@@ -134,8 +134,8 @@ let identifier =
     take_while is_valid_char
     >>= fun id ->
     (match is_reserved id with
-    | false -> return id <* space
-    | true -> fail "Reserved identifier")
+     | false -> return id <* space
+     | true -> fail "Reserved identifier")
   | _ -> fail "Invalid first char"
 ;;
 
@@ -146,8 +146,8 @@ let no_space_identifier =
     take_while is_valid_char
     >>= fun id ->
     (match is_reserved id with
-    | false -> return id <* space
-    | true -> fail "Reserved identifier")
+     | false -> return id <* space
+     | true -> fail "Reserved identifier")
   | _ -> fail "Invalid first char"
 ;;
 
@@ -211,8 +211,8 @@ let%test _ = parse number "-1.23" = Ok (Const (Float (-1.23)))
 let p_string =
   char '\"'
   *> take_while1 (function
-         | '\"' -> false
-         | _ -> true)
+       | '\"' -> false
+       | _ -> true)
   <* char '\"'
   >>= fun s -> return (Const (String s))
 ;;
@@ -253,13 +253,13 @@ let class_instance p =
     c
     >>= fun chr ->
     (match is_first_char_capital chr with
-    | true ->
-      identifier
-      >>= fun id ->
-      token "(" *> sep_by comma p
-      <* token ")"
-      >>= fun args -> return (ClassToInstance (id, args))
-    | false -> fail "SAD")
+     | true ->
+       identifier
+       >>= fun id ->
+       token "(" *> sep_by comma p
+       <* token ")"
+       >>= fun args -> return (ClassToInstance (id, args))
+     | false -> fail "SAD")
 ;;
 
 (* someClass.someField *)
@@ -374,8 +374,8 @@ let check_is_first_block_empty block =
     | [] -> true
     | Block (_, stmt) :: _ ->
       (match take_block_from_stmt stmt with
-      | [] -> true
-      | _ -> check (take_block_from_stmt stmt))
+       | [] -> true
+       | _ -> check (take_block_from_stmt stmt))
     | _ -> false
   in
   check block
@@ -429,20 +429,20 @@ let remove_lvling list =
     | [] -> return acc
     | Block (_, stmt) :: t ->
       (match stmt with
-      | IfElse (_, _, _) as iff ->
-        (match acc with
-        | [] ->
-          rvrs [] (take_block_from_stmt stmt)
-          >>= fun rstmt -> rvrs (insert_to_stmt rstmt stmt :: acc) t
-        | h :: t1 ->
-          (match h with
-          | Else s -> merge_if_else s iff >>= fun ifelse -> rvrs (ifelse :: t1) t
-          | _ ->
+       | IfElse (_, _, _) as iff ->
+         (match acc with
+          | [] ->
             rvrs [] (take_block_from_stmt stmt)
-            >>= fun rstmt -> rvrs (insert_to_stmt rstmt stmt :: acc) t))
-      | _ ->
-        rvrs [] (take_block_from_stmt stmt)
-        >>= fun rstmt -> rvrs (insert_to_stmt rstmt stmt :: acc) t)
+            >>= fun rstmt -> rvrs (insert_to_stmt rstmt stmt :: acc) t
+          | h :: t1 ->
+            (match h with
+             | Else s -> merge_if_else s iff >>= fun ifelse -> rvrs (ifelse :: t1) t
+             | _ ->
+               rvrs [] (take_block_from_stmt stmt)
+               >>= fun rstmt -> rvrs (insert_to_stmt rstmt stmt :: acc) t))
+       | _ ->
+         rvrs [] (take_block_from_stmt stmt)
+         >>= fun rstmt -> rvrs (insert_to_stmt rstmt stmt :: acc) t)
     | LvledStmt (_, stmt) :: t -> rvrs (stmt :: acc) t
     | _ -> return []
   in
@@ -454,45 +454,49 @@ let flatten list =
     | [] -> return acc_lines
     | Block (n, stmt) :: t ->
       (match acc_lines with
-      | [] -> insert_ (Block (n, stmt) :: acc_lines) t
-      | x :: t1 ->
-        (match x with
-        | Block (m, stmt1) ->
-          if m > n
-          then (
-            match check_is_first_block_empty (take_block_from_stmt stmt1) with
-            | true -> fail "check tabs. block is empty"
-            | _ -> insert_ (Block (n, stmt) :: acc_lines) t)
-          else if m = n
-          then (
-            match check_is_first_block_empty (take_block_from_stmt stmt1) with
-            | true -> fail "check tabs. block is empty"
-            | _ -> insert_ (Block (n, stmt) :: acc_lines) t)
-          else (
-            let subblock = insert_ (take_block_from_stmt stmt1) [ Block (n, stmt) ] in
-            subblock >>= fun sb -> insert_ (Block (m, insert_to_stmt sb stmt1) :: t1) t)
-        | LvledStmt (m, _) ->
-          if m < n then fail "parser error" else insert_ (Block (n, stmt) :: acc_lines) t
-        | _ -> fail "unreachable"))
+       | [] -> insert_ (Block (n, stmt) :: acc_lines) t
+       | x :: t1 ->
+         (match x with
+          | Block (m, stmt1) ->
+            if m > n
+            then (
+              match check_is_first_block_empty (take_block_from_stmt stmt1) with
+              | true -> fail "check tabs. block is empty"
+              | _ -> insert_ (Block (n, stmt) :: acc_lines) t)
+            else if m = n
+            then (
+              match check_is_first_block_empty (take_block_from_stmt stmt1) with
+              | true -> fail "check tabs. block is empty"
+              | _ -> insert_ (Block (n, stmt) :: acc_lines) t)
+            else (
+              let subblock = insert_ (take_block_from_stmt stmt1) [ Block (n, stmt) ] in
+              subblock >>= fun sb -> insert_ (Block (m, insert_to_stmt sb stmt1) :: t1) t)
+          | LvledStmt (m, _) ->
+            if m < n
+            then fail "parser error"
+            else insert_ (Block (n, stmt) :: acc_lines) t
+          | _ -> fail "unreachable"))
     | LvledStmt (n, stmt) :: t ->
       (match acc_lines with
-      | [] -> insert_ (LvledStmt (n, stmt) :: acc_lines) t
-      | x :: t1 ->
-        (match x with
-        | Block (m, stmt1) ->
-          if m >= n
-          then (
-            match check_is_first_block_empty (take_block_from_stmt stmt1) with
-            | true -> fail "check tabs. block is empty"
-            | _ -> insert_ (LvledStmt (n, stmt) :: acc_lines) t)
-          else (
-            let subblock = insert_ (take_block_from_stmt stmt1) [ LvledStmt (n, stmt) ] in
-            subblock >>= fun sb -> insert_ (Block (m, insert_to_stmt sb stmt1) :: t1) t)
-        | LvledStmt (m, _) ->
-          if m = n
-          then insert_ (LvledStmt (n, stmt) :: acc_lines) t
-          else fail "parser error"
-        | _ -> fail "unreachable"))
+       | [] -> insert_ (LvledStmt (n, stmt) :: acc_lines) t
+       | x :: t1 ->
+         (match x with
+          | Block (m, stmt1) ->
+            if m >= n
+            then (
+              match check_is_first_block_empty (take_block_from_stmt stmt1) with
+              | true -> fail "check tabs. block is empty"
+              | _ -> insert_ (LvledStmt (n, stmt) :: acc_lines) t)
+            else (
+              let subblock =
+                insert_ (take_block_from_stmt stmt1) [ LvledStmt (n, stmt) ]
+              in
+              subblock >>= fun sb -> insert_ (Block (m, insert_to_stmt sb stmt1) :: t1) t)
+          | LvledStmt (m, _) ->
+            if m = n
+            then insert_ (LvledStmt (n, stmt) :: acc_lines) t
+            else fail "parser error"
+          | _ -> fail "unreachable"))
     | _ -> fail "unreachable"
   in
   insert_ [] list
@@ -501,60 +505,60 @@ let flatten list =
 let prog =
   let expr =
     fix (fun expr ->
-        let predict =
-          eolspace *> peek_char_fail
-          >>= function
-          | x when is_valid_first_char x ->
-            class_field
-            <|> class_instance expr
-            <|> access_method expr
-            <|> access_field
-            <|> method_call expr
-            <|> local_var
-            <|> lambda expr
-          | x when is_digit x -> number
-          | '(' -> parens expr
-          | '[' -> lst expr
-          | '\"' -> p_string
-          | _ -> fail "not implemented yet"
-        in
-        let high = chainl1 predict high_pr_op in
-        let low = chainl1 high low_pr_op in
-        let cmp = chainl1 low cmp_op in
-        let bfactor =
-          fix (fun bfactor ->
-              let nnot = b_not <* space <*> bfactor in
-              choice [ nnot; cmp ])
-        in
-        let bterm = chainl1 bfactor (b_and <* space) in
-        chainl1 bterm (b_or <* space))
+      let predict =
+        eolspace *> peek_char_fail
+        >>= function
+        | x when is_valid_first_char x ->
+          class_field
+          <|> class_instance expr
+          <|> access_method expr
+          <|> access_field
+          <|> method_call expr
+          <|> local_var
+          <|> lambda expr
+        | x when is_digit x -> number
+        | '(' -> parens expr
+        | '[' -> lst expr
+        | '\"' -> p_string
+        | _ -> fail "not implemented yet"
+      in
+      let high = chainl1 predict high_pr_op in
+      let low = chainl1 high low_pr_op in
+      let cmp = chainl1 low cmp_op in
+      let bfactor =
+        fix (fun bfactor ->
+          let nnot = b_not <* space <*> bfactor in
+          choice [ nnot; cmp ])
+      in
+      let bterm = chainl1 bfactor (b_and <* space) in
+      chainl1 bterm (b_or <* space))
   in
   let stmt =
     fix (fun _ ->
-        let pexpr =
-          many (string "\t" <|> string tab_as_spaces)
-          >>= fun tabs -> expr >>| expr_stmt (List.length tabs)
-        in
-        let passign =
-          many (token "\t" <|> string tab_as_spaces)
-          >>= fun tabs -> assign expr (List.length tabs)
-        in
-        let predict =
-          many (string "\t" <|> string tab_as_spaces)
-          >>= fun tabs ->
-          let lvl = List.length tabs in
-          peek_char_fail
-          >>= function
-          | 'i' -> parse_if expr lvl
-          | 'e' -> parse_else lvl
-          | 'w' -> parse_while expr lvl
-          | 'f' -> parse_for expr lvl
-          | 'd' -> parse_def lvl
-          | 'r' -> parse_return expr lvl
-          | 'c' -> parse_class lvl
-          | _ -> expr >>| expr_stmt lvl
-        in
-        choice [ passign; predict; pexpr ])
+      let pexpr =
+        many (string "\t" <|> string tab_as_spaces)
+        >>= fun tabs -> expr >>| expr_stmt (List.length tabs)
+      in
+      let passign =
+        many (token "\t" <|> string tab_as_spaces)
+        >>= fun tabs -> assign expr (List.length tabs)
+      in
+      let predict =
+        many (string "\t" <|> string tab_as_spaces)
+        >>= fun tabs ->
+        let lvl = List.length tabs in
+        peek_char_fail
+        >>= function
+        | 'i' -> parse_if expr lvl
+        | 'e' -> parse_else lvl
+        | 'w' -> parse_while expr lvl
+        | 'f' -> parse_for expr lvl
+        | 'd' -> parse_def lvl
+        | 'r' -> parse_return expr lvl
+        | 'c' -> parse_class lvl
+        | _ -> expr >>| expr_stmt lvl
+      in
+      choice [ passign; predict; pexpr ])
   in
   take_while (fun c -> is_eol c) *> sep_by (token "\n") stmt
   <* take_while (fun c -> is_eol c)

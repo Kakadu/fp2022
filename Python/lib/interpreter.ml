@@ -163,8 +163,8 @@ module Eval (M : MONADERROR) = struct
     let rec merge acc = function
       | [] ->
         (match acc with
-        | [] -> return [ element ]
-        | _ -> return acc)
+         | [] -> return [ element ]
+         | _ -> return acc)
       | h :: t ->
         if is_equal_id h id then merge (element :: acc) t else merge (h :: acc) t
     in
@@ -201,93 +201,97 @@ module Eval (M : MONADERROR) = struct
       match e with
       | Const x ->
         (match x with
-        | Integer i -> return (VInt i)
-        | Float f -> return (VFloat f)
-        | String s -> return (VString s)
-        | Bool b -> return (VBool b)
-        | Void -> return VNone)
+         | Integer i -> return (VInt i)
+         | Float f -> return (VFloat f)
+         | String s -> return (VString s)
+         | Bool b -> return (VBool b)
+         | Void -> return VNone)
       | Var (VarName (x, id)) ->
         (match ctx.scope with
-        | Global | Class _ ->
-          get_with_key (fun x y -> x.var_id = y) id ctx.local_vars
-          >>= fun vr -> return vr.v
-        | Instance inst_id ->
-          (match x with
-          | Local ->
-            get_with_key (fun x y -> x.var_id = y) id ctx.local_vars
-            >>= fun vr -> return vr.v
-          | Class ->
-            get_with_key (fun x y -> x.instance_id = y) inst_id ctx.instances
-            >>= fun inst ->
-            get_with_key (fun x y -> x.var_id = y) id inst.instance_fields
-            >>= fun vr -> return vr.v))
+         | Global | Class _ ->
+           get_with_key (fun x y -> x.var_id = y) id ctx.local_vars
+           >>= fun vr -> return vr.v
+         | Instance inst_id ->
+           (match x with
+            | Local ->
+              get_with_key (fun x y -> x.var_id = y) id ctx.local_vars
+              >>= fun vr -> return vr.v
+            | Class ->
+              get_with_key (fun x y -> x.instance_id = y) inst_id ctx.instances
+              >>= fun inst ->
+              get_with_key (fun x y -> x.var_id = y) id inst.instance_fields
+              >>= fun vr -> return vr.v))
       | ClassToInstance (id, args) ->
         (match is_class_exist id ctx.classes with
-        | true -> map (fun e -> get_val e) args >>= fun a -> return (VClassRef (id, a))
-        | false -> error (str_of_err (UnknownName id)))
+         | true -> map (fun e -> get_val e) args >>= fun a -> return (VClassRef (id, a))
+         | false -> error (str_of_err (UnknownName id)))
       | ArithOp (op, e1, e2) ->
         eval get_val e1
         >>= fun l ->
         eval get_val e2
         >>= fun r ->
         (match op with
-        | Add ->
-          (match l, r with
-          | VInt i1, VInt i2 -> return (VInt (i1 + i2))
-          | VFloat f1, VFloat f2 -> return (VFloat (f1 +. f2))
-          | VFloat f, VInt i -> return (VFloat (f +. float_of_int i))
-          | VInt i, VFloat f -> return (VFloat (float_of_int i +. f))
-          | VString s1, VString s2 -> return (VString (s1 ^ s2))
-          | _ -> error (str_of_err (UndefinedOp "+")))
-        | Mul ->
-          (match l, r with
-          | VInt i1, VInt i2 -> return (VInt (i1 * i2))
-          | VFloat f1, VFloat f2 -> return (VFloat (f1 *. f2))
-          | VFloat f, VInt i -> return (VFloat (f *. float_of_int i))
-          | VInt i, VFloat f -> return (VFloat (float_of_int i *. f))
-          | _ -> error (str_of_err (UndefinedOp "*")))
-        | Sub ->
-          (match l, r with
-          | VInt i1, VInt i2 -> return (VInt (i1 - i2))
-          | VFloat f1, VFloat f2 -> return (VFloat (f1 -. f2))
-          | VFloat f, VInt i -> return (VFloat (f -. float_of_int i))
-          | VInt i, VFloat f -> return (VFloat (float_of_int i -. f))
-          | _ -> error (str_of_err (UndefinedOp "-")))
-        | Div ->
-          (match l, r with
-          | VInt _, VInt 0 | VFloat _, VInt 0 | VFloat _, VFloat 0.0 | VInt _, VFloat 0.0
-            -> error (str_of_err DivisionByZero)
-          | VFloat f1, VFloat f2 -> return (VFloat (f1 /. f2))
-          | VFloat f, VInt i -> return (VFloat (f +. float_of_int i))
-          | VInt i, VFloat f -> return (VFloat (float_of_int i +. f))
-          | _ -> error (str_of_err (UndefinedOp "div")))
-        | Mod ->
-          (match l, r with
-          | VInt _, VInt 0 | VFloat _, VInt 0 | VFloat _, VFloat 0.0 | VInt _, VFloat 0.0
-            -> error (str_of_err DivisionByZero)
-          | VInt i1, VInt i2 -> return (VInt (i1 mod i2))
-          | _ -> error (str_of_err DivisionByZero)))
+         | Add ->
+           (match l, r with
+            | VInt i1, VInt i2 -> return (VInt (i1 + i2))
+            | VFloat f1, VFloat f2 -> return (VFloat (f1 +. f2))
+            | VFloat f, VInt i -> return (VFloat (f +. float_of_int i))
+            | VInt i, VFloat f -> return (VFloat (float_of_int i +. f))
+            | VString s1, VString s2 -> return (VString (s1 ^ s2))
+            | _ -> error (str_of_err (UndefinedOp "+")))
+         | Mul ->
+           (match l, r with
+            | VInt i1, VInt i2 -> return (VInt (i1 * i2))
+            | VFloat f1, VFloat f2 -> return (VFloat (f1 *. f2))
+            | VFloat f, VInt i -> return (VFloat (f *. float_of_int i))
+            | VInt i, VFloat f -> return (VFloat (float_of_int i *. f))
+            | _ -> error (str_of_err (UndefinedOp "*")))
+         | Sub ->
+           (match l, r with
+            | VInt i1, VInt i2 -> return (VInt (i1 - i2))
+            | VFloat f1, VFloat f2 -> return (VFloat (f1 -. f2))
+            | VFloat f, VInt i -> return (VFloat (f -. float_of_int i))
+            | VInt i, VFloat f -> return (VFloat (float_of_int i -. f))
+            | _ -> error (str_of_err (UndefinedOp "-")))
+         | Div ->
+           (match l, r with
+            | VInt _, VInt 0
+            | VFloat _, VInt 0
+            | VFloat _, VFloat 0.0
+            | VInt _, VFloat 0.0 -> error (str_of_err DivisionByZero)
+            | VFloat f1, VFloat f2 -> return (VFloat (f1 /. f2))
+            | VFloat f, VInt i -> return (VFloat (f +. float_of_int i))
+            | VInt i, VFloat f -> return (VFloat (float_of_int i +. f))
+            | _ -> error (str_of_err (UndefinedOp "div")))
+         | Mod ->
+           (match l, r with
+            | VInt _, VInt 0
+            | VFloat _, VInt 0
+            | VFloat _, VFloat 0.0
+            | VInt _, VFloat 0.0 -> error (str_of_err DivisionByZero)
+            | VInt i1, VInt i2 -> return (VInt (i1 mod i2))
+            | _ -> error (str_of_err DivisionByZero)))
       | BoolOp (op, e1, e2) ->
         eval get_val e1
         >>= fun l ->
         eval get_val e2
         >>= fun r ->
         (match op with
-        | And ->
-          (match l, r with
-          | VBool true, VBool true -> return (VBool true)
-          | _ -> return (VBool false))
-        | Or ->
-          (match l, r with
-          | VBool false, VBool false -> return (VBool false)
-          | _ -> return (VBool true)))
+         | And ->
+           (match l, r with
+            | VBool true, VBool true -> return (VBool true)
+            | _ -> return (VBool false))
+         | Or ->
+           (match l, r with
+            | VBool false, VBool false -> return (VBool false)
+            | _ -> return (VBool true)))
       | UnaryOp (Not, e1) ->
         eval get_val e1
         >>= fun l ->
         (match l with
-        | VBool false -> return (VBool true)
-        | VBool true -> return (VBool false)
-        | _ -> error (str_of_err (UndefinedOp "NOT")))
+         | VBool false -> return (VBool true)
+         | VBool true -> return (VBool false)
+         | _ -> error (str_of_err (UndefinedOp "NOT")))
       | Eq (e1, e2) ->
         eval get_val e1 >>= fun l -> eval get_val e2 >>= fun r -> return (VBool (l = r))
       | NotEq (e1, e2) ->
@@ -305,13 +309,13 @@ module Eval (M : MONADERROR) = struct
         (match
            get_with_key (fun x y -> x.instance_id = y) instance_name ctx.instances
          with
-        | inst ->
-          inst
-          >>= fun i ->
-          get_with_key (fun x y -> x.class_id = y) i.class_reference_id ctx.classes
-          >>= fun c ->
-          get_with_key (fun x y -> x.var_id = y) field_name c.class_fields
-          >>= fun vr -> return vr.v)
+         | inst ->
+           inst
+           >>= fun i ->
+           get_with_key (fun x y -> x.class_id = y) i.class_reference_id ctx.classes
+           >>= fun c ->
+           get_with_key (fun x y -> x.var_id = y) field_name c.class_fields
+           >>= fun vr -> return vr.v)
       | Lambda (args, expr) -> return (VLambda (args, expr))
       | _ -> return VNone
     in
@@ -344,8 +348,8 @@ module Eval (M : MONADERROR) = struct
       >>= fun x ->
       let cur_res = x.return_v in
       (match cur_res with
-      | VNone -> eval_method x stmts
-      | v -> return { ctx with return_v = v })
+       | VNone -> eval_method x stmts
+       | v -> return { ctx with return_v = v })
 
   and eval_return exprs ctx =
     match exprs with
@@ -366,50 +370,50 @@ module Eval (M : MONADERROR) = struct
         match values, vars with
         | h1 :: t1, h2 :: t2 ->
           (match h2 with
-          | Var (VarName (Local, id)) ->
-            (match h1 with
-            | VClassRef (class_id, _) ->
-              get_with_key (fun x y -> x.class_id = y) class_id ctx.classes
-              >>= fun cls ->
-              add_or_update
-                is_instance_exist
-                (fun x y -> x.instance_id = y)
-                id
-                { instance_id = id
-                ; class_reference_id = cls.class_id
-                ; instance_fields = cls.class_fields
-                ; instance_methods = cls.class_methods
-                }
-                ctx_upd.instances
-              >>= fun t -> set_values_to_vars t1 t2 { ctx_upd with instances = t }
-            | VLambda (args, expr) ->
-              add_or_update
-                is_method_exist
-                (fun x y -> x.method_id = y)
-                id
-                { method_id = id; args; body = [ Ast.Return [ expr ] ] }
-                ctx_upd.methods
-              >>= fun t -> set_values_to_vars t1 t2 { ctx_upd with methods = t }
-            | _ ->
-              add_or_update_var id h1 ctx_upd.local_vars
-              >>= fun t -> set_values_to_vars t1 t2 { ctx_upd with local_vars = t })
-          | Var (VarName (Class, id)) ->
-            (match ctx_upd.scope with
-            | Instance inst_id ->
-              get_with_key (fun x y -> x.instance_id = y) inst_id ctx_upd.instances
-              >>= fun i ->
-              add_or_update_var id h1 i.instance_fields
-              >>= fun fields_upd ->
-              add_or_update
-                is_instance_exist
-                (fun x y -> x.instance_id = y)
-                id
-                { i with instance_fields = fields_upd }
-                ctx_upd.instances
-              >>= fun new_insta ->
-              set_values_to_vars t1 t2 { ctx_upd with instances = new_insta }
-            | _ -> set_values_to_vars t1 t2 ctx_upd)
-          | _ -> set_values_to_vars t1 t2 ctx_upd)
+           | Var (VarName (Local, id)) ->
+             (match h1 with
+              | VClassRef (class_id, _) ->
+                get_with_key (fun x y -> x.class_id = y) class_id ctx.classes
+                >>= fun cls ->
+                add_or_update
+                  is_instance_exist
+                  (fun x y -> x.instance_id = y)
+                  id
+                  { instance_id = id
+                  ; class_reference_id = cls.class_id
+                  ; instance_fields = cls.class_fields
+                  ; instance_methods = cls.class_methods
+                  }
+                  ctx_upd.instances
+                >>= fun t -> set_values_to_vars t1 t2 { ctx_upd with instances = t }
+              | VLambda (args, expr) ->
+                add_or_update
+                  is_method_exist
+                  (fun x y -> x.method_id = y)
+                  id
+                  { method_id = id; args; body = [ Ast.Return [ expr ] ] }
+                  ctx_upd.methods
+                >>= fun t -> set_values_to_vars t1 t2 { ctx_upd with methods = t }
+              | _ ->
+                add_or_update_var id h1 ctx_upd.local_vars
+                >>= fun t -> set_values_to_vars t1 t2 { ctx_upd with local_vars = t })
+           | Var (VarName (Class, id)) ->
+             (match ctx_upd.scope with
+              | Instance inst_id ->
+                get_with_key (fun x y -> x.instance_id = y) inst_id ctx_upd.instances
+                >>= fun i ->
+                add_or_update_var id h1 i.instance_fields
+                >>= fun fields_upd ->
+                add_or_update
+                  is_instance_exist
+                  (fun x y -> x.instance_id = y)
+                  id
+                  { i with instance_fields = fields_upd }
+                  ctx_upd.instances
+                >>= fun new_insta ->
+                set_values_to_vars t1 t2 { ctx_upd with instances = new_insta }
+              | _ -> set_values_to_vars t1 t2 ctx_upd)
+           | _ -> set_values_to_vars t1 t2 ctx_upd)
         | [], [] -> return ctx_upd
         | _ -> error (str_of_err AssignFail)
       in
@@ -430,16 +434,16 @@ module Eval (M : MONADERROR) = struct
         >>= fun c -> return { ctx with methods = c }
       in
       (match ctx.scope with
-      | Class class_name -> add_method_to_class class_name >>= fun c -> return c
-      | Global ->
-        add_or_update
-          is_method_exist
-          (fun x y -> x.method_id = y)
-          id
-          { method_id = id; args = params; body = stmts }
-          ctx.methods
-        >>= fun c -> return { ctx with methods = c }
-      | Instance _ -> error "unreachable")
+       | Class class_name -> add_method_to_class class_name >>= fun c -> return c
+       | Global ->
+         add_or_update
+           is_method_exist
+           (fun x y -> x.method_id = y)
+           id
+           { method_id = id; args = params; body = stmts }
+           ctx.methods
+         >>= fun c -> return { ctx with methods = c }
+       | Instance _ -> error "unreachable")
     | IfElse (expr, if_stmts, else_stmts) ->
       eval_expr ctx expr
       >>= fun e ->
