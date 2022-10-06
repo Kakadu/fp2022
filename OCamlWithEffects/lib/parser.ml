@@ -4,7 +4,7 @@ open List
 open String
 
 type input = string
-type error = string
+(* type error = string *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
 let remove_spaces = take_while space_predicate
@@ -14,32 +14,34 @@ let%test _ =
   = Result.ok @@ [ 's' ]
 ;;
 
+let parens parser = char '(' *> parser <* char ')'
+
 let parse_literal =
-  let digit =
-    satisfy (function
-      | '0' .. '9' -> true
-      | _ -> false)
+  let is_digit = function
+    | '0' .. '9' -> true
+    | _ -> false
   in
-  let parse_int_literal =
-    many1 digit
-    >>| (fun x -> String.of_seq (List.to_seq x))
-    >>| int_of_string
-    >>| fun x -> LInt x
+  let parse_int_literal = take_while1 is_digit >>| int_of_string >>| fun x -> LInt x
   and parse_string_literal =
-    char '"' *> take_while (fun c -> c != '"') <* char '"' >>| fun x -> LString x
+    char '"' *> take_while (( != ) '"') <* char '"' >>| fun x -> LString x
   and parse_char_literal = char '\'' *> any_char <* char '\'' >>| fun x -> LChar x
   and parse_bool_literal =
     string "true" <|> string "false" >>| bool_of_string >>| fun x -> LBool x
   and parse_unit_literal = string "()" >>| fun _ -> LUnit in
-  remove_spaces
-  *> choice
-       [ parse_int_literal
-       ; parse_string_literal
-       ; parse_char_literal
-       ; parse_bool_literal
-       ; parse_unit_literal
-       ]
-  >>| fun x -> ELiteral x
+  let parse_literal =
+    choice
+      [ parse_int_literal
+      ; parse_string_literal
+      ; parse_char_literal
+      ; parse_bool_literal
+      ; parse_unit_literal
+      ]
+  in
+  remove_spaces *> choice [ parens parse_literal; parse_literal ] >>| fun x -> ELiteral x
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_literal "(888)" = Result.ok @@ ELiteral (LInt 888)
 ;;
 
 let%test _ =
@@ -70,6 +72,18 @@ let%test _ =
   parse_string ~consume:Prefix parse_literal " () " = Result.ok @@ ELiteral LUnit
 ;;
 
+let%test _ =
+  match parse_string ~consume:Prefix parse_literal "x" with
+  | Result.Ok _ -> false
+  | _ -> true
+;;
+
+let%test _ =
+  match parse_string ~consume:Prefix parse_literal "let f x = f x" with
+  | Result.Ok _ -> false
+  | _ -> true
+;;
+
 let parse_entity =
   remove_spaces
   *> take_while1 (fun x ->
@@ -96,6 +110,11 @@ let remove_brackets =
 
 let%test _ = parse_string ~consume:Prefix remove_brackets "(3 + 5)" = Result.ok @@ "3 + 5"
 
+(* Elements of a list can also be functions
+   However, just adding `parse_function` to `choice` won't help,
+   since `parse_variable` and `parse_function` work in same way,
+   that is, by using `parse_entity`, so the parse result will
+   either be ambiguous, or it will always be EVariable. *)
 let parse_list =
   let parse_content = choice [ parse_literal; parse_variable ] in
   let parse_elem_in_brackets =
@@ -150,8 +169,28 @@ let parse_fun =
   <* string "->"
   <* remove_spaces
   >>= fun var_list ->
-  choice [ parse_literal; parse_list; parse_variable ]
-  >>| fun expression -> EFun (var_list, expression)
+  let parse_fun = choice [ parse_literal; parse_list; parse_variable ] in
+  choice [ parens parse_fun; parse_fun ] >>| fun expression -> EFun (var_list, expression)
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_fun "fun x -> (888)"
+  = Result.ok @@ EFun ([ "x" ], ELiteral (LInt 888))
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_fun "fun _ -> (fun _ -> (\"Hello\"))"
+  = Result.ok @@ EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello")))
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_fun "fun _ -> fun _ -> \"Hello\""
+  = Result.ok @@ EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello")))
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_fun "((fun _ -> 5))"
+  = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
 ;;
 
 let%test _ =
