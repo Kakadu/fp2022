@@ -70,4 +70,23 @@ let%test _ =
   parse_string ~consume:Prefix parse_literal " () " = Result.ok @@ ELiteral LUnit
 ;;
 
+let parse_entity =
+  remove_spaces
+  *> take_while1 (fun x ->
+       contains "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'_" x)
+;;
+
+let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
+let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @@ "add"
+
+let parse_variable = parse_entity >>| fun x -> EVariable x
+
+let%test _ = parse_string ~consume:Prefix parse_variable "y" = Result.ok @@ EVariable "y"
+
+let parse_function = parse_entity >>| fun x -> EFunction x
+
+let%test _ =
+  parse_string ~consume:Prefix parse_function "f x" = Result.ok @@ EFunction "f"
+;;
+
 let parse = Error ""
