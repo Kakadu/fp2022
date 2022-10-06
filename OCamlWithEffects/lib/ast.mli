@@ -6,8 +6,7 @@ type literal =
   | LUnit
 [@@deriving eq, show { with_path = false }]
 
-type function_name = string [@@deriving eq, show { with_path = false }]
-type variable_name = string [@@deriving eq, show { with_path = false }]
+type id = string [@@deriving eq, show { with_path = false }]
 type data_constructor_name = string [@@deriving eq, show { with_path = false }]
 
 (* type numerical_binary_operator =
@@ -53,17 +52,13 @@ type expression =
   | EBinaryOperation of binary_operator * expression * expression (* 1 + 3 *)
   | EUnaryOperation of unary_operator * expression (* -(1 + 3) *)
   | EApplication of expression * expression (* f x *)
-  | EFunction of function_name (* f *)
-  | EVariable of variable_name (* x *)
-  | EFun of variable_name list * expression (* fun x y -> x + y *)
+  | EIdentifier of id
+  | EFun of id list * expression (* fun x y -> x + y *)
   | EList of expression list (* [ 1; 2; 3 ] *)
   | ETuple of expression list (* (1, "Vasya Pupkin", '\n') *)
-  | EDeclaration of
-      function_name * variable_name list * expression (* let add x y = x + y *)
+  | EDeclaration of id * id list * expression (* let add x y = x + y *)
   | EDeclarationRecursive of
-      function_name
-      * variable_name list
-      * expression (* let rec factorial n = n * factorial (n - 1) *)
+      id * id list * expression (* let rec factorial n = n * factorial (n - 1) *)
   | ELetIn of expression list * expression (* let x = 1 and y = 2 in x + y *)
   | EIf of expression * expression * expression (* if true then 1 else 0 *)
   | EMatchWith of expression * (expression * expression) list (* match x with _ -> x *)
