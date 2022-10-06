@@ -89,4 +89,57 @@ let%test _ =
   parse_string ~consume:Prefix parse_function "f x" = Result.ok @@ EFunction "f"
 ;;
 
+(*TODO: come up with something...*)
+let remove_brackets =
+  char '(' *> many any_char >>| fun x -> String.of_seq (List.to_seq @@ rev @@ tl @@ rev x)
+;;
+
+let%test _ = parse_string ~consume:Prefix remove_brackets "(3 + 5)" = Result.ok @@ "3 + 5"
+
+let parse_list =
+  let parse_content = choice [ parse_literal; parse_variable ] in
+  let parse_elem_in_brackets =
+    remove_spaces *> parse_content <* remove_spaces <* many (char ';')
+  in
+  let parse_in_brackets =
+    char '[' *> many parse_elem_in_brackets <* remove_spaces <* char ']'
+  in
+  let parse_elem_in_constructor =
+    parse_content <* remove_spaces <* string "::" <* remove_spaces
+  in
+  remove_spaces *> many parse_elem_in_constructor
+  >>= fun x -> parse_in_brackets >>| (fun y -> append x y) >>| fun l -> EList l
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ 1; 3; 7; ]"
+  = Result.ok @@ EList [ ELiteral (LInt 1); ELiteral (LInt 3); ELiteral (LInt 7) ]
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_list
+    "   [\"apple\";\"orange\";\"banana\";\"pear\"]   "
+  = Result.ok
+    @@ EList
+         [ ELiteral (LString "apple")
+         ; ELiteral (LString "orange")
+         ; ELiteral (LString "banana")
+         ; ELiteral (LString "pear")
+         ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "   'h' :: 'e' :: 'l' :: [ 'l' ; 'o' ]   "
+  = Result.ok
+    @@ EList
+         [ ELiteral (LChar 'h')
+         ; ELiteral (LChar 'e')
+         ; ELiteral (LChar 'l')
+         ; ELiteral (LChar 'l')
+         ; ELiteral (LChar 'o')
+         ]
+;;
+
 let parse = Error ""
