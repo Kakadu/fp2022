@@ -142,4 +142,45 @@ let%test _ =
          ]
 ;;
 
+let parse_fun =
+  remove_spaces
+  *> string "fun"
+  *> many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
+  <* remove_spaces
+  <* string "->"
+  <* remove_spaces
+  >>= fun var_list ->
+  choice [ parse_literal; parse_list; parse_variable ]
+  >>| fun expression -> EFun (var_list, expression)
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_fun "fun x y _ -> [x; y]"
+  = Result.ok @@ EFun ([ "x"; "y"; "_" ], EList [ EVariable "x"; EVariable "y" ])
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_fun "fun _ -> 5"
+  = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_fun
+    "   fun  par1  par2  ->  [\"line 1\"; par1; \"line 2\"; par2; \"line 3\"]   "
+  = Result.ok
+    @@ EFun
+         ( [ "par1"; "par2" ]
+         , EList
+             [ ELiteral (LString "line 1")
+             ; EVariable "par1"
+             ; ELiteral (LString "line 2")
+             ; EVariable "par2"
+             ; ELiteral (LString "line 3")
+             ] )
+;;
+
+(*TODO: brackets!!!!!!!*)
+
 let parse = Error ""
