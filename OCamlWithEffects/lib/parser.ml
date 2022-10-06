@@ -96,14 +96,14 @@ let parse_entity =
 let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
 let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @@ "add"
 
-let parse_variable = parse_entity >>| fun x -> EVariable x
-
-let%test _ = parse_string ~consume:Prefix parse_variable "y" = Result.ok @@ EVariable "y"
-
-let parse_function = parse_entity >>| fun x -> EFunction x
+let parse_identifier = parse_entity >>| fun x -> EIdentifier x
 
 let%test _ =
-  parse_string ~consume:Prefix parse_function "f x" = Result.ok @@ EFunction "f"
+  parse_string ~consume:Prefix parse_identifier "y" = Result.ok @@ EIdentifier "y"
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_identifier "f x" = Result.ok @@ EIdentifier "f"
 ;;
 
 (* Elements of a list can also be functions
@@ -113,7 +113,7 @@ let%test _ =
    either be ambiguous, or it will always be EVariable. *)
 let parse_list =
   let parse_list =
-    let parse_content = choice [ parse_literal; parse_variable ] in
+    let parse_content = choice [ parse_literal; parse_identifier ] in
     let parse_elem_in_brackets =
       remove_spaces *> parse_content <* remove_spaces <* many (char ';')
     in
@@ -170,7 +170,7 @@ let parse_fun =
   <* string "->"
   <* remove_spaces
   >>= fun var_list ->
-  let parse_fun = choice [ self; parse_literal; parse_list; parse_variable ] in
+  let parse_fun = choice [ self; parse_literal; parse_list; parse_identifier ] in
   choice [ parens parse_fun; parse_fun ] >>| fun expression -> EFun (var_list, expression)
 ;;
 
@@ -197,7 +197,7 @@ let%test _ =
 
 let%test _ =
   parse_string ~consume:Prefix parse_fun "fun x y _ -> [x; y]"
-  = Result.ok @@ EFun ([ "x"; "y"; "_" ], EList [ EVariable "x"; EVariable "y" ])
+  = Result.ok @@ EFun ([ "x"; "y"; "_" ], EList [ EIdentifier "x"; EIdentifier "y" ])
 ;;
 
 let%test _ =
@@ -215,11 +215,32 @@ let%test _ =
          ( [ "par1"; "par2" ]
          , EList
              [ ELiteral (LString "line 1")
-             ; EVariable "par1"
+             ; EIdentifier "par1"
              ; ELiteral (LString "line 2")
-             ; EVariable "par2"
+             ; EIdentifier "par2"
              ; ELiteral (LString "line 3")
              ] )
+;;
+
+let parse_tuple =
+  let parse_tuple =
+    let parse_content = choice [ parse_literal; parse_identifier ] in
+    remove_spaces *> sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
+    <* remove_spaces
+    >>| fun t -> ETuple t
+  in
+  remove_spaces *> choice [ parens parse_tuple; parse_tuple ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_tuple "  ( 1 , '2' , \"3\" )  "
+  = Result.ok
+    @@ ETuple [ ELiteral (LInt 1); ELiteral (LChar '2'); ELiteral (LString "3") ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_tuple " x,y , z "
+  = Result.ok @@ ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
 ;;
 
 let parse = Error "TODO"
