@@ -1,0 +1,4 @@
+(executable
+ (name runULC)
+ (modules runULC QCTests)
+ (libraries lambda_lib qcheck-core qcheck-core.runner))
