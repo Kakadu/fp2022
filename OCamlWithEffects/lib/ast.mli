@@ -3,8 +3,8 @@ type literal =
   | LString of string
   | LChar of char
   | LBool of bool
-  | LUnit of unit
-[@@deriving show { with_path = false }]
+  | LUnit
+[@@deriving eq, show { with_path = false }]
 
 type function_name = string [@@deriving eq, show { with_path = false }]
 type variable_name = string [@@deriving eq, show { with_path = false }]
@@ -44,8 +44,8 @@ type binary_operator =
 [@@deriving show { with_path = false }]
 
 type unary_operator =
-  | UMinus
-  | UNot
+  | Minus
+  | Not
 [@@deriving show { with_path = false }]
 
 type expression =
@@ -67,5 +67,4 @@ type expression =
   | ELetIn of expression list * expression (* let x = 1 and y = 2 in x + y *)
   | EIf of expression * expression * expression (* if true then 1 else 0 *)
   | EMatchWith of expression * (expression * expression) list (* match x with _ -> x *)
-  | EWildcard (* fun x _ -> x *)
   | EDataConstructor of data_constructor_name * expression list (* Some 5 *)
