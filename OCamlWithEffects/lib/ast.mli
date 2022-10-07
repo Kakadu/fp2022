@@ -55,6 +55,7 @@ type expression =
   | EIdentifier of id
   | EFun of id list * expression (* fun x y -> x + y *)
   | EList of expression list (* [ 1; 2; 3 ] *)
+  | EConstructList of expression * expression (* 1 :: [2; 3] *)
   | ETuple of expression list (* (1, "Vasya Pupkin", '\n') *)
   | EDeclaration of id * id list * expression (* let add x y = x + y *)
   | EDeclarationRecursive of
