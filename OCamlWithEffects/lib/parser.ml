@@ -17,31 +17,42 @@ let%test _ =
 let parens parser = char '(' *> parser <* char ')'
 
 let parse_literal =
-  let is_digit = function
-    | '0' .. '9' -> true
-    | _ -> false
-  in
-  let parse_int_literal = take_while1 is_digit >>| int_of_string >>| fun x -> LInt x
-  and parse_string_literal =
-    char '"' *> take_while (( != ) '"') <* char '"' >>| fun x -> LString x
-  and parse_char_literal = char '\'' *> any_char <* char '\'' >>| fun x -> LChar x
-  and parse_bool_literal =
-    string "true" <|> string "false" >>| bool_of_string >>| fun x -> LBool x
-  and parse_unit_literal = string "()" >>| fun _ -> LUnit in
-  let parse_literal =
-    choice
-      [ parse_int_literal
-      ; parse_string_literal
-      ; parse_char_literal
-      ; parse_bool_literal
-      ; parse_unit_literal
-      ]
-  in
-  remove_spaces *> choice [ parens parse_literal; parse_literal ] >>| fun x -> ELiteral x
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let is_digit = function
+       | '0' .. '9' -> true
+       | _ -> false
+     in
+     let parse_int_literal = take_while1 is_digit >>| int_of_string >>| fun x -> LInt x
+     and parse_string_literal =
+       char '"' *> take_while (( != ) '"') <* char '"' >>| fun x -> LString x
+     and parse_char_literal = char '\'' *> any_char <* char '\'' >>| fun x -> LChar x
+     and parse_bool_literal =
+       string "true" <|> string "false" >>| bool_of_string >>| fun x -> LBool x
+     and parse_unit_literal = string "()" >>| fun _ -> LUnit in
+     let parse_literal =
+       choice
+         [ parse_int_literal
+         ; parse_string_literal
+         ; parse_char_literal
+         ; parse_bool_literal
+         ; parse_unit_literal
+         ]
+     in
+     parse_literal >>| fun x -> ELiteral x)
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_literal "(888)" = Result.ok @@ ELiteral (LInt 888)
+  parse_string ~consume:Prefix parse_literal "\n \t (888)"
+  = Result.ok @@ ELiteral (LInt 888)
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_literal "  ((888))"
+  = Result.ok @@ ELiteral (LInt 888)
 ;;
 
 let%test _ =
@@ -85,12 +96,13 @@ let%test _ =
 ;;
 
 let parse_entity =
-  let parse_entity =
-    remove_spaces
-    *> take_while1 (fun x ->
-         contains "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'_" x)
-  in
-  choice [ parens parse_entity; parse_entity ]
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> take_while1 (fun x ->
+           contains "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'_" x)
+     )
 ;;
 
 let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
@@ -99,11 +111,23 @@ let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @
 let parse_identifier = parse_entity >>| fun x -> EIdentifier x
 
 let%test _ =
-  parse_string ~consume:Prefix parse_identifier "y" = Result.ok @@ EIdentifier "y"
+  parse_string ~consume:Prefix parse_identifier " (y) " = Result.ok @@ EIdentifier "y"
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_identifier "f x" = Result.ok @@ EIdentifier "f"
+  parse_string ~consume:Prefix parse_identifier "  f x" = Result.ok @@ EIdentifier "f"
+;;
+
+let parse_tuple =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let parse_content = choice [ parse_literal; parse_identifier; self ] in
+     sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
+     <* remove_spaces
+     >>| fun t -> ETuple t)
 ;;
 
 (* Elements of a list can also be functions
@@ -112,21 +136,23 @@ let%test _ =
    that is, by using `parse_entity`, so the parse result will
    either be ambiguous, or it will always be EVariable. *)
 let parse_list =
-  let parse_list =
-    let parse_content = choice [ parse_literal; parse_identifier ] in
-    let parse_elem_in_brackets =
-      remove_spaces *> parse_content <* remove_spaces <* many (char ';')
-    in
-    let parse_in_brackets =
-      char '[' *> many parse_elem_in_brackets <* remove_spaces <* char ']'
-    in
-    let parse_elem_in_constructor =
-      parse_content <* remove_spaces <* string "::" <* remove_spaces
-    in
-    remove_spaces *> many parse_elem_in_constructor
-    >>= fun x -> parse_in_brackets >>| (fun y -> append x y) >>| fun l -> EList l
-  in
-  choice [ parens parse_list; parse_list ]
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let parse_content = choice [ parse_literal; parse_identifier ] in
+     let parse_elem_in_brackets =
+       remove_spaces *> parse_content <* remove_spaces <* many (char ';')
+     in
+     let parse_in_brackets =
+       char '[' *> many parse_elem_in_brackets <* remove_spaces <* char ']'
+     in
+     let parse_elem_in_constructor =
+       parse_content <* remove_spaces <* string "::" <* remove_spaces
+     in
+     remove_spaces *> many parse_elem_in_constructor
+     >>= fun x -> parse_in_brackets >>| (fun y -> append x y) >>| fun l -> EList l)
 ;;
 
 let%test _ =
@@ -164,14 +190,15 @@ let parse_fun =
   fix
   @@ fun self ->
   remove_spaces
-  *> string "fun"
-  *> many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
-  <* remove_spaces
-  <* string "->"
-  <* remove_spaces
-  >>= fun var_list ->
-  let parse_fun = choice [ self; parse_literal; parse_list; parse_identifier ] in
-  choice [ parens parse_fun; parse_fun ] >>| fun expression -> EFun (var_list, expression)
+  *> (parens self
+     <|> (string "fun"
+          *> many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
+         <* remove_spaces
+         <* string "->"
+         <* remove_spaces
+         >>= fun var_list ->
+         choice [ self; parse_literal; parse_list; parse_identifier ]
+         >>| fun expression -> EFun (var_list, expression)))
 ;;
 
 let%test _ =
@@ -190,9 +217,8 @@ let%test _ =
 ;;
 
 let%test _ =
-  match parse_string ~consume:Prefix parse_fun "((fun _ -> 5))" with
-  | Result.Ok _ -> false
-  | _ -> true
+  parse_string ~consume:Prefix parse_fun "((fun _ -> 5))"
+  = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
 ;;
 
 let%test _ =
@@ -222,15 +248,7 @@ let%test _ =
              ] )
 ;;
 
-let parse_tuple =
-  let parse_tuple =
-    let parse_content = choice [ parse_literal; parse_identifier ] in
-    remove_spaces *> sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
-    <* remove_spaces
-    >>| fun t -> ETuple t
-  in
-  remove_spaces *> choice [ parens parse_tuple; parse_tuple ]
-;;
+(* parse_tuple was here!!! *)
 
 let%test _ =
   parse_string ~consume:Prefix parse_tuple "  ( 1 , '2' , \"3\" )  "
