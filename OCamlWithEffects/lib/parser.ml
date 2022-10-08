@@ -89,12 +89,6 @@ let%test _ =
   | _ -> true
 ;;
 
-let%test _ =
-  match parse_string ~consume:Prefix parse_literal "let f x = f x" with
-  | Result.Ok _ -> false
-  | _ -> true
-;;
-
 let parse_entity =
   fix
   @@ fun self ->
@@ -125,9 +119,14 @@ let parse_tuple =
   *> (parens self
      <|>
      let parse_content = choice [ parse_literal; parse_identifier; self ] in
+     parse_content
+     <* remove_spaces
+     <* char ','
+     <* remove_spaces
+     >>= fun h ->
      sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
      <* remove_spaces
-     >>| fun t -> ETuple t)
+     >>| fun l -> ETuple (h :: l))
 ;;
 
 (* Elements of a list can also be functions
@@ -138,26 +137,19 @@ let parse_tuple =
 let parse_list =
   fix
   @@ fun self ->
+  let brackets parser = char '[' *> parser <* char ']'
+  and parse_content =
+    choice [ parse_literal; parse_identifier; self; parens parse_tuple ]
+  in
   remove_spaces
   *> (parens self
-     <|>
-     let parse_content = choice [ parse_literal; parse_identifier ] in
-     let parse_elem_in_brackets =
-       remove_spaces *> parse_content <* remove_spaces <* many (char ';')
-     in
-     let parse_in_brackets =
-       char '[' *> many parse_elem_in_brackets <* remove_spaces <* char ']'
-     in
-     let parse_elem_in_constructor =
-       parse_content <* remove_spaces <* string "::" <* remove_spaces
-     in
-     remove_spaces *> many parse_elem_in_constructor
-     >>= fun x -> parse_in_brackets >>| (fun y -> append x y) >>| fun l -> EList l)
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_list "[ 1; 3; 7; ]"
-  = Result.ok @@ EList [ ELiteral (LInt 1); ELiteral (LInt 3); ELiteral (LInt 7) ]
+     <|> (brackets
+          @@ (remove_spaces
+             *> many
+                  (parse_content
+                  <* remove_spaces
+                  <* (char ';' *> remove_spaces <|> remove_spaces)))
+         >>| fun l -> EList l))
 ;;
 
 let%test _ =
@@ -175,7 +167,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "   'h' :: 'e' :: 'l' :: [ 'l' ; 'o' ]   "
+  parse_string ~consume:Prefix parse_list "  [ 'h' ; 'e' ; 'l' ; 'l' ; 'o'  ]   "
   = Result.ok
     @@ EList
          [ ELiteral (LChar 'h')
@@ -185,6 +177,86 @@ let%test _ =
          ; ELiteral (LChar 'o')
          ]
 ;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list " [1  ]   "
+  = Result.ok @@ EList [ ELiteral (LInt 1) ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ 1; 2; 3]"
+  = Result.ok @@ EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ 1; [true; false]; (())]"
+  = Result.ok
+    @@ EList
+         [ ELiteral (LInt 1)
+         ; EList [ ELiteral (LBool true); ELiteral (LBool false) ]
+         ; ELiteral LUnit
+         ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ 1; [true; false]; ('s', 'e'); ]"
+  = Result.ok
+    @@ EList
+         [ ELiteral (LInt 1)
+         ; EList [ ELiteral (LBool true); ELiteral (LBool false) ]
+         ; ETuple [ ELiteral (LChar 's'); ELiteral (LChar 'e') ]
+         ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ (); (()); (1); (x, y)]"
+  = Result.ok
+    @@ EList
+         [ ELiteral LUnit
+         ; ELiteral LUnit
+         ; ELiteral (LInt 1)
+         ; ETuple [ EIdentifier "x"; EIdentifier "y" ]
+         ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ (a, b); (5, c, (d, e))]"
+  = Result.ok
+    @@ EList
+         [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
+         ; ETuple
+             [ ELiteral (LInt 5)
+             ; EIdentifier "c"
+             ; ETuple [ EIdentifier "d"; EIdentifier "e" ]
+             ]
+         ]
+;;
+
+(* let%test _ =
+  parse_string ~consume:Prefix parse_list "[ (a, b); ((d, e), 5, c); ]"
+  = Result.ok
+    @@ EList
+         [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
+         ; ETuple
+             [ ETuple [ EIdentifier "d"; EIdentifier "e" ]
+             ; ELiteral (LInt 5)
+             ; EIdentifier "c"
+             ]
+         ]
+;; *)
+
+(* let%test _ =
+  parse_string ~consume:Prefix parse_list "[ (((), ())); ((a, b), ) ]"
+  = Result.ok
+    @@ EList
+         [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
+         ; ETuple
+             [ ELiteral (LInt 5)
+             ; EIdentifier "c"
+             ; ETuple [ EIdentifier "d"; EIdentifier "e" ]
+             ]
+         ]
+;; *)
 
 let parse_fun =
   fix
