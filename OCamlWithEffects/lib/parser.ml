@@ -10,6 +10,8 @@ type dispatch =
   { parse_tuple : dispatch -> expression Angstrom.t
   ; parse_list : dispatch -> expression Angstrom.t
   ; parse_fun : dispatch -> expression Angstrom.t
+  ; parse_expression : dispatch -> expression Angstrom.t
+  ; parse_declaration : dispatch -> expression Angstrom.t
   }
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -169,14 +171,32 @@ let parse_fun d =
          <* string "->"
          <* remove_spaces
          >>= fun var_list ->
-         choice [ self; parse_literal; parse_list d; parse_identifier ]
+         choice [ self; parse_literal; d.parse_tuple d; d.parse_list d; parse_identifier ]
          >>| fun expression -> EFun (var_list, expression)))
 ;;
 
-let default = { parse_tuple; parse_list; parse_fun }
+let parse_declaration d =
+  remove_spaces
+  *> string "let"
+  *> lift3
+       (fun function_name variable_list expression ->
+         EDeclaration (function_name, variable_list, expression))
+       parse_entity
+       (many1 (parse_entity >>= fun v -> if v = "=" then fail "" else return v))
+       (remove_spaces *> string "=" *> remove_spaces *> d.parse_expression d)
+;;
+
+let parse_expression d =
+  choice
+    [ parse_literal; d.parse_fun d; d.parse_list d; d.parse_tuple d; parse_identifier ]
+;;
+
+let default = { parse_tuple; parse_list; parse_fun; parse_expression; parse_declaration }
 let parse_tuple = default.parse_tuple default
 let parse_list = default.parse_list default
 let parse_fun = default.parse_fun default
+let parse_expression = default.parse_expression default
+let parse_declaration = default.parse_declaration default
 
 (* Tests for list parsing *)
 let%test _ =
@@ -366,6 +386,36 @@ let%test _ =
   parse_string ~consume:Prefix parse_list "[fun _ -> 1; fun _ -> 2]"
   = Result.ok
     @@ EList [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
+;;
+
+(* Tests for function declaration *)
+let%test _ =
+  parse_string ~consume:Prefix parse_declaration "let f x = ((x, [1; x]), true)"
+  = Result.ok
+    @@ EDeclaration
+         ( "f"
+         , [ "x" ]
+         , ETuple
+             [ ETuple [ EIdentifier "x"; EList [ ELiteral (LInt 1); EIdentifier "x" ] ]
+             ; ELiteral (LBool true)
+             ] )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_declaration
+    "let f x = fun arg1 arg2 -> (arg1, fun x -> [arg1; x])"
+  = Result.ok
+    @@ EDeclaration
+         ( "f"
+         , [ "x" ]
+         , EFun
+             ( [ "arg1"; "arg2" ]
+             , ETuple
+                 [ EIdentifier "arg1"
+                 ; EFun ([ "x" ], EList [ EIdentifier "arg1"; EIdentifier "x" ])
+                 ] ) )
 ;;
 
 let parse = Error "TODO"
