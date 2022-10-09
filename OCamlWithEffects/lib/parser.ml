@@ -12,6 +12,7 @@ type dispatch =
   ; parse_fun : dispatch -> expression Angstrom.t
   ; parse_expression : dispatch -> expression Angstrom.t
   ; parse_declaration : dispatch -> expression Angstrom.t
+  ; parse_conditional : dispatch -> expression Angstrom.t
   }
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -183,20 +184,50 @@ let parse_declaration d =
          EDeclaration (function_name, variable_list, expression))
        parse_entity
        (many1 (parse_entity >>= fun v -> if v = "=" then fail "" else return v))
-       (remove_spaces *> string "=" *> remove_spaces *> d.parse_expression d)
+       (remove_spaces *> string "=" *> d.parse_expression d)
+;;
+
+let parse_conditional d =
+  fix
+  @@ fun self ->
+  parens self
+  <|> remove_spaces
+      *> string "if"
+      *> lift3
+           (fun condition true_branch false_branch ->
+             EIf (condition, true_branch, false_branch))
+           (d.parse_expression d)
+           (remove_spaces *> string "then" *> d.parse_expression d)
+           (remove_spaces *> string "else" *> d.parse_expression d)
 ;;
 
 let parse_expression d =
   choice
-    [ parse_literal; d.parse_fun d; d.parse_list d; d.parse_tuple d; parse_identifier ]
+    [ parse_literal
+    ; d.parse_fun d
+    ; d.parse_list d
+    ; d.parse_tuple d
+    ; d.parse_conditional d
+    ; parse_identifier
+    ]
 ;;
 
-let default = { parse_tuple; parse_list; parse_fun; parse_expression; parse_declaration }
+let default =
+  { parse_tuple
+  ; parse_list
+  ; parse_fun
+  ; parse_expression
+  ; parse_declaration
+  ; parse_conditional
+  }
+;;
+
 let parse_tuple = default.parse_tuple default
 let parse_list = default.parse_list default
 let parse_fun = default.parse_fun default
 let parse_expression = default.parse_expression default
 let parse_declaration = default.parse_declaration default
+let parse_conditional = default.parse_conditional default
 
 (* Tests for list parsing *)
 let%test _ =
@@ -416,6 +447,36 @@ let%test _ =
                  [ EIdentifier "arg1"
                  ; EFun ([ "x" ], EList [ EIdentifier "arg1"; EIdentifier "x" ])
                  ] ) )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_declaration
+    "let f x = if x then (1, x) else (fun y -> [x; y])"
+  = Result.ok
+    @@ EDeclaration
+         ( "f"
+         , [ "x" ]
+         , EIf
+             ( EIdentifier "x"
+             , ETuple [ ELiteral (LInt 1); EIdentifier "x" ]
+             , EFun ([ "y" ], EList [ EIdentifier "x"; EIdentifier "y" ]) ) )
+;;
+
+(* Tests for conditionals parser *)
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_conditional
+    "if true then (1, 2) else (fun _ -> [1; 2; 3])"
+  = Result.ok
+    @@ EIf
+         ( ELiteral (LBool true)
+         , ETuple [ ELiteral (LInt 1); ELiteral (LInt 2) ]
+         , EFun
+             ([ "_" ], EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ])
+         )
 ;;
 
 let parse = Error "TODO"
