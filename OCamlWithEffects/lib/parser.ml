@@ -6,6 +6,12 @@ open String
 type input = string
 (* type error = string *)
 
+type dispatch =
+  { parse_tuple : dispatch -> expression Angstrom.t
+  ; parse_list : dispatch -> expression Angstrom.t
+  ; parse_fun : dispatch -> expression Angstrom.t
+  }
+
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
 let remove_spaces = take_while space_predicate
 
@@ -45,6 +51,7 @@ let parse_literal =
      parse_literal >>| fun x -> ELiteral x)
 ;;
 
+(* Tests for literal parsing *)
 let%test _ =
   parse_string ~consume:Prefix parse_literal "\n \t (888)"
   = Result.ok @@ ELiteral (LInt 888)
@@ -99,11 +106,13 @@ let parse_entity =
      )
 ;;
 
+(* Tests for entity parsing *)
 let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
 let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @@ "add"
 
 let parse_identifier = parse_entity >>| fun x -> EIdentifier x
 
+(* Tests for parsing identifiers *)
 let%test _ =
   parse_string ~consume:Prefix parse_identifier " (y) " = Result.ok @@ EIdentifier "y"
 ;;
@@ -112,34 +121,31 @@ let%test _ =
   parse_string ~consume:Prefix parse_identifier "  f x" = Result.ok @@ EIdentifier "f"
 ;;
 
-let parse_tuple =
+let parse_tuple d =
   fix
   @@ fun self ->
   remove_spaces
-  *> (parens self
-     <|>
-     let parse_content = choice [ parse_literal; parse_identifier; self ] in
-     parse_content
-     <* remove_spaces
-     <* char ','
-     <* remove_spaces
-     >>= fun h ->
-     sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
-     <* remove_spaces
-     >>| fun l -> ETuple (h :: l))
+  *> ((let parse_content =
+         choice
+           [ d.parse_fun d; parse_literal; parse_identifier; d.parse_list d; parens self ]
+       in
+       parse_content
+       <* remove_spaces
+       <* char ','
+       <* remove_spaces
+       >>= fun h ->
+       sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
+       <* remove_spaces
+       >>| fun l -> ETuple (h :: l))
+     <|> parens self)
 ;;
 
-(* Elements of a list can also be functions
-   However, just adding `parse_function` to `choice` won't help,
-   since `parse_variable` and `parse_function` work in same way,
-   that is, by using `parse_entity`, so the parse result will
-   either be ambiguous, or it will always be EVariable. *)
-let parse_list =
+let parse_list d =
   fix
   @@ fun self ->
   let brackets parser = char '[' *> parser <* char ']'
   and parse_content =
-    choice [ parse_literal; parse_identifier; self; parens parse_tuple ]
+    choice [ d.parse_fun d; parse_literal; parse_identifier; self; d.parse_tuple d ]
   in
   remove_spaces
   *> (parens self
@@ -152,6 +158,27 @@ let parse_list =
          >>| fun l -> EList l))
 ;;
 
+let parse_fun d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> (string "fun"
+          *> many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
+         <* remove_spaces
+         <* string "->"
+         <* remove_spaces
+         >>= fun var_list ->
+         choice [ self; parse_literal; parse_list d; parse_identifier ]
+         >>| fun expression -> EFun (var_list, expression)))
+;;
+
+let default = { parse_tuple; parse_list; parse_fun }
+let parse_tuple = default.parse_tuple default
+let parse_list = default.parse_list default
+let parse_fun = default.parse_fun default
+
+(* Tests for list parsing *)
 let%test _ =
   parse_string
     ~consume:Prefix
@@ -232,7 +259,7 @@ let%test _ =
          ]
 ;;
 
-(* let%test _ =
+let%test _ =
   parse_string ~consume:Prefix parse_list "[ (a, b); ((d, e), 5, c); ]"
   = Result.ok
     @@ EList
@@ -243,36 +270,33 @@ let%test _ =
              ; EIdentifier "c"
              ]
          ]
-;; *)
-
-(* let%test _ =
-  parse_string ~consume:Prefix parse_list "[ (((), ())); ((a, b), ) ]"
-  = Result.ok
-    @@ EList
-         [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
-         ; ETuple
-             [ ELiteral (LInt 5)
-             ; EIdentifier "c"
-             ; ETuple [ EIdentifier "d"; EIdentifier "e" ]
-             ]
-         ]
-;; *)
-
-let parse_fun =
-  fix
-  @@ fun self ->
-  remove_spaces
-  *> (parens self
-     <|> (string "fun"
-          *> many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
-         <* remove_spaces
-         <* string "->"
-         <* remove_spaces
-         >>= fun var_list ->
-         choice [ self; parse_literal; parse_list; parse_identifier ]
-         >>| fun expression -> EFun (var_list, expression)))
 ;;
 
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[ (); (()); (((), ())); [(); 1]; ('a', 'b')]"
+  = Result.ok
+    @@ EList
+         [ ELiteral LUnit
+         ; ELiteral LUnit
+         ; ETuple [ ELiteral LUnit; ELiteral LUnit ]
+         ; EList [ ELiteral LUnit; ELiteral (LInt 1) ]
+         ; ETuple [ ELiteral (LChar 'a'); ELiteral (LChar 'b') ]
+         ]
+;;
+
+let%test _ =
+  match parse_string ~consume:Prefix parse_list "[a, b), c]" with
+  | Result.Ok _ -> false
+  | _ -> true
+;;
+
+let%test _ =
+  match parse_string ~consume:Prefix parse_list "[a, (1, 2)), ()]" with
+  | Result.Ok _ -> false
+  | _ -> true
+;;
+
+(* Tests for lambda function parsing *)
 let%test _ =
   parse_string ~consume:Prefix parse_fun "fun x -> (888)"
   = Result.ok @@ EFun ([ "x" ], ELiteral (LInt 888))
@@ -320,8 +344,7 @@ let%test _ =
              ] )
 ;;
 
-(* parse_tuple was here!!! *)
-
+(* Tests for tuple parsing *)
 let%test _ =
   parse_string ~consume:Prefix parse_tuple "  ( 1 , '2' , \"3\" )  "
   = Result.ok
@@ -331,6 +354,18 @@ let%test _ =
 let%test _ =
   parse_string ~consume:Prefix parse_tuple " x,y , z "
   = Result.ok @@ ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_tuple "(fun _ -> 1, fun _ -> 2)"
+  = Result.ok
+    @@ ETuple [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_list "[fun _ -> 1; fun _ -> 2]"
+  = Result.ok
+    @@ EList [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
 ;;
 
 let parse = Error "TODO"
