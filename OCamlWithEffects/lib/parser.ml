@@ -12,6 +12,7 @@ type dispatch =
   ; parse_expression : dispatch -> expression Angstrom.t
   ; parse_declaration : dispatch -> expression Angstrom.t
   ; parse_conditional : dispatch -> expression Angstrom.t
+  ; parse_matching : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -26,7 +27,7 @@ let edeclaration function_name variable_list expression =
 ;;
 
 let eif condition true_branch false_branch = EIf (condition, true_branch, false_branch)
-let eidentifier x = EIdentifier x
+let ematchwith expression cases = EMatchWith (expression, cases)
 (* -------------------------------------- *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -127,7 +128,15 @@ let parse_entity =
 let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
 let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @@ "add"
 
-let parse_identifier = lift eidentifier parse_entity
+let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "in"; "fun" ]
+
+let parse_identifier =
+  parse_entity
+  >>= fun entity ->
+  if List.exists (( = ) entity) keywords
+  then fail "Keyword used!"
+  else return @@ eidentifier entity
+;;
 
 (* Tests for parsing identifiers *)
 let%test _ =
@@ -144,6 +153,7 @@ let parsers_except_tuple d =
   ; d.parse_fun d
   ; d.parse_list d
   ; d.parse_conditional d
+  ; d.parse_matching d
   ; parse_identifier
   ]
 ;;
@@ -155,7 +165,7 @@ let parse_tuple d =
   @@ fun self ->
   remove_spaces
   *> ((let parse_content = choice @@ parsers_except_tuple d <|> parens self
-       and separator = remove_spaces <* char ',' *> remove_spaces in
+       and separator = remove_spaces *> char ',' *> remove_spaces in
        lift2
          etuple
          (parse_content <* separator)
@@ -202,17 +212,39 @@ let parse_declaration d =
 let parse_conditional d =
   fix
   @@ fun self ->
-  parens self
-  <|> remove_spaces
-      *> string "if"
-      *> lift3
-           eif
-           (d.parse_expression d)
-           (remove_spaces *> string "then" *> d.parse_expression d)
-           (remove_spaces *> string "else" *> d.parse_expression d)
+  remove_spaces
+  *> (parens self
+     <|> string "if"
+         *> lift3
+              eif
+              (d.parse_expression d)
+              (remove_spaces *> string "then" *> d.parse_expression d)
+              (remove_spaces *> string "else" *> d.parse_expression d))
 ;;
 
-let parse_expression d = choice @@ parsers_except_tuple d <|> d.parse_tuple d
+let parse_matching d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> string "match"
+         *> lift2
+              ematchwith
+              (d.parse_expression d)
+              (let parse_case =
+                 lift2
+                   (fun case action -> case, action)
+                   (d.parse_expression d)
+                   (remove_spaces *> string "->" *> d.parse_expression d)
+               and separator = remove_spaces *> string "|" in
+               remove_spaces
+               *> string "with"
+               *> remove_spaces
+               *> (string "|" <|> remove_spaces)
+               *> sep_by1 separator parse_case))
+;;
+
+let parse_expression d = d.parse_tuple d <|> choice @@ parsers_except_tuple d
 
 let default =
   { parse_tuple
@@ -221,6 +253,7 @@ let default =
   ; parse_expression
   ; parse_declaration
   ; parse_conditional
+  ; parse_matching
   }
 ;;
 
@@ -230,12 +263,13 @@ let parse_fun = default.parse_fun default
 let parse_expression = default.parse_expression default
 let parse_declaration = default.parse_declaration default
 let parse_conditional = default.parse_conditional default
+let parse_matching = default.parse_matching default
 
 (* Tests for list parsing *)
 let%test _ =
   parse_string
     ~consume:Prefix
-    parse_list
+    parse_expression
     "   [\"apple\";\"orange\";\"banana\";\"pear\"]   "
   = Result.ok
     @@ EList
@@ -247,7 +281,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "  [ 'h' ; 'e' ; 'l' ; 'l' ; 'o'  ]   "
+  parse_string ~consume:Prefix parse_expression "  [ 'h' ; 'e' ; 'l' ; 'l' ; 'o'  ]   "
   = Result.ok
     @@ EList
          [ ELiteral (LChar 'h')
@@ -259,17 +293,17 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list " [1  ]   "
+  parse_string ~consume:Prefix parse_expression " [1  ]   "
   = Result.ok @@ EList [ ELiteral (LInt 1) ]
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ 1; 2; 3]"
+  parse_string ~consume:Prefix parse_expression "[ 1; 2; 3]"
   = Result.ok @@ EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ]
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ 1; [true; false]; (())]"
+  parse_string ~consume:Prefix parse_expression "[ 1; [true; false]; (())]"
   = Result.ok
     @@ EList
          [ ELiteral (LInt 1)
@@ -279,7 +313,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ 1; [true; false]; ('s', 'e'); ]"
+  parse_string ~consume:Prefix parse_expression "[ 1; [true; false]; ('s', 'e'); ]"
   = Result.ok
     @@ EList
          [ ELiteral (LInt 1)
@@ -289,7 +323,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ (); (()); (1); (x, y)]"
+  parse_string ~consume:Prefix parse_expression "[ (); (()); (1); (x, y)]"
   = Result.ok
     @@ EList
          [ ELiteral LUnit
@@ -300,7 +334,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ (a, b); (5, c, (d, e))]"
+  parse_string ~consume:Prefix parse_expression "[ (a, b); (5, c, (d, e))]"
   = Result.ok
     @@ EList
          [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
@@ -313,7 +347,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ (a, b); ((d, e), 5, c); ]"
+  parse_string ~consume:Prefix parse_expression "[ (a, b); ((d, e), 5, c); ]"
   = Result.ok
     @@ EList
          [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
@@ -326,7 +360,10 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[ (); (()); (((), ())); [(); 1]; ('a', 'b')]"
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    "[ (); (()); (((), ())); [(); 1]; ('a', 'b')]"
   = Result.ok
     @@ EList
          [ ELiteral LUnit
@@ -338,52 +375,52 @@ let%test _ =
 ;;
 
 let%test _ =
-  match parse_string ~consume:Prefix parse_list "[a, b), c]" with
+  match parse_string ~consume:Prefix parse_expression "[a, b), c]" with
   | Result.Ok _ -> false
   | _ -> true
 ;;
 
 let%test _ =
-  match parse_string ~consume:Prefix parse_list "[a, (1, 2)), ()]" with
+  match parse_string ~consume:Prefix parse_expression "[a, (1, 2)), ()]" with
   | Result.Ok _ -> false
   | _ -> true
 ;;
 
 (* Tests for lambda function parsing *)
 let%test _ =
-  parse_string ~consume:Prefix parse_fun "fun x -> (888)"
+  parse_string ~consume:Prefix parse_expression "fun x -> (888)"
   = Result.ok @@ EFun ([ "x" ], ELiteral (LInt 888))
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_fun "fun _ -> (fun _ -> (\"Hello\"))"
+  parse_string ~consume:Prefix parse_expression "fun _ -> (fun _ -> (\"Hello\"))"
   = Result.ok @@ EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello")))
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_fun "fun _ -> fun _ -> \"Hello\""
+  parse_string ~consume:Prefix parse_expression "fun _ -> fun _ -> \"Hello\""
   = Result.ok @@ EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello")))
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_fun "((fun _ -> 5))"
+  parse_string ~consume:Prefix parse_expression "((fun _ -> 5))"
   = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_fun "fun x y _ -> [x; y]"
+  parse_string ~consume:Prefix parse_expression "fun x y _ -> [x; y]"
   = Result.ok @@ EFun ([ "x"; "y"; "_" ], EList [ EIdentifier "x"; EIdentifier "y" ])
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_fun "fun _ -> 5"
+  parse_string ~consume:Prefix parse_expression "fun _ -> 5"
   = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
 ;;
 
 let%test _ =
   parse_string
     ~consume:Prefix
-    parse_fun
+    parse_expression
     "   fun  par1  par2  ->  [\"line 1\"; par1; \"line 2\"; par2; \"line 3\"]   "
   = Result.ok
     @@ EFun
@@ -399,29 +436,29 @@ let%test _ =
 
 (* Tests for tuple parsing *)
 let%test _ =
-  parse_string ~consume:Prefix parse_tuple "  ( 1 , '2' , \"3\" )  "
+  parse_string ~consume:Prefix parse_expression "  ( 1 , '2' , \"3\" )  "
   = Result.ok
     @@ ETuple [ ELiteral (LInt 1); ELiteral (LChar '2'); ELiteral (LString "3") ]
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_tuple " x,y , z "
+  parse_string ~consume:Prefix parse_expression " x,y , z "
   = Result.ok @@ ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_tuple " (x,y) , z "
+  parse_string ~consume:Prefix parse_expression " (x,y) , z "
   = Result.ok @@ ETuple [ ETuple [ EIdentifier "x"; EIdentifier "y" ]; EIdentifier "z" ]
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_tuple "(fun _ -> 1, fun _ -> 2)"
+  parse_string ~consume:Prefix parse_expression "(fun _ -> 1, fun _ -> 2)"
   = Result.ok
-    @@ ETuple [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
+    @@ EFun ([ "_" ], ETuple [ ELiteral (LInt 1); EFun ([ "_" ], ELiteral (LInt 2)) ])
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_list "[fun _ -> 1; fun _ -> 2]"
+  parse_string ~consume:Prefix parse_expression "[fun _ -> 1; fun _ -> 2]"
   = Result.ok
     @@ EList [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
 ;;
@@ -460,7 +497,7 @@ let%test _ =
   parse_string
     ~consume:Prefix
     parse_declaration
-    "let f x = if x then (1, x) else (fun y -> [x; y])"
+    "let f x = (if x then (1, x) else (fun y -> [x; y]))"
   = Result.ok
     @@ EDeclaration
          ( "f"
@@ -491,8 +528,8 @@ let%test _ =
 let%test _ =
   parse_string
     ~consume:Prefix
-    parse_conditional
-    "if true then (1, 2) else (fun _ -> [1; 2; 3])"
+    parse_expression
+    "  if (true) then (1, 2) else (fun _ -> [1; 2; 3])"
   = Result.ok
     @@ EIf
          ( ELiteral (LBool true)
@@ -500,6 +537,51 @@ let%test _ =
          , EFun
              ([ "_" ], EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ])
          )
+;;
+
+(* Tests for pattern matching *)
+let%test _ =
+  parse_string ~consume:Prefix parse_expression " match x with _ -> false"
+  = Result.ok @@ EMatchWith (EIdentifier "x", [ EIdentifier "_", ELiteral (LBool false) ])
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    " match [x; y] with\n  | [1; 5] -> 12\n  | [5; 1] -> 12\n  | _ -> 0"
+  = Result.ok
+    @@ EMatchWith
+         ( EList [ EIdentifier "x"; EIdentifier "y" ]
+         , [ EList [ ELiteral (LInt 1); ELiteral (LInt 5) ], ELiteral (LInt 12)
+           ; EList [ ELiteral (LInt 5); ELiteral (LInt 1) ], ELiteral (LInt 12)
+           ; EIdentifier "_", ELiteral (LInt 0)
+           ] )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    " match x, y, z with\n\
+    \  | true, true, false -> true\n\
+    \  | true, false, true -> true\n\
+    \  | false, true, true -> true\n\
+    \  | _ -> false"
+  = Result.ok
+    @@ EMatchWith
+         ( ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
+         , [ ( ETuple
+                 [ ELiteral (LBool true); ELiteral (LBool true); ELiteral (LBool false) ]
+             , ELiteral (LBool true) )
+           ; ( ETuple
+                 [ ELiteral (LBool true); ELiteral (LBool false); ELiteral (LBool true) ]
+             , ELiteral (LBool true) )
+           ; ( ETuple
+                 [ ELiteral (LBool false); ELiteral (LBool true); ELiteral (LBool true) ]
+             , ELiteral (LBool true) )
+           ; EIdentifier "_", ELiteral (LBool false)
+           ] )
 ;;
 
 let parse = Error "TODO"
