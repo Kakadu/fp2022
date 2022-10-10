@@ -4,7 +4,6 @@ open List
 open String
 
 type input = string
-(* type error = string *)
 
 type dispatch =
   { parse_tuple : dispatch -> expression Angstrom.t
@@ -14,6 +13,21 @@ type dispatch =
   ; parse_declaration : dispatch -> expression Angstrom.t
   ; parse_conditional : dispatch -> expression Angstrom.t
   }
+
+(* Functions for constructing expressions *)
+let eliteral x = ELiteral x
+let eidentifier x = EIdentifier x
+let etuple head tail = ETuple (head :: tail)
+let elist x = EList x
+let efun variable_list expression = EFun (variable_list, expression)
+
+let edeclaration function_name variable_list expression =
+  EDeclaration (function_name, variable_list, expression)
+;;
+
+let eif condition true_branch false_branch = EIf (condition, true_branch, false_branch)
+let eidentifier x = EIdentifier x
+(* -------------------------------------- *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
 let remove_spaces = take_while space_predicate
@@ -51,7 +65,7 @@ let parse_literal =
          ; parse_unit_literal
          ]
      in
-     parse_literal >>| fun x -> ELiteral x)
+     lift eliteral parse_literal)
 ;;
 
 (* Tests for literal parsing *)
@@ -113,7 +127,7 @@ let parse_entity =
 let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
 let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @@ "add"
 
-let parse_identifier = parse_entity >>| fun x -> EIdentifier x
+let parse_identifier = lift eidentifier parse_entity
 
 (* Tests for parsing identifiers *)
 let%test _ =
@@ -124,41 +138,40 @@ let%test _ =
   parse_string ~consume:Prefix parse_identifier "  f x" = Result.ok @@ EIdentifier "f"
 ;;
 
+(* Write new parsers (except tuple) here! *)
+let parsers_except_tuple d =
+  [ parse_literal
+  ; d.parse_fun d
+  ; d.parse_list d
+  ; d.parse_conditional d
+  ; parse_identifier
+  ]
+;;
+
+(* -------------------------------------- *)
+
 let parse_tuple d =
   fix
   @@ fun self ->
   remove_spaces
-  *> ((let parse_content =
-         choice
-           [ d.parse_fun d; parse_literal; parse_identifier; d.parse_list d; parens self ]
-       in
-       parse_content
-       <* remove_spaces
-       <* char ','
-       <* remove_spaces
-       >>= fun h ->
-       sep_by1 (remove_spaces <* char ',' *> remove_spaces) parse_content
-       <* remove_spaces
-       >>| fun l -> ETuple (h :: l))
+  *> ((let parse_content = choice @@ parsers_except_tuple d <|> parens self
+       and separator = remove_spaces <* char ',' *> remove_spaces in
+       lift2
+         etuple
+         (parse_content <* separator)
+         (sep_by1 separator parse_content <* remove_spaces))
      <|> parens self)
 ;;
 
 let parse_list d =
   fix
   @@ fun self ->
-  let brackets parser = char '[' *> parser <* char ']'
-  and parse_content =
-    choice [ d.parse_fun d; parse_literal; parse_identifier; self; d.parse_tuple d ]
-  in
   remove_spaces
-  *> (parens self
-     <|> (brackets
-          @@ (remove_spaces
-             *> many
-                  (parse_content
-                  <* remove_spaces
-                  <* (char ';' *> remove_spaces <|> remove_spaces)))
-         >>| fun l -> EList l))
+  *>
+  let brackets parser = char '[' *> parser <* char ']'
+  and separator = remove_spaces *> char ';' *> remove_spaces <|> remove_spaces in
+  parens self
+  <|> lift elist @@ brackets @@ (remove_spaces *> many (d.parse_expression d <* separator))
 ;;
 
 let parse_fun d =
@@ -166,22 +179,21 @@ let parse_fun d =
   @@ fun self ->
   remove_spaces
   *> (parens self
-     <|> (string "fun"
-          *> many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
-         <* remove_spaces
-         <* string "->"
-         <* remove_spaces
-         >>= fun var_list ->
-         choice [ self; parse_literal; d.parse_tuple d; d.parse_list d; parse_identifier ]
-         >>| fun expression -> EFun (var_list, expression)))
+     <|> string "fun"
+         *> lift2
+              efun
+              (many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
+              <* remove_spaces
+              <* string "->"
+              <* remove_spaces)
+              (d.parse_expression d))
 ;;
 
 let parse_declaration d =
   remove_spaces
   *> string "let"
   *> lift3
-       (fun function_name variable_list expression ->
-         EDeclaration (function_name, variable_list, expression))
+       edeclaration
        parse_entity
        (many1 (parse_entity >>= fun v -> if v = "=" then fail "" else return v))
        (remove_spaces *> string "=" *> d.parse_expression d)
@@ -194,23 +206,13 @@ let parse_conditional d =
   <|> remove_spaces
       *> string "if"
       *> lift3
-           (fun condition true_branch false_branch ->
-             EIf (condition, true_branch, false_branch))
+           eif
            (d.parse_expression d)
            (remove_spaces *> string "then" *> d.parse_expression d)
            (remove_spaces *> string "else" *> d.parse_expression d)
 ;;
 
-let parse_expression d =
-  choice
-    [ parse_literal
-    ; d.parse_fun d
-    ; d.parse_list d
-    ; d.parse_tuple d
-    ; d.parse_conditional d
-    ; parse_identifier
-    ]
-;;
+let parse_expression d = choice @@ parsers_except_tuple d <|> d.parse_tuple d
 
 let default =
   { parse_tuple
@@ -408,6 +410,11 @@ let%test _ =
 ;;
 
 let%test _ =
+  parse_string ~consume:Prefix parse_tuple " (x,y) , z "
+  = Result.ok @@ ETuple [ ETuple [ EIdentifier "x"; EIdentifier "y" ]; EIdentifier "z" ]
+;;
+
+let%test _ =
   parse_string ~consume:Prefix parse_tuple "(fun _ -> 1, fun _ -> 2)"
   = Result.ok
     @@ ETuple [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
@@ -462,6 +469,22 @@ let%test _ =
              ( EIdentifier "x"
              , ETuple [ ELiteral (LInt 1); EIdentifier "x" ]
              , EFun ([ "y" ], EList [ EIdentifier "x"; EIdentifier "y" ]) ) )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_declaration "let g x y z = (x, x, y, y, z, z)"
+  = Result.ok
+    @@ EDeclaration
+         ( "g"
+         , [ "x"; "y"; "z" ]
+         , ETuple
+             [ EIdentifier "x"
+             ; EIdentifier "x"
+             ; EIdentifier "y"
+             ; EIdentifier "y"
+             ; EIdentifier "z"
+             ; EIdentifier "z"
+             ] )
 ;;
 
 (* Tests for conditionals parser *)
