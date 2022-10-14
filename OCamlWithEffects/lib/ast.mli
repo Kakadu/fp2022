@@ -58,7 +58,7 @@ type expression =
   | EConstructList of expression * expression (* 1 :: [2; 3] *)
   | ETuple of expression list (* (1, "Vasya Pupkin", '\n') *)
   | EDeclaration of id * id list * expression (* let add x y = x + y *)
-  | EDeclarationRecursive of
+  | ERecursiveDeclaration of
       id * id list * expression (* let rec factorial n = n * factorial (n - 1) *)
   | ELetIn of expression list * expression (* let x = 1 and y = 2 in x + y *)
   | EIf of expression * expression * expression (* if true then 1 else 0 *)
