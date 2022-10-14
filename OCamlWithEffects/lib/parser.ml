@@ -13,6 +13,7 @@ type dispatch =
   ; parse_declaration : dispatch -> expression Angstrom.t
   ; parse_conditional : dispatch -> expression Angstrom.t
   ; parse_matching : dispatch -> expression Angstrom.t
+  ; parse_binary_operation : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -22,12 +23,31 @@ let etuple head tail = ETuple (head :: tail)
 let elist x = EList x
 let efun variable_list expression = EFun (variable_list, expression)
 
+let ebinary_operation operator left_operand right_operand =
+  EBinaryOperation (operator, left_operand, right_operand)
+;;
+
 let edeclaration function_name variable_list expression =
   EDeclaration (function_name, variable_list, expression)
 ;;
 
 let eif condition true_branch false_branch = EIf (condition, true_branch, false_branch)
 let ematchwith expression cases = EMatchWith (expression, cases)
+
+(* Binary operators smart constructors *)
+let badd _ = Add
+let bsub _ = Sub
+let bmul _ = Mul
+let bdiv _ = Div
+let beq _ = Eq
+let bneq _ = NEq
+let bgt _ = GT
+let bgte _ = GTE
+let blt _ = LT
+let blte _ = LTE
+let band _ = AND
+let bor _ = OR
+
 (* -------------------------------------- *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -38,7 +58,7 @@ let%test _ =
   = Result.ok @@ [ 's' ]
 ;;
 
-let parens parser = char '(' *> parser <* char ')'
+let parens parser = remove_spaces *> char '(' *> parser <* char ')'
 
 let parse_literal =
   fix
@@ -148,7 +168,7 @@ let%test _ =
 ;;
 
 (* Write new parsers (except tuple) here! *)
-let parsers_except_tuple d =
+let parsers_except d =
   [ parse_literal
   ; d.parse_fun d
   ; d.parse_list d
@@ -164,7 +184,7 @@ let parse_tuple d =
   fix
   @@ fun self ->
   remove_spaces
-  *> ((let parse_content = choice @@ parsers_except_tuple d <|> parens self
+  *> ((let parse_content = choice @@ parsers_except d <|> parens self
        and separator = remove_spaces *> char ',' *> remove_spaces in
        lift2
          etuple
@@ -244,7 +264,51 @@ let parse_matching d =
                *> sep_by1 separator parse_case))
 ;;
 
-let parse_expression d = d.parse_tuple d <|> choice @@ parsers_except_tuple d
+let parse_binary_operation d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *>
+  let multiplicative = remove_spaces *> choice [ char '*' >>| bmul; char '/' >>| bdiv ]
+  and additive = remove_spaces *> choice [ char '+' >>| badd; char '-' >>| bsub ]
+  and relational =
+    remove_spaces
+    *> choice
+         [ string ">=" >>| bgte
+         ; string "<=" >>| blte
+         ; char '>' >>| bgt
+         ; char '<' >>| blt
+         ]
+  and equality =
+    remove_spaces *> choice [ string "==" >>| beq; string "!=" <|> string "<>" >>| bneq ]
+  and logical_and = remove_spaces *> (string "&&" >>| band)
+  and logical_or = remove_spaces *> (string "||" >>| bor) in
+  let chainl1 expression_parser operation_parser =
+    let rec go acc =
+      lift2
+        (fun binary_operator right_operand ->
+          ebinary_operation binary_operator acc right_operand)
+        operation_parser
+        expression_parser
+      >>= go
+      <|> return acc
+    in
+    expression_parser >>= fun init -> go init
+  in
+  let ( <||> ) = chainl1 in
+  let parse_content = d.parse_tuple d <|> parens self <|> choice (parsers_except d) in
+  parse_content
+  <||> multiplicative
+  <||> additive
+  <||> relational
+  <||> equality
+  <||> logical_and
+  <||> logical_or
+;;
+
+let parse_expression d =
+  d.parse_tuple d <|> d.parse_binary_operation d <|> choice @@ parsers_except d
+;;
 
 let default =
   { parse_tuple
@@ -254,6 +318,7 @@ let default =
   ; parse_declaration
   ; parse_conditional
   ; parse_matching
+  ; parse_binary_operation
   }
 ;;
 
@@ -264,6 +329,7 @@ let parse_expression = default.parse_expression default
 let parse_declaration = default.parse_declaration default
 let parse_conditional = default.parse_conditional default
 let parse_matching = default.parse_matching default
+let parse_binary_operation = default.parse_binary_operation default
 
 (* Tests for list parsing *)
 let%test _ =
@@ -582,6 +648,91 @@ let%test _ =
              , ELiteral (LBool true) )
            ; EIdentifier "_", ELiteral (LBool false)
            ] )
+;;
+
+(* Tests for arithmetic expressions  *)
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "1 + 2"
+  = Result.ok @@ EBinaryOperation (Add, ELiteral (LInt 1), ELiteral (LInt 2))
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "1 + 2 * 3"
+  = Result.ok
+    @@ EBinaryOperation
+         ( Add
+         , ELiteral (LInt 1)
+         , EBinaryOperation (Mul, ELiteral (LInt 2), ELiteral (LInt 3)) )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "1 + 2 * 3 == 7"
+  = Result.ok
+    @@ EBinaryOperation
+         ( Eq
+         , EBinaryOperation
+             ( Add
+             , ELiteral (LInt 1)
+             , EBinaryOperation (Mul, ELiteral (LInt 2), ELiteral (LInt 3)) )
+         , ELiteral (LInt 7) )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    "1 <= 3 && 2 <= 4 && true && 3 > 1 || 1 == 7"
+  = Result.ok
+    @@ EBinaryOperation
+         ( OR
+         , EBinaryOperation
+             ( AND
+             , EBinaryOperation
+                 ( AND
+                 , EBinaryOperation
+                     ( AND
+                     , EBinaryOperation (LTE, ELiteral (LInt 1), ELiteral (LInt 3))
+                     , EBinaryOperation (LTE, ELiteral (LInt 2), ELiteral (LInt 4)) )
+                 , ELiteral (LBool true) )
+             , EBinaryOperation (GT, ELiteral (LInt 3), ELiteral (LInt 1)) )
+         , EBinaryOperation (Eq, ELiteral (LInt 1), ELiteral (LInt 7)) )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "1 + (2 + 3)"
+  = Result.ok
+    @@ EBinaryOperation
+         ( Add
+         , ELiteral (LInt 1)
+         , EBinaryOperation (Add, ELiteral (LInt 2), ELiteral (LInt 3)) )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_declaration "let f x y = x + y"
+  = Result.ok
+    @@ EDeclaration
+         ("f", [ "x"; "y" ], EBinaryOperation (Add, EIdentifier "x", EIdentifier "y"))
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    "if x && y / z then (x + y) / z else (x + y) * z"
+  = Result.ok
+    @@ EIf
+         ( EBinaryOperation
+             ( AND
+             , EIdentifier "x"
+             , EBinaryOperation (Div, EIdentifier "y", EIdentifier "z") )
+         , EBinaryOperation
+             ( Div
+             , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y")
+             , EIdentifier "z" )
+         , EBinaryOperation
+             ( Mul
+             , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y")
+             , EIdentifier "z" ) )
 ;;
 
 let parse = Error "TODO"
