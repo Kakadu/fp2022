@@ -10,10 +10,10 @@ type dispatch =
   ; parse_list : dispatch -> expression Angstrom.t
   ; parse_fun : dispatch -> expression Angstrom.t
   ; parse_expression : dispatch -> expression Angstrom.t
-  ; parse_declaration : dispatch -> expression Angstrom.t
   ; parse_conditional : dispatch -> expression Angstrom.t
   ; parse_matching : dispatch -> expression Angstrom.t
   ; parse_binary_operation : dispatch -> expression Angstrom.t
+  ; parse_let_in : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -29,6 +29,10 @@ let ebinary_operation operator left_operand right_operand =
 
 let edeclaration function_name variable_list expression =
   EDeclaration (function_name, variable_list, expression)
+;;
+
+let erecursivedeclaration function_name variable_list expression =
+  ERecursiveDeclaration (function_name, variable_list, expression)
 ;;
 
 let eif condition true_branch false_branch = EIf (condition, true_branch, false_branch)
@@ -47,7 +51,7 @@ let blt _ = LT
 let blte _ = LTE
 let band _ = AND
 let bor _ = OR
-
+let eletin declaration_list body = ELetIn (declaration_list, body)
 (* -------------------------------------- *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -154,7 +158,7 @@ let parse_identifier =
   parse_entity
   >>= fun entity ->
   if List.exists (( = ) entity) keywords
-  then fail "Keyword used!"
+  then fail "Parsing error: keyword used."
   else return @@ eidentifier entity
 ;;
 
@@ -175,6 +179,7 @@ let parsers_except d =
   ; d.parse_conditional d
   ; d.parse_matching d
   ; parse_identifier
+  ; d.parse_let_in d
   ]
 ;;
 
@@ -219,15 +224,38 @@ let parse_fun d =
               (d.parse_expression d))
 ;;
 
-let parse_declaration d =
-  remove_spaces
-  *> string "let"
-  *> lift3
-       edeclaration
-       parse_entity
-       (many1 (parse_entity >>= fun v -> if v = "=" then fail "" else return v))
-       (remove_spaces *> string "=" *> d.parse_expression d)
+(* Declaration parsing*)
+let declaration_helper constructing_function d =
+  lift3
+    constructing_function
+    parse_entity
+    (many (parse_entity >>= fun v -> if v = "=" then fail "" else return v))
+    (remove_spaces *> string "=" *> d.parse_expression d)
 ;;
+
+let parse_declaration d =
+  remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
+  >>= fun parsed_rec ->
+  match parsed_rec with
+  | [] -> declaration_helper edeclaration d
+  | [ _ ] -> declaration_helper erecursivedeclaration d
+  | _ -> fail "Parsing error: too many \"rec\"."
+;;
+
+let parse_let_in d =
+  remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
+  >>= fun parsed_rec ->
+  lift2
+    eletin
+    (let separator = remove_spaces *> string "and" *> remove_spaces in
+     match parsed_rec with
+     | [] -> sep_by1 separator @@ declaration_helper edeclaration d
+     | [ _ ] -> sep_by1 separator @@ declaration_helper erecursivedeclaration d
+     | _ -> fail "Parsing error: too many \"rec\".")
+    (remove_spaces *> string "in" *> d.parse_expression d)
+;;
+
+(* -------------------*)
 
 let parse_conditional d =
   fix
@@ -315,10 +343,10 @@ let default =
   ; parse_list
   ; parse_fun
   ; parse_expression
-  ; parse_declaration
   ; parse_conditional
   ; parse_matching
   ; parse_binary_operation
+  ; parse_let_in
   }
 ;;
 
@@ -326,10 +354,11 @@ let parse_tuple = default.parse_tuple default
 let parse_list = default.parse_list default
 let parse_fun = default.parse_fun default
 let parse_expression = default.parse_expression default
-let parse_declaration = default.parse_declaration default
+let parse_declaration = parse_declaration default
 let parse_conditional = default.parse_conditional default
 let parse_matching = default.parse_matching default
 let parse_binary_operation = default.parse_binary_operation default
+let parse_let_in = default.parse_let_in default
 
 (* Tests for list parsing *)
 let%test _ =
@@ -590,6 +619,17 @@ let%test _ =
              ] )
 ;;
 
+let%test _ =
+  parse_string ~consume:Prefix parse_declaration "let comma = ','"
+  = Result.ok @@ EDeclaration ("comma", [], ELiteral (LChar ','))
+;;
+
+(* let%test _ =
+  parse_string ~consume:Prefix parse_declaration "let rec helper acc n =\n match n with\n | 0 -> acc\n | _ -> helper (acc + n) (n - 1)"
+  = Result.ok
+    @@ lalala
+;; *)
+
 (* Tests for conditionals parser *)
 let%test _ =
   parse_string
@@ -714,6 +754,26 @@ let%test _ =
          ("f", [ "x"; "y" ], EBinaryOperation (Add, EIdentifier "x", EIdentifier "y"))
 ;;
 
+(* Tests for let in *)
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_declaration
+    " let triple_by_triple x = let triple = (x, x, x) in [ triple; triple; triple] "
+  = Result.ok
+    @@ EDeclaration
+         ( "triple_by_triple"
+         , [ "x" ]
+         , ELetIn
+             ( [ EDeclaration
+                   ( "triple"
+                   , []
+                   , ETuple [ EIdentifier "x"; EIdentifier "x"; EIdentifier "x" ] )
+               ]
+             , EList [ EIdentifier "triple"; EIdentifier "triple"; EIdentifier "triple" ]
+             ) )
+;;
+
 let%test _ =
   parse_string
     ~consume:Prefix
@@ -733,6 +793,27 @@ let%test _ =
              ( Mul
              , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y")
              , EIdentifier "z" ) )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_declaration
+    " let triple_by_triple x = let triple = (x, x, x) and double = (x, x) in [ triple; \
+     double; triple] "
+  = Result.ok
+    @@ EDeclaration
+         ( "triple_by_triple"
+         , [ "x" ]
+         , ELetIn
+             ( [ EDeclaration
+                   ( "triple"
+                   , []
+                   , ETuple [ EIdentifier "x"; EIdentifier "x"; EIdentifier "x" ] )
+               ; EDeclaration ("double", [], ETuple [ EIdentifier "x"; EIdentifier "x" ])
+               ]
+             , EList [ EIdentifier "triple"; EIdentifier "double"; EIdentifier "triple" ]
+             ) )
 ;;
 
 let parse = Error "TODO"
