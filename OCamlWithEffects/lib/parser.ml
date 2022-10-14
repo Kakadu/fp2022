@@ -15,6 +15,7 @@ type dispatch =
   ; parse_binary_operation : dispatch -> expression Angstrom.t
   ; parse_let_in : dispatch -> expression Angstrom.t
   ; parse_application : dispatch -> expression Angstrom.t
+  ; parse_data_constructor : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -44,6 +45,10 @@ let eapplication function_expression operand_expression =
   EApplication (function_expression, operand_expression)
 ;;
 
+let edata_constructor constructor_name expressions =
+  EDataConstructor (constructor_name, expressions)
+;;
+
 (* Binary operators smart constructors *)
 let badd _ = Add
 let bsub _ = Sub
@@ -57,7 +62,6 @@ let blt _ = LT
 let blte _ = LTE
 let band _ = AND
 let bor _ = OR
-
 (* -------------------------------------- *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -158,12 +162,13 @@ let parse_entity =
 let%test _ = parse_string ~consume:Prefix parse_entity "_ -> x" = Result.ok @@ "_"
 let%test _ = parse_string ~consume:Prefix parse_entity "  add x y" = Result.ok @@ "add"
 
-let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "in"; "fun" ]
+let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
+let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun" ]
 
 let parse_identifier =
   parse_entity
   >>= fun entity ->
-  if List.exists (( = ) entity) keywords
+  if List.exists (( = ) entity) keywords || List.exists (( = ) entity) data_constructors
   then fail "Parsing error: keyword used."
   else return @@ eidentifier entity
 ;;
@@ -184,6 +189,7 @@ let parsers_except d =
   ; d.parse_list d
   ; d.parse_conditional d
   ; d.parse_matching d
+  ; d.parse_data_constructor d
   ; parse_identifier
   ; d.parse_let_in d
   ]
@@ -331,7 +337,9 @@ let parse_binary_operation d =
     expression_parser >>= fun init -> go init
   in
   let ( <||> ) = chainl1 in
-  let parse_content = d.parse_tuple d <|> parens self <|> choice (parsers_except d) in
+  let parse_content =
+    d.parse_application d <|> parens self <|> choice (parsers_except d)
+  in
   parse_content
   <||> multiplicative
   <||> additive
@@ -348,7 +356,10 @@ let parse_application d =
   *> (parens self
      <|>
      let operand_parser =
-       choice @@ parsers_except d <|> parens @@ d.parse_application d <|> parens self
+       parens (d.parse_binary_operation d)
+       <|> choice @@ parsers_except d
+       <|> parens (d.parse_tuple d)
+       <|> parens self
      in
      let apply_lift acc =
        lift (fun operand_expression -> eapplication acc operand_expression) operand_parser
@@ -357,6 +368,22 @@ let parse_application d =
      parse_identifier
      <|> parens @@ d.parse_fun d
      >>= fun init -> apply_lift init >>= fun init -> go init)
+;;
+
+let parse_data_constructor d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> (lift2
+            (fun constructor_name expression_list -> constructor_name, expression_list)
+            parse_entity
+            (many (d.parse_expression d))
+         >>= function
+         | constructor_name, expression_list ->
+           if List.exists (( = ) constructor_name) data_constructors
+           then return @@ edata_constructor constructor_name expression_list
+           else fail "Parsing error: invalid constructor."))
 ;;
 
 let parse_expression d =
@@ -376,6 +403,7 @@ let default =
   ; parse_binary_operation
   ; parse_let_in
   ; parse_application
+  ; parse_data_constructor
   }
 ;;
 
@@ -654,11 +682,26 @@ let%test _ =
   = Result.ok @@ EDeclaration ("comma", [], ELiteral (LChar ','))
 ;;
 
-(* let%test _ =
-  parse_string ~consume:Prefix parse_declaration "let rec helper acc n =\n match n with\n | 0 -> acc\n | _ -> helper (acc + n) (n - 1)"
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_declaration
+    "let rec helper acc n =\n match n with\n | 0 -> acc\n | _ -> helper (acc + n) (n - 1)"
   = Result.ok
-    @@ lalala
-;; *)
+    @@ ERecursiveDeclaration
+         ( "helper"
+         , [ "acc"; "n" ]
+         , EMatchWith
+             ( EIdentifier "n"
+             , [ ELiteral (LInt 0), EIdentifier "acc"
+               ; ( EIdentifier "_"
+                 , EApplication
+                     ( EApplication
+                         ( EIdentifier "helper"
+                         , EBinaryOperation (Add, EIdentifier "acc", EIdentifier "n") )
+                     , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) ) )
+               ] ) )
+;;
 
 (* Tests for conditionals parser *)
 let%test _ =
@@ -876,6 +919,12 @@ let%test _ =
          , ELiteral (LInt 0) )
 ;;
 
+(* Tests for data constructor parser *)
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "Ok 1"
+  = Result.ok @@ EDataConstructor ("Ok", [ ELiteral (LInt 1) ])
+;;
+
 let%test _ =
   parse_string
     ~consume:Prefix
@@ -887,6 +936,29 @@ let%test _ =
          , [ ELiteral (LInt 100), EIdentifier "x"
            ; ELiteral (LInt 200), EIdentifier "y"
            ; EIdentifier "_", ELiteral (LInt 0)
+           ] )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    "match f with Ok x -> x + 1 | _ -> let sq = fun y -> y * y in sq x"
+  = Result.ok
+    @@ EMatchWith
+         ( EIdentifier "f"
+         , [ ( EDataConstructor ("Ok", [ EIdentifier "x" ])
+             , EBinaryOperation (Add, EIdentifier "x", ELiteral (LInt 1)) )
+           ; ( EIdentifier "_"
+             , ELetIn
+                 ( [ EDeclaration
+                       ( "sq"
+                       , []
+                       , EFun
+                           ( [ "y" ]
+                           , EBinaryOperation (Mul, EIdentifier "y", EIdentifier "y") ) )
+                   ]
+                 , EApplication (EIdentifier "sq", EIdentifier "x") ) )
            ] )
 ;;
 
