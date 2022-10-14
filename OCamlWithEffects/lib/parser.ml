@@ -14,6 +14,7 @@ type dispatch =
   ; parse_matching : dispatch -> expression Angstrom.t
   ; parse_binary_operation : dispatch -> expression Angstrom.t
   ; parse_let_in : dispatch -> expression Angstrom.t
+  ; parse_application : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -37,6 +38,11 @@ let erecursivedeclaration function_name variable_list expression =
 
 let eif condition true_branch false_branch = EIf (condition, true_branch, false_branch)
 let ematchwith expression cases = EMatchWith (expression, cases)
+let eletin declaration_list body = ELetIn (declaration_list, body)
+
+let eapplication function_expression operand_expression =
+  EApplication (function_expression, operand_expression)
+;;
 
 (* Binary operators smart constructors *)
 let badd _ = Add
@@ -51,7 +57,7 @@ let blt _ = LT
 let blte _ = LTE
 let band _ = AND
 let bor _ = OR
-let eletin declaration_list body = ELetIn (declaration_list, body)
+
 (* -------------------------------------- *)
 
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
@@ -189,7 +195,8 @@ let parse_tuple d =
   fix
   @@ fun self ->
   remove_spaces
-  *> ((let parse_content = choice @@ parsers_except d <|> parens self
+  *> ((let parse_content =
+         choice @@ parsers_except d <|> d.parse_application d <|> parens self
        and separator = remove_spaces *> char ',' *> remove_spaces in
        lift2
          etuple
@@ -221,7 +228,7 @@ let parse_fun d =
               <* remove_spaces
               <* string "->"
               <* remove_spaces)
-              (d.parse_expression d))
+              (d.parse_expression d <* remove_spaces))
 ;;
 
 (* Declaration parsing*)
@@ -334,8 +341,29 @@ let parse_binary_operation d =
   <||> logical_or
 ;;
 
+let parse_application d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice @@ parsers_except d <|> parens @@ d.parse_application d <|> parens self
+     in
+     let apply_lift acc =
+       lift (fun operand_expression -> eapplication acc operand_expression) operand_parser
+     in
+     let rec go acc = apply_lift acc >>= go <|> return acc in
+     parse_identifier
+     <|> parens @@ d.parse_fun d
+     >>= fun init -> apply_lift init >>= fun init -> go init)
+;;
+
 let parse_expression d =
-  d.parse_tuple d <|> d.parse_binary_operation d <|> choice @@ parsers_except d
+  d.parse_tuple d
+  <|> d.parse_binary_operation d
+  <|> d.parse_application d
+  <|> choice @@ parsers_except d
 ;;
 
 let default =
@@ -347,6 +375,7 @@ let default =
   ; parse_matching
   ; parse_binary_operation
   ; parse_let_in
+  ; parse_application
   }
 ;;
 
@@ -359,6 +388,7 @@ let parse_conditional = default.parse_conditional default
 let parse_matching = default.parse_matching default
 let parse_binary_operation = default.parse_binary_operation default
 let parse_let_in = default.parse_let_in default
+let parse_application = default.parse_application default
 
 (* Tests for list parsing *)
 let%test _ =
@@ -393,12 +423,12 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "[ 1; 2; 3]"
+  parse_string ~consume:Prefix parse_expression " [ 1; 2; 3] "
   = Result.ok @@ EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ]
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "[ 1; [true; false]; (())]"
+  parse_string ~consume:Prefix parse_expression "  [ 1; [true; false]; (())]  "
   = Result.ok
     @@ EList
          [ ELiteral (LInt 1)
@@ -498,7 +528,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "((fun _ -> 5))"
+  parse_string ~consume:Prefix parse_expression "((fun _ -> 5   ))"
   = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
 ;;
 
@@ -814,6 +844,50 @@ let%test _ =
                ]
              , EList [ EIdentifier "triple"; EIdentifier "double"; EIdentifier "triple" ]
              ) )
+;;
+
+(* Tests for application *)
+let%test _ =
+  parse_string ~consume:Prefix parse_expression " f x "
+  = Result.ok @@ EApplication (EIdentifier "f", EIdentifier "x")
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression " f x y "
+  = Result.ok
+    @@ EApplication (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression " f [1; 2] n "
+  = Result.ok
+    @@ EApplication
+         ( EApplication (EIdentifier "f", EList [ ELiteral (LInt 1); ELiteral (LInt 2) ])
+         , EIdentifier "n" )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "(fun x y -> [x; y]) n 0"
+  = Result.ok
+    @@ EApplication
+         ( EApplication
+             ( EFun ([ "x"; "y" ], EList [ EIdentifier "x"; EIdentifier "y" ])
+             , EIdentifier "n" )
+         , ELiteral (LInt 0) )
+;;
+
+let%test _ =
+  parse_string
+    ~consume:Prefix
+    parse_expression
+    " match f x y with\n  | 100 -> x\n  | 200 -> y\n  | _ -> 0"
+  = Result.ok
+    @@ EMatchWith
+         ( EApplication (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
+         , [ ELiteral (LInt 100), EIdentifier "x"
+           ; ELiteral (LInt 200), EIdentifier "y"
+           ; EIdentifier "_", ELiteral (LInt 0)
+           ] )
 ;;
 
 let parse = Error "TODO"
