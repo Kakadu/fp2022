@@ -16,6 +16,7 @@ type dispatch =
   ; parse_let_in : dispatch -> expression Angstrom.t
   ; parse_application : dispatch -> expression Angstrom.t
   ; parse_data_constructor : dispatch -> expression Angstrom.t
+  ; parse_unary_operation : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -49,6 +50,8 @@ let edata_constructor constructor_name expressions =
   EDataConstructor (constructor_name, expressions)
 ;;
 
+let eunary_operation operation expression = EUnaryOperation (operation, expression)
+
 (* Binary operators smart constructors *)
 let badd _ = Add
 let bsub _ = Sub
@@ -64,6 +67,9 @@ let band _ = AND
 let bor _ = OR
 (* -------------------------------------- *)
 
+(* Unary operator smart constructors *)
+let uminus _ = Minus
+let unot _ = Not
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
 let remove_spaces = take_while space_predicate
 
@@ -338,7 +344,10 @@ let parse_binary_operation d =
   in
   let ( <||> ) = chainl1 in
   let parse_content =
-    d.parse_application d <|> parens self <|> choice (parsers_except d)
+    d.parse_application d
+    <|> d.parse_unary_operation d
+    <|> parens self
+    <|> choice (parsers_except d)
   in
   parse_content
   <||> multiplicative
@@ -357,13 +366,12 @@ let parse_application d =
      <|>
      let operand_parser =
        parens (d.parse_binary_operation d)
+       <|> parens (d.parse_unary_operation d)
        <|> choice @@ parsers_except d
        <|> parens (d.parse_tuple d)
        <|> parens self
      in
-     let apply_lift acc =
-       lift (fun operand_expression -> eapplication acc operand_expression) operand_parser
-     in
+     let apply_lift acc = lift (eapplication acc) operand_parser in
      let rec go acc = apply_lift acc >>= go <|> return acc in
      parse_identifier
      <|> parens @@ d.parse_fun d
@@ -386,9 +394,23 @@ let parse_data_constructor d =
            else fail "Parsing error: invalid constructor."))
 ;;
 
+let parse_unary_operation d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let parse_unary_operator = choice [ char '-' >>| uminus; char '!' >>| unot ] in
+     lift2
+       eunary_operation
+       parse_unary_operator
+       (parens (d.parse_binary_operation d) <|> choice (parsers_except d)))
+;;
+
 let parse_expression d =
   d.parse_tuple d
   <|> d.parse_binary_operation d
+  <|> d.parse_unary_operation d
   <|> d.parse_application d
   <|> choice @@ parsers_except d
 ;;
@@ -404,6 +426,7 @@ let default =
   ; parse_let_in
   ; parse_application
   ; parse_data_constructor
+  ; parse_unary_operation
   }
 ;;
 
@@ -417,6 +440,7 @@ let parse_matching = default.parse_matching default
 let parse_binary_operation = default.parse_binary_operation default
 let parse_let_in = default.parse_let_in default
 let parse_application = default.parse_application default
+let parse_unary_operation = default.parse_unary_operation default
 
 (* Tests for list parsing *)
 let%test _ =
@@ -960,6 +984,45 @@ let%test _ =
                    ]
                  , EApplication (EIdentifier "sq", EIdentifier "x") ) )
            ] )
+;;
+
+(* Tests for unary operations parsing *)
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "-2"
+  = Result.ok @@ EUnaryOperation (Minus, ELiteral (LInt 2))
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "-(x + y)"
+  = Result.ok
+    @@ EUnaryOperation (Minus, EBinaryOperation (Add, EIdentifier "x", EIdentifier "y"))
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "- ((fun x y -> x + y) 1 2)"
+  = Result.ok
+    @@ EUnaryOperation
+         ( Minus
+         , EApplication
+             ( EApplication
+                 ( EFun
+                     ( [ "x"; "y" ]
+                     , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y") )
+                 , ELiteral (LInt 1) )
+             , ELiteral (LInt 2) ) )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression "if !x then -1 + x else !(x * (-x))"
+  = Result.ok
+    @@ EIf
+         ( EUnaryOperation (Not, EIdentifier "x")
+         , EBinaryOperation
+             (Add, EUnaryOperation (Minus, ELiteral (LInt 1)), EIdentifier "x")
+         , EUnaryOperation
+             ( Not
+             , EBinaryOperation
+                 (Mul, EIdentifier "x", EUnaryOperation (Minus, EIdentifier "x")) ) )
 ;;
 
 let parse = Error "TODO"
