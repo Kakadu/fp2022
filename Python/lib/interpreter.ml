@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Evgeniy Bakaev *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Ast
 
 module type MONAD = sig
@@ -150,8 +154,7 @@ module Eval (M : MONADERROR) = struct
   ;;
 
   let get_with_key is_equal key lst =
-    let rec get key lst =
-      match lst with
+    let rec get key = function
       | h :: t -> if is_equal h key then return h else get key t
       | _ -> error (str_of_err (UnknownName key))
     in
@@ -287,8 +290,7 @@ module Eval (M : MONADERROR) = struct
             | _ -> return (VBool true)))
       | UnaryOp (Not, e1) ->
         eval get_val e1
-        >>= fun l ->
-        (match l with
+        >>= (function
          | VBool false -> return (VBool true)
          | VBool true -> return (VBool false)
          | _ -> error (str_of_err (UndefinedOp "NOT")))

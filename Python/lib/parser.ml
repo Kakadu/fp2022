@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Evgeniy Bakaev *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Ast
 open Angstrom
 
@@ -420,7 +424,9 @@ let%test _ =
 
 let merge_if_else else_stmts = function
   | IfElse (e, s, s2) ->
-    if s2 = [] then return (IfElse (e, s, else_stmts)) else fail "parse else error"
+    (match s2 with
+     | [] -> return (IfElse (e, s, else_stmts))
+     | _ -> fail "parse else error")
   | _ -> fail "unexpected stmt"
 ;;
 
