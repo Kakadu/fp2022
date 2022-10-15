@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Evgeniy Bakaev *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Python_lib.Interpreter
 open Eval (Result)
 
