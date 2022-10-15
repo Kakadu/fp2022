@@ -291,9 +291,9 @@ module Eval (M : MONADERROR) = struct
       | UnaryOp (Not, e1) ->
         eval get_val e1
         >>= (function
-         | VBool false -> return (VBool true)
-         | VBool true -> return (VBool false)
-         | _ -> error (str_of_err (UndefinedOp "NOT")))
+        | VBool false -> return (VBool true)
+        | VBool true -> return (VBool false)
+        | _ -> error (str_of_err (UndefinedOp "NOT")))
       | Eq (e1, e2) ->
         eval get_val e1 >>= fun l -> eval get_val e2 >>= fun r -> return (VBool (l = r))
       | NotEq (e1, e2) ->
