@@ -17,6 +17,7 @@ type help_statements =
   | Class of identifier * help_statements list
   | Return of expression list
   | LvledStmt of int * help_statements
+  | ParserError
 
 let parse p s = parse_string ~consume:All p s
 
@@ -207,7 +208,8 @@ let number =
   | false -> return (Const (Integer (int_of_string (sign ^ whole))))
   | true ->
     take_while1 is_digit
-    >>= fun part -> return (Const (Float (float_of_string (sign ^ whole ^ "." ^ part))))
+    >>= fun part ->
+    return (Const (Float (float_of_string (Printf.sprintf "%s%s.%s" sign whole part))))
 ;;
 
 let%test _ = parse number "-1.23" = Ok (Const (Float (-1.23)))
@@ -351,14 +353,13 @@ let insert_to_stmt new_stmts = function
   | IfElse (e, _, else_stmts) -> IfElse (e, new_stmts, else_stmts)
   | While (e, _) -> While (e, new_stmts)
   | Class (e, _) -> Class (e, new_stmts)
-  | _ -> failwith "unreachable"
+  | _ -> ParserError
 ;;
 
 let rec help_to_ast = function
   | MethodDef (i, p, stmts) ->
     Ast.MethodDef (i, p, List.map (fun x -> help_to_ast x) stmts)
   | For (e1, e2, stmts) -> For (e1, e2, List.map (fun x -> help_to_ast x) stmts)
-  | Else _ -> failwith "else stmt does not exist in AST"
   | IfElse (e, stmts, else_stmts) ->
     IfElse
       ( e
@@ -371,6 +372,7 @@ let rec help_to_ast = function
   | Return x -> Return x
   | Assign (l, r) -> Assign (l, r)
   | Expression e -> Expression e
+  | _ -> failwith "parser failed"
 ;;
 
 let check_is_first_block_empty block =

@@ -47,7 +47,7 @@ module Eval (M : MONADERROR) = struct
     | NotImplementedFeature
 
   let str_of_err = function
-    | UndefinedOp str -> "The " ^ str ^ " operator is not defined in this case"
+    | UndefinedOp str -> "Undefined operator: " ^ str
     | UnknownName str -> "Unknown name " ^ str
     | DivisionByZero -> "Division by zero"
     | AssignFail -> "Left and Right sides of different size"
@@ -112,7 +112,8 @@ module Eval (M : MONADERROR) = struct
     | VBool b -> string_of_bool b
     | VString s -> s
     | VNone -> "none"
-    | VList lst -> "[" ^ String.concat ", " (List.map string_of_value lst) ^ "]"
+    | VList lst ->
+      Printf.sprintf "[%s]" (String.concat ", " (List.map string_of_value lst))
     | VClassRef _ -> "none"
     | VLambda _ -> ""
   ;;
