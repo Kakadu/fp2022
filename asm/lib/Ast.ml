@@ -4,6 +4,7 @@ type expr =
   | Mul of expr * expr
   | Div of expr * expr
   | Const of int
+  | Var of string
   | Reg of string
 [@@deriving show { with_path = false }]
 
@@ -20,4 +21,14 @@ type command =
 type code_section =
   | Command of command
   | Id of label
+[@@deriving show { with_path = false }]
+
+type data_type = DataType of string [@@deriving show { with_path = false }]
+
+type var = Variable of string * data_type * string list
+[@@deriving show { with_path = false }]
+
+type section =
+  | Code of command list
+  | Data of var list
 [@@deriving show { with_path = false }]

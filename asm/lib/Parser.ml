@@ -78,6 +78,11 @@ let is_jmp = function
   | _ -> false
 ;;
 
+let is_data_dec = function
+  | "DB" | "DW" | "DD" | "DQ" -> true
+  | _ -> false
+;;
+
 let is_mnemonic s = is_arg0 s || is_arg1 s || is_arg2 s || is_jmp s
 let digit_c = satisfy is_num
 let digit = digit_c >>= fun c -> return (Char.code c - Char.code '0')
@@ -102,7 +107,7 @@ let expr_parser =
     word
     >>= fun x ->
     let w = String.uppercase_ascii x in
-    if is_reg w then return (Reg w) else failwith "Invalid member of expression"
+    if is_reg w then return (Reg w) else return (Var x)
   in
   let arg = reg <|> num in
   let chainl1 e op =
@@ -142,10 +147,37 @@ let code_line_parser =
   label <|> inst
 ;;
 
+let data_line_parser =
+  let data_t =
+    trim word
+    >>= fun x ->
+    let w = String.uppercase_ascii x in
+    if is_data_dec w then return (DataType w) else failwith "Invalud datatype"
+  in
+  let var =
+    trim word
+    >>= fun x ->
+    let w = String.uppercase_ascii x in
+    if is_reg w
+    then failwith "Var's name must not be equal the name of reg"
+    else return (fun dt y -> Variable (x, dt, y))
+  in
+  let sep = trim @@ char ',' in
+  var >>= fun v -> data_t >>= fun dt -> sep_by sep word >>= fun l -> return (v dt l)
+;;
+
+let sec_parser =
+  trim @@ (string "section" *> whitespaces *> char '.' *> word)
+  >>= function
+  | "code" | "text" -> many code_line_parser
+  | "data" -> failwith "none implemented"
+  | _ -> failwith "Invalid section"
+;;
+
 let pr = many code_line_parser
 
 let eval str =
-  match parse_string ~consume:All pr str with
+  match parse_string ~consume:All data_line_parser str with
   | Ok v -> v
   | Error msg -> failwith msg
 ;;
