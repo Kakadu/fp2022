@@ -5,3 +5,4 @@ _build
 .bloop
 .metals
 /install_linter.sh
+CSharpAsync/.idea/
