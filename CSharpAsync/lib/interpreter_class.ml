@@ -61,7 +61,7 @@ module Interpreter_for_classes (M : MONADERROR) = struct
     let field_map = KeyMap.add "message" field_t field_map in
     let method_map = KeyMap.add "ToString" method_t method_map in
     let class_map =
-      (* Delete exceptions *)
+      (* Probably delete exceptions *)
       KeyMap.add "Exception"
         { class_key= "Exception"
         ; field_map
