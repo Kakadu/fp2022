@@ -7,11 +7,7 @@ type _type =
   | Array of _type * int
 [@@deriving show { with_path = false }]
 
-type modifier =
-  | Public 
-  | Static
-  | Const 
-  | Async
+type modifier = Public | Static | Const | Async
 [@@deriving show { with_path = false }]
 
 type values =
@@ -21,12 +17,12 @@ type values =
   | ValVoid
   | ValBool of bool
   | ValClass of obj_ref
-[@@deriving show {with_path= false}]
+[@@deriving show { with_path = false }]
 
 and obj_ref =
   | ObjNull
   | ObjRef of string * string option (* TODO: class key and parent key??*)
-[@@deriving show {with_path= false}]
+[@@deriving show { with_path = false }]
 
 type expr =
   | Value of values
@@ -57,10 +53,14 @@ type expr =
   | Lambda of expr (* ??? *)
   | Await of expr (* ?? *)
   | Linq of expr (* ??? *)
-[@@deriving show {with_path= false}]
+[@@deriving show { with_path = false }]
 
 and stmt =
-  | For of stmt option * expr option * expr list * stmt (*because you can write for(int i = 0, j = 5; i < 4; i++, j--)*)
+  | For of
+      stmt option
+      * expr option
+      * expr list
+      * stmt (*because you can write for(int i = 0, j = 5; i < 4; i++, j--)*)
   | If of expr * stmt * stmt option (*statement option is "else"*)
   | While of expr * stmt
   | Return of expr option
@@ -70,13 +70,22 @@ and stmt =
   | VarDeclr of modifier option * _type * (string * expr option) list
   | Expr of expr
   | Print of expr
-[@@deriving show {with_path= false}]
+[@@deriving show { with_path = false }]
 
 and field =
   | VarField of _type * (string * expr option) list
-  | Method of modifier list (* TODO: option? *) * _type * string * (_type * string) list * stmt
+  | Method of
+      modifier list (* TODO: option? *)
+      * _type
+      * string
+      * (_type * string) list
+      * stmt
 [@@deriving show { with_path = false }]
 
 and c_sharp_class =
-  | Class of modifier list * string (* class name*) * string option (* TODO: remove parent class name*) * (modifier list * field) list (* Methods *)
+  | Class of
+      modifier list
+      * string (* class name*)
+      * string option (* TODO: remove parent class name*)
+      * (modifier list * field) list (* Methods *)
 [@@deriving show { with_path = false }]

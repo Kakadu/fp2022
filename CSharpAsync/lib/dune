@@ -1,31 +1,68 @@
 (env
  (dev
   (flags
-   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
-                    -linkall -warn-error -A -w -3-9-32-34-58)))
+   (:standard
+    -thread
+    -I
+    +threads
+    -o
+    unix.cma
+    -o
+    threads.cma
+    -g
+    -safe-string
+    -linkall
+    -warn-error
+    -A
+    -w
+    -3-9-32-34-58)))
  (release
   (flags
-   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
-                    -linkall -warn-error -A -w -3-9-32-34-58)))
+   (:standard
+    -thread
+    -I
+    +threads
+    -o
+    unix.cma
+    -o
+    threads.cma
+    -g
+    -safe-string
+    -linkall
+    -warn-error
+    -A
+    -w
+    -3-9-32-34-58)))
  (tests
   (flags
-   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
-                    -linkall -warn-error -A -w -3-9-32-34-58)))
-)
+   (:standard
+    -thread
+    -I
+    +threads
+    -o
+    unix.cma
+    -o
+    threads.cma
+    -g
+    -safe-string
+    -linkall
+    -warn-error
+    -A
+    -w
+    -3-9-32-34-58))))
 
 (library
  (name csharp_lib)
  (public_name CSharpAsync.Lib)
- (modules 
-  Ast 
+ (modules
+  Ast
   Parser
   Parser_tests
   Interpreter
   Interpreter_class
-  Interpreter_tests 
+  Interpreter_tests
   Tables)
  (libraries opal stdio ppx_show.runtime)
  (inline_tests)
  (preprocess
-  (pps ppx_expect ppx_deriving.show ppx_deriving.eq))
-)
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))

@@ -1,17 +1,55 @@
 (env
  (dev
   (flags
-   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
-                    -linkall -warn-error -A -w -3-9-32-34-58)))
+   (:standard
+    -thread
+    -I
+    +threads
+    -o
+    unix.cma
+    -o
+    threads.cma
+    -g
+    -safe-string
+    -linkall
+    -warn-error
+    -A
+    -w
+    -3-9-32-34-58)))
  (release
   (flags
-   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
-                    -linkall -warn-error -A -w -3-9-32-34-58)))
+   (:standard
+    -thread
+    -I
+    +threads
+    -o
+    unix.cma
+    -o
+    threads.cma
+    -g
+    -safe-string
+    -linkall
+    -warn-error
+    -A
+    -w
+    -3-9-32-34-58)))
  (test
   (flags
-   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
-                    -linkall -warn-error -A -w -3-9-32-34-58)))
-)
+   (:standard
+    -thread
+    -I
+    +threads
+    -o
+    unix.cma
+    -o
+    threads.cma
+    -g
+    -safe-string
+    -linkall
+    -warn-error
+    -A
+    -w
+    -3-9-32-34-58))))
 
 ; (executable
 ;  (name REPL)
@@ -20,4 +58,4 @@
 ;  (libraries CSharpAsync.Lib))
 
 (cram
-  (deps ./REPL.exe %{bin:REPL}))
+ (deps ./REPL.exe %{bin:REPL}))

@@ -3,7 +3,9 @@ open Parser
 open Parser.Expr
 open Parser.Stmt
 
-let%test _ = apply_parser get_modifiers "public static" = Some [Public; Static]
+let%test _ =
+  apply_parser get_modifiers "public static" = Some [ Public; Static ]
+
 let%test _ = apply_parser convert_to_int "1" = Some 1
 let%test _ = apply_parser null "  null" = Some Null
 let%test _ = apply_parser ident_obj "   car" = Some "car"
@@ -38,10 +40,10 @@ let%test _ =
   apply_parser expr "2/5 + 3 * (5 % 3)"
   = Some
       (Add
-         ( Div (ConstExpr (ValInt 2), ConstExpr (ValInt 5))
-         , Mul
-             ( ConstExpr (ValInt 3)
-             , Mod (ConstExpr (ValInt 5), ConstExpr (ValInt 3)) ) ) )
+         ( Div (ConstExpr (ValInt 2), ConstExpr (ValInt 5)),
+           Mul
+             ( ConstExpr (ValInt 3),
+               Mod (ConstExpr (ValInt 5), ConstExpr (ValInt 3)) ) ))
 
 let%test _ =
   apply_parser expr "x = true"
@@ -53,21 +55,25 @@ let%test _ =
   apply_parser parse_stmts "int a = 0, b = 1, c = 2;"
   = Some
       (VarDeclr
-         ( None
-         , TypeInt
-         , [ ("a", Some (ConstExpr (ValInt 0)))
-           ; ("b", Some (ConstExpr (ValInt 1)))
-           ; ("c", Some (ConstExpr (ValInt 2))) ] ) )
+         ( None,
+           TypeInt,
+           [
+             ("a", Some (ConstExpr (ValInt 0)));
+             ("b", Some (ConstExpr (ValInt 1)));
+             ("c", Some (ConstExpr (ValInt 2)));
+           ] ))
 
 let%test _ =
   apply_parser parse_stmts "const int a = 0, b = 1, c = 2;"
   = Some
       (VarDeclr
-         ( Some Const
-         , TypeInt
-         , [ ("a", Some (ConstExpr (ValInt 0)))
-           ; ("b", Some (ConstExpr (ValInt 1)))
-           ; ("c", Some (ConstExpr (ValInt 2))) ] ) )
+         ( Some Const,
+           TypeInt,
+           [
+             ("a", Some (ConstExpr (ValInt 0)));
+             ("b", Some (ConstExpr (ValInt 1)));
+             ("c", Some (ConstExpr (ValInt 2)));
+           ] ))
 
 let%test _ = apply_parser parse_break "break;" = Some Break
 let%test _ = apply_parser parse_continue "continue;" = Some Continue
@@ -89,9 +95,9 @@ let%test _ =
 }   |}
   = Some
       (If
-         ( More (Var "num1", Var "num2")
-         , StmtsBlock [Print (ConstExpr (ValString "help"))]
-         , None ) )
+         ( More (Var "num1", Var "num2"),
+           StmtsBlock [ Print (ConstExpr (ValString "help")) ],
+           None ))
 
 let%test _ =
   apply_parser parse_stmts
@@ -102,8 +108,8 @@ let%test _ =
 } |}
   = Some
       (While
-         ( More (Var "i", ConstExpr (ValInt 0))
-         , StmtsBlock [Print (Var "i"); Expr (PostDec (Var "i"))] ) )
+         ( More (Var "i", ConstExpr (ValInt 0)),
+           StmtsBlock [ Print (Var "i"); Expr (PostDec (Var "i")) ] ))
 
 let%test _ =
   apply_parser parse_stmts
@@ -113,10 +119,11 @@ let%test _ =
 }|}
   = Some
       (For
-         ( Some (VarDeclr (None, TypeInt, [("i", Some (ConstExpr (ValInt 0)))]))
-         , Some (Less (Var "i", ConstExpr (ValInt 9)))
-         , [PostInc (Var "i")]
-         , StmtsBlock [Print (ConstExpr (ValInt 1))] ) )
+         ( Some
+             (VarDeclr (None, TypeInt, [ ("i", Some (ConstExpr (ValInt 0))) ])),
+           Some (Less (Var "i", ConstExpr (ValInt 9))),
+           [ PostInc (Var "i") ],
+           StmtsBlock [ Print (ConstExpr (ValInt 1)) ] ))
 
 let%test _ =
   apply_parser parse_stmts {| { if(a<b) {}
@@ -127,9 +134,10 @@ for (; ;)
 |}
   = Some
       (StmtsBlock
-         [ If (Less (Var "a", Var "b"), StmtsBlock [], None)
-         ; For (None, None, [], StmtsBlock [])
-         ] )
+         [
+           If (Less (Var "a", Var "b"), StmtsBlock [], None);
+           For (None, None, [], StmtsBlock []);
+         ])
 
 let%test _ =
   apply_parser parse_stmts {|  for (; i<9;)
@@ -138,10 +146,10 @@ let%test _ =
 } |}
   = Some
       (For
-         ( None
-         , Some (Less (Var "i", ConstExpr (ValInt 9)))
-         , []
-         , StmtsBlock [Print (Mul (Var "i", Var "i"))] ) )
+         ( None,
+           Some (Less (Var "i", ConstExpr (ValInt 9))),
+           [],
+           StmtsBlock [ Print (Mul (Var "i", Var "i")) ] ))
 
 let%test _ =
   apply_parser parse_stmts
@@ -153,13 +161,16 @@ let%test _ =
 }|}
   = Some
       (For
-         ( Some (VarDeclr (None, TypeInt, [("i", Some (ConstExpr (ValInt 0)))]))
-         , Some (Less (Var "i", ConstExpr (ValInt 9)))
-         , [PostInc (Var "i")]
-         , StmtsBlock
-             [ If (Equal (Var "i", ConstExpr (ValInt 5)), Break, None)
-             ; Print (Var "i") ] ) )
+         ( Some
+             (VarDeclr (None, TypeInt, [ ("i", Some (ConstExpr (ValInt 0))) ])),
+           Some (Less (Var "i", ConstExpr (ValInt 9))),
+           [ PostInc (Var "i") ],
+           StmtsBlock
+             [
+               If (Equal (Var "i", ConstExpr (ValInt 5)), Break, None);
+               Print (Var "i");
+             ] ))
 
 let%test _ =
   apply_parser parse_class_elements {|  public int sum;|}
-  = Some ([Public], VarField (TypeInt, [("sum", None)]))
+  = Some ([ Public ], VarField (TypeInt, [ ("sum", None) ]))
