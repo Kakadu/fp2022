@@ -19,14 +19,13 @@
  (synopsis "An interpreter for C# language")
  (description "Needs to be fixed! Work in progress.")
  (version 0.1)
-; (depends
-;  dune
-;  angstrom
-;  (ppx_inline_test :with-test)
-;  ppx_expect
-;  ppx_show
-;  (odoc :with-doc)
-;  (ocamlformat :build)
-;  base
-;  ppx_deriving )
-  )
+ (depends
+  dune
+  opal
+  (ppx_inline_test :with-test)
+  ppx_expect
+  ppx_show
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ppx_deriving ))
