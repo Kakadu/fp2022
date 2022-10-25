@@ -1,0 +1,32 @@
+(env
+ (dev
+  (flags
+   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
+                    -linkall -warn-error -A -w -3-9-32-34-58)))
+ (release
+  (flags
+   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
+                    -linkall -warn-error -A -w -3-9-32-34-58)))
+ (test
+  (flags
+   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
+                    -linkall -warn-error -A -w -3-9-32-34-58)))
+)
+
+(executable
+ (name demoOnlyPrint)
+ (modes byte)
+ (modules demoOnlyPrint)
+ (libraries unix threads CSharp.Lib)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name demoShowContext)
+ (modules demoShowContext)
+ (libraries unix threads CSharp.Lib)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
+
+(cram
+ (deps ./demoOnlyPrint.exe ./demoShowContext.exe))

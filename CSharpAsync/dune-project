@@ -1,0 +1,32 @@
+(lang dune 2.9)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-only)
+
+(authors "Dmitriy Kuznetsov")
+
+(maintainers "dmitrvlkuznetsov@gmail.com")
+
+(bug_reports "...")
+
+(homepage "...")
+
+(package
+ (name CSharp) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "An interpreter for C# language")
+ (description "Needs to be fixed! Work in progress.")
+ (version 0.1)
+; (depends
+;  dune
+;  angstrom
+;  (ppx_inline_test :with-test)
+;  ppx_expect
+;  ppx_show
+;  (odoc :with-doc)
+;  (ocamlformat :build)
+;  base
+;  ppx_deriving )
+  )
