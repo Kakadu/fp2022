@@ -2,7 +2,7 @@
 
 (generate_opam_files true)
 
-;(cram enable)
+(cram enable)
 
 (license LGPL-3.0-only)
 
