@@ -6,3 +6,4 @@ _build
 .metals
 /install_linter.sh
 CSharpAsync/.idea/
+CSharpAsync/.ocamlformat
