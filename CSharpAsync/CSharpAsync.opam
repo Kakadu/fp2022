@@ -4,7 +4,7 @@ version: "0.1"
 synopsis: "An interpreter for C# language"
 description: "Needs to be fixed! Work in progress."
 maintainer: ["dmitrvlkuznetsov@gmail.com"]
-authors: ["Dmitriy Kuznetsov"]
+authors: ["Dmitrii Kuznetsov"]
 license: "LGPL-3.0-only"
 homepage: "..."
 bug-reports: "..."

@@ -15,14 +15,14 @@
 
 (library
  (name csharp_lib)
- (public_name CSharp.Lib)
+ (public_name CSharpAsync.Lib)
  (modules 
   Ast 
   Parser
+  Parser_tests
   Interpreter
   Interpreter_class
   Interpreter_tests 
-  Parser_tests
   Tables)
  (libraries opal stdio ppx_show.runtime)
  (inline_tests)

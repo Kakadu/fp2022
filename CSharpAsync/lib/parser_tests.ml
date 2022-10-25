@@ -128,7 +128,7 @@ for (; ;)
   = Some
       (StmtsBlock
          [ If (Less (Var "a", Var "b"), StmtsBlock [], None)
-         ; For (None, None, [], StmtsBlock [Print (ConstExpr (ValString "1"))])
+         ; For (None, None, [], StmtsBlock [])
          ] )
 
 let%test _ =

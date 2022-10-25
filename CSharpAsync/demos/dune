@@ -17,14 +17,14 @@
  (name demoOnlyPrint)
  (modes byte)
  (modules demoOnlyPrint)
- (libraries unix threads CSharp.Lib)
+ (libraries unix threads CSharpAsync.Lib)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
 
 (executable
  (name demoShowContext)
  (modules demoShowContext)
- (libraries unix threads CSharp.Lib)
+ (libraries unix threads CSharpAsync.Lib)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
 
