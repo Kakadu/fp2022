@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Dmitrii Kuznetsov *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Parser
 open Interpreter_class.Interpreter_for_classes (Interpreter_class.Result)
 open Interpreter.Interpreter (Interpreter_class.Result)
