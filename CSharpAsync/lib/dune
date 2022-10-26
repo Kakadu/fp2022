@@ -62,7 +62,7 @@
   Interpreter_class
   Interpreter_tests
   Tables)
- (libraries opal stdio ppx_show.runtime)
+ (libraries opal stdio ppx_show.runtime threads)
  (inline_tests)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
