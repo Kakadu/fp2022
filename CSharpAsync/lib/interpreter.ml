@@ -667,7 +667,7 @@ module Interpreter (M : MONADERROR) = struct
 
   and run_in_parallel x =
     let self = Thread.id (Thread.self ()) in
-    Printf.printf "[we run task in thr %d:]\n" self;
+    (*Printf.printf "[we run task in thr %d:]\n" self; *)
     let rez =
       match x with
       (* execute task *)

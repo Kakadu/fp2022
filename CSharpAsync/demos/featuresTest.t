@@ -69,7 +69,6 @@ Test 1 (Primes test - await)
   >    } 
   > }
   > EOF
-  [we run task in thr 1:]
   2
   3
   5
@@ -89,10 +88,6 @@ Test 2 (Multy await)
   >    } 
   > }
   > EOF
-  [we run task in thr 1:]
-  [we run task in thr 2:]
-  [we run task in thr 3:]
-  [we run task in thr 4:]
   15
   
 
@@ -131,10 +126,6 @@ Test 4 (Await requires async in method - ok)
   >    } 
   > }
   > EOF
-  [we run task in thr 1:]
-  [we run task in thr 2:]
-  [we run task in thr 3:]
-  [we run task in thr 4:]
   15
   
 
