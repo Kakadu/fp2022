@@ -4,7 +4,9 @@
 
 open Ast
 
-type interpret_result = Succes of world | Fail of exn
+type interpret_result =
+  | Succes of world
+  | Fail of exn
 
-val interpret : string -> interpret_result
 (** parse -> semantic test -> interpret *)
+val interpret : string -> interpret_result

@@ -4,8 +4,8 @@
 
 open Ast
 
-val get_type_val : value -> vtype
 (** Get value type. *)
+val get_type_val : value -> vtype
 
-val compare_types : vtype -> vtype -> bool
 (** Compare types except types with expr in definition. *)
+val compare_types : vtype -> vtype -> bool
