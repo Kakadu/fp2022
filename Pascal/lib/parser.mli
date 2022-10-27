@@ -2,5 +2,5 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-(** Pascal language parser. *)
 val parse : string -> Ast.t option
+(** Pascal language parser. *)

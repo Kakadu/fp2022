@@ -27,11 +27,7 @@ type binop =
   | LShift
 [@@deriving show]
 
-type unop =
-  | Plus
-  | Minus
-  | Not
-[@@deriving show]
+type unop = Plus | Minus | Not [@@deriving show]
 
 type vtype =
   | VTBool
@@ -101,11 +97,7 @@ and define =
   | DFunction of name * vtype * fun_param list * t
 [@@deriving show]
 
-and variable =
-  | VConst of value
-  | VVariable of value
-  | VType
-[@@deriving show]
+and variable = VConst of value | VVariable of value | VType [@@deriving show]
 
 and world = (vtype * variable) KeyMap.t [@@deriving show]
 
