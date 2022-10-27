@@ -17,8 +17,7 @@
 (package
  (name Pascal) ; FIXME and regenerate .opam file using 'dune build @install'
  (synopsis "An interpreter for Pascal")
- (description
-  "Parser and Interpreter for Pascal")
+ (description "Parser and Interpreter for Pascal")
  (version 0.1)
  (depends
   dune
@@ -26,6 +25,7 @@
   qcheck-core
   ppx_expect
   ppx_show
+  opal
   (odoc :with-doc)
   (ocamlformat :build)
   base
