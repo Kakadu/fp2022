@@ -21,11 +21,11 @@
  (version 0.1)
  (depends
   dune
+  opal
   (ppx_inline_test :with-test)
   qcheck-core
   ppx_expect
   ppx_show
-  opal
   (odoc :with-doc)
   (ocamlformat :build)
   base
