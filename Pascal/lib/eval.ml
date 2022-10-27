@@ -34,52 +34,52 @@ let rec eval_binop op v1 v2 =
     ((fun (op, x, y) ->
        VInt
          (match op with
-         | Add -> x + y
-         | Sub -> x - y
-         | Mul -> x * x
-         | Div -> x / y
-         | Mod -> x mod y
-         | And -> x land y
-         | Or -> x lor y
-         | Xor -> x lxor y
-         | RShift -> Int.shift_right x y
-         | LShift -> Int.shift_left x y
-         | _ -> raise error))
+          | Add -> x + y
+          | Sub -> x - y
+          | Mul -> x * x
+          | Div -> x / y
+          | Mod -> x mod y
+          | And -> x land y
+          | Or -> x lor y
+          | Xor -> x lxor y
+          | RShift -> Int.shift_right x y
+          | LShift -> Int.shift_left x y
+          | _ -> raise error))
     <|> (fun (op, x, y) ->
           VBool
             (match op with
-            | Greater -> x > y
-            | GreaterEq -> x >= y
-            | Less -> x < y
-            | LessEq -> x <= y
-            | Eq -> x == y
-            | NotEq -> x != y
-            | _ -> raise error))
+             | Greater -> x > y
+             | GreaterEq -> x >= y
+             | Less -> x < y
+             | LessEq -> x <= y
+             | Eq -> x == y
+             | NotEq -> x != y
+             | _ -> raise error))
     <|> fun (op, x, y) ->
     VFloat
       (match op with
-      | FDiv -> Float.of_int x /. Float.of_int y
-      | _ -> raise error))
+       | FDiv -> Float.of_int x /. Float.of_int y
+       | _ -> raise error))
       (op, v1, v2)
   | VFloat v1, VFloat v2 ->
     ((fun (op, x, y) ->
        VFloat
          (match op with
-         | Add -> x +. y
-         | Sub -> x -. y
-         | Mul -> x *. y
-         | FDiv -> x /. y
-         | _ -> raise error))
+          | Add -> x +. y
+          | Sub -> x -. y
+          | Mul -> x *. y
+          | FDiv -> x /. y
+          | _ -> raise error))
     <|> fun (op, x, y) ->
     VBool
       (match op with
-      | Greater -> x > y
-      | GreaterEq -> x >= y
-      | Less -> x < y
-      | LessEq -> x <= y
-      | Eq -> x = y
-      | NotEq -> x != y
-      | _ -> raise error))
+       | Greater -> x > y
+       | GreaterEq -> x >= y
+       | Less -> x < y
+       | LessEq -> x <= y
+       | Eq -> x = y
+       | NotEq -> x != y
+       | _ -> raise error))
       (op, v1, v2)
   | VChar v1, VChar v2 ->
     eval_binop op (VString (String.make 1 v1)) (VString (String.make 1 v2))
@@ -87,33 +87,33 @@ let rec eval_binop op v1 v2 =
     ((fun (op, x, y) ->
        VString
          (match op with
-         | Add -> String.concat x [ ""; y ]
-         | _ -> raise error))
+          | Add -> String.concat x [ ""; y ]
+          | _ -> raise error))
     <|> fun (op, x, y) ->
     VBool
       (match op with
-      | Greater -> x > y
-      | GreaterEq -> x >= y
-      | Less -> x < y
-      | LessEq -> x <= y
-      | Eq -> x == y
-      | NotEq -> x != y
-      | _ -> raise error))
+       | Greater -> x > y
+       | GreaterEq -> x >= y
+       | Less -> x < y
+       | LessEq -> x <= y
+       | Eq -> x == y
+       | NotEq -> x != y
+       | _ -> raise error))
       (op, v1, v2)
   | VBool v1, VBool v2 ->
     (fun (op, x, y) ->
       VBool
         (match op with
-        | And -> x && y
-        | Or -> x || y
-        | Xor -> x || (y && (not x) && y)
-        | Greater -> x > y
-        | GreaterEq -> x >= y
-        | Less -> x < y
-        | LessEq -> x <= y
-        | Eq -> x == y
-        | NotEq -> x != y
-        | _ -> raise error))
+         | And -> x && y
+         | Or -> x || y
+         | Xor -> x || (y && (not x) && y)
+         | Greater -> x > y
+         | GreaterEq -> x >= y
+         | Less -> x < y
+         | LessEq -> x <= y
+         | Eq -> x == y
+         | NotEq -> x != y
+         | _ -> raise error))
       (op, v1, v2)
   | _ -> raise error
 ;;
@@ -132,44 +132,44 @@ let eval_binop_type op t1 t2 =
   match op with
   | Add ->
     (match types with
-    | VTInt, VTInt -> VTInt
-    | VTInt, VTFloat -> VTFloat
-    | VTFloat, VTFloat -> VTFloat
-    | VTChar, VTChar -> VTNDString
-    | VTChar, VTNDString -> VTNDString
-    | VTNDString, VTNDString -> VTNDString
-    | _ -> raise error)
+     | VTInt, VTInt -> VTInt
+     | VTInt, VTFloat -> VTFloat
+     | VTFloat, VTFloat -> VTFloat
+     | VTChar, VTChar -> VTNDString
+     | VTChar, VTNDString -> VTNDString
+     | VTNDString, VTNDString -> VTNDString
+     | _ -> raise error)
   | Sub | Mul ->
     (match types with
-    | VTInt, VTInt -> VTInt
-    | VTInt, VTFloat -> VTFloat
-    | VTFloat, VTFloat -> VTFloat
-    | _ -> raise error)
+     | VTInt, VTInt -> VTInt
+     | VTInt, VTFloat -> VTFloat
+     | VTFloat, VTFloat -> VTFloat
+     | _ -> raise error)
   | FDiv ->
     (match types with
-    | VTInt, VTInt -> VTFloat
-    | VTInt, VTFloat -> VTFloat
-    | VTFloat, VTFloat -> VTFloat
-    | _ -> raise error)
+     | VTInt, VTInt -> VTFloat
+     | VTInt, VTFloat -> VTFloat
+     | VTFloat, VTFloat -> VTFloat
+     | _ -> raise error)
   | Div | Mod | RShift | LShift ->
     (match types with
-    | VTInt, VTInt -> VTInt
-    | _ -> raise error)
+     | VTInt, VTInt -> VTInt
+     | _ -> raise error)
   | And | Or | Xor ->
     (match types with
-    | VTInt, VTInt -> VTInt
-    | VTBool, VTBool -> VTBool
-    | _ -> raise error)
+     | VTInt, VTInt -> VTInt
+     | VTBool, VTBool -> VTBool
+     | _ -> raise error)
   | Greater | Less | Eq | NotEq | GreaterEq | LessEq ->
     (match types with
-    | VTInt, VTInt -> VTBool
-    | VTInt, VTFloat -> VTBool
-    | VTFloat, VTFloat -> VTBool
-    | VTChar, VTChar -> VTBool
-    | VTChar, VTNDString -> VTBool
-    | VTNDString, VTNDString -> VTBool
-    | VTBool, VTBool -> VTBool
-    | _ -> raise error)
+     | VTInt, VTInt -> VTBool
+     | VTInt, VTFloat -> VTBool
+     | VTFloat, VTFloat -> VTBool
+     | VTChar, VTChar -> VTBool
+     | VTChar, VTNDString -> VTBool
+     | VTNDString, VTNDString -> VTBool
+     | VTBool, VTBool -> VTBool
+     | _ -> raise error)
 ;;
 
 let eval_unop op v =
@@ -177,17 +177,17 @@ let eval_unop op v =
   match op with
   | Plus ->
     (match v with
-    | (VInt _ | VFloat _) as ok -> ok
-    | _ -> raise error)
+     | (VInt _ | VFloat _) as ok -> ok
+     | _ -> raise error)
   | Minus ->
     (match v with
-    | VInt v -> VInt (-v)
-    | VFloat v -> VFloat (-.v)
-    | _ -> raise error)
+     | VInt v -> VInt (-v)
+     | VFloat v -> VFloat (-.v)
+     | _ -> raise error)
   | Not ->
     (match v with
-    | VBool v -> VBool (not v)
-    | _ -> raise error)
+     | VBool v -> VBool (not v)
+     | _ -> raise error)
 ;;
 
 let eval_unop_type op t =
@@ -195,18 +195,18 @@ let eval_unop_type op t =
   match op with
   | Plus ->
     (match t with
-    | VTInt -> VTInt
-    | VTFloat -> VTFloat
-    | _ -> raise error)
+     | VTInt -> VTInt
+     | VTFloat -> VTFloat
+     | _ -> raise error)
   | Minus ->
     (match t with
-    | VTInt -> VTInt
-    | VTFloat -> VTFloat
-    | _ -> raise error)
+     | VTInt -> VTInt
+     | VTFloat -> VTFloat
+     | _ -> raise error)
   | Not ->
     (match t with
-    | VTBool -> VTBool
-    | _ -> raise error)
+     | VTBool -> VTBool
+     | _ -> raise error)
 ;;
 
 let eval_std_function n p =
@@ -215,60 +215,60 @@ let eval_std_function n p =
   match n with
   | "abs" ->
     (match p with
-    | [ VInt v ] -> VInt (abs v)
-    | [ VFloat v ] -> VFloat (abs_float v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VInt (abs v)
+     | [ VFloat v ] -> VFloat (abs_float v)
+     | _ -> raise type_error)
   | "arctan" ->
     (match p with
-    | [ VInt v ] -> VFloat (atan (Float.of_int v))
-    | [ VFloat v ] -> VFloat (atan v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VFloat (atan (Float.of_int v))
+     | [ VFloat v ] -> VFloat (atan v)
+     | _ -> raise type_error)
   | "cos" ->
     (match p with
-    | [ VInt v ] -> VFloat (cos (Float.of_int v))
-    | [ VFloat v ] -> VFloat (cos v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VFloat (cos (Float.of_int v))
+     | [ VFloat v ] -> VFloat (cos v)
+     | _ -> raise type_error)
   | "exp" ->
     (match p with
-    | [ VInt v ] -> VFloat (exp (Float.of_int v))
-    | [ VFloat v ] -> VFloat (exp v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VFloat (exp (Float.of_int v))
+     | [ VFloat v ] -> VFloat (exp v)
+     | _ -> raise type_error)
   | "ln" ->
     (match p with
-    | [ VInt v ] -> VFloat (log (Float.of_int v))
-    | [ VFloat v ] -> VFloat (log v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VFloat (log (Float.of_int v))
+     | [ VFloat v ] -> VFloat (log v)
+     | _ -> raise type_error)
   | "round" ->
     (match p with
-    | [ VFloat v ] -> VInt (Float.to_int (Float.round v))
-    | _ -> raise type_error)
+     | [ VFloat v ] -> VInt (Float.to_int (Float.round v))
+     | _ -> raise type_error)
   | "sin" ->
     (match p with
-    | [ VInt v ] -> VFloat (sin (Float.of_int v))
-    | [ VFloat v ] -> VFloat (sin v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VFloat (sin (Float.of_int v))
+     | [ VFloat v ] -> VFloat (sin v)
+     | _ -> raise type_error)
   | "sqr" ->
     (match p with
-    | [ VInt v ] -> VInt (v * v)
-    | [ VFloat v ] -> VFloat (v *. v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VInt (v * v)
+     | [ VFloat v ] -> VFloat (v *. v)
+     | _ -> raise type_error)
   | "sqrt" ->
     (match p with
-    | [ VInt v ] -> VFloat (Float.sqrt (Float.of_int v))
-    | [ VFloat v ] -> VFloat (Float.sqrt v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VFloat (Float.sqrt (Float.of_int v))
+     | [ VFloat v ] -> VFloat (Float.sqrt v)
+     | _ -> raise type_error)
   | "trunc" ->
     (match p with
-    | [ VFloat v ] -> VInt (Float.to_int (Float.trunc v))
-    | _ -> raise type_error)
+     | [ VFloat v ] -> VInt (Float.to_int (Float.trunc v))
+     | _ -> raise type_error)
   | "chr" ->
     (match p with
-    | [ VInt v ] -> VChar (Char.chr v)
-    | _ -> raise type_error)
+     | [ VInt v ] -> VChar (Char.chr v)
+     | _ -> raise type_error)
   | "ord" ->
     (match p with
-    | [ VChar v ] -> VInt (Char.code v)
-    | _ -> raise type_error)
+     | [ VChar v ] -> VInt (Char.code v)
+     | _ -> raise type_error)
   | _ -> raise error
 ;;
 
@@ -278,26 +278,26 @@ let eval_std_function_type n pt =
   match n with
   | "abs" | "sqr" | "exp" | "ln" | "sin" | "sqrt" ->
     (match pt with
-    | [ VTInt ] -> VTInt
-    | [ VTFloat ] -> VTFloat
-    | _ -> raise type_error)
+     | [ VTInt ] -> VTInt
+     | [ VTFloat ] -> VTFloat
+     | _ -> raise type_error)
   | "arctan" | "cos" ->
     (match pt with
-    | [ VTInt ] -> VTFloat
-    | [ VTFloat ] -> VTFloat
-    | _ -> raise type_error)
+     | [ VTInt ] -> VTFloat
+     | [ VTFloat ] -> VTFloat
+     | _ -> raise type_error)
   | "round" | "trunc" ->
     (match pt with
-    | [ VTFloat ] -> VTInt
-    | _ -> raise type_error)
+     | [ VTFloat ] -> VTInt
+     | _ -> raise type_error)
   | "chr" ->
     (match pt with
-    | [ VTInt ] -> VTChar
-    | _ -> raise type_error)
+     | [ VTInt ] -> VTChar
+     | _ -> raise type_error)
   | "ord" ->
     (match pt with
-    | [ VTChar ] -> VTChar
-    | _ -> raise type_error)
+     | [ VTChar ] -> VTChar
+     | _ -> raise type_error)
   | _ -> raise error
 ;;
 
@@ -305,8 +305,8 @@ let get_rec v n =
   match v with
   | VRecord w ->
     (match KeyMap.find_opt n w with
-    | Some (_, VConst v) | Some (_, VVariable v) -> v
-    | _ -> raise (PascalInterp (RecordFieldError (get_type_val v, n))))
+     | Some (_, VConst v) | Some (_, VVariable v) -> v
+     | _ -> raise (PascalInterp (RecordFieldError (get_type_val v, n))))
   | _ -> raise (PascalInterp (RecordTypeError (get_type_val v)))
 ;;
 
@@ -321,8 +321,8 @@ let get_rec_type t n =
   match t with
   | VTDRecord w ->
     (match KeyMap.find_opt n w with
-    | Some t -> t
-    | _ -> raise (PascalInterp (RecordFieldError (t, n))))
+     | Some t -> t
+     | _ -> raise (PascalInterp (RecordFieldError (t, n))))
   | _ -> raise (PascalInterp (RecordTypeError t))
 ;;
 

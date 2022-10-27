@@ -20,8 +20,8 @@ let rec load_variables : define list -> world =
       | VTString e ->
         VTDString
           (match eval_expr e with
-          | VInt i when i > 0 -> i
-          | _ -> raise (PascalInterp TypeError))
+           | VInt i when i > 0 -> i
+           | _ -> raise (PascalInterp TypeError))
       | VTNDString -> VTDString 255
       | VTDString i -> if i > 0 then VTDString i else raise (PascalInterp TypeError)
       | VTRecord l ->
@@ -50,17 +50,17 @@ let rec load_variables : define list -> world =
         else raise (PascalInterp TypeError)
       | VTCustom n ->
         (match KeyMap.find_opt n w with
-        | Some (t, VType) -> t
-        | Some _ -> raise (PascalInterp (NotAType n))
-        | _ -> raise (PascalInterp (TypeNotFound n)))
+         | Some (t, VType) -> t
+         | Some _ -> raise (PascalInterp (NotAType n))
+         | _ -> raise (PascalInterp (TypeNotFound n)))
       | VTCollable n -> raise (PascalInterp (InvalidCall n))
       | (VTBool | VTInt | VTFloat | VTChar | VTVoid) as t -> t
     and load_type_fun_param pl =
       List.map
         (function
-          | FPFree (n, t) -> FPFree (n, load_type t)
-          | FPOut (n, t) -> FPOut (n, load_type t)
-          | FPConst (n, t) -> FPConst (n, load_type t))
+         | FPFree (n, t) -> FPFree (n, load_type t)
+         | FPOut (n, t) -> FPOut (n, load_type t)
+         | FPConst (n, t) -> FPConst (n, load_type t))
         pl
     in
     let rec construct = function
@@ -97,8 +97,8 @@ let rec load_variables : define list -> world =
       let fun_param_def =
         List.map
           (function
-            | FPFree (n, t) | FPOut (n, t) -> DNDVariable (n, t)
-            | FPConst (n, t) -> DDConst (n, construct t))
+           | FPFree (n, t) | FPOut (n, t) -> DNDVariable (n, t)
+           | FPConst (n, t) -> DDConst (n, construct t))
           p
       in
       let fdef = (DNDVariable (n, t) :: fun_param_def) @ d in

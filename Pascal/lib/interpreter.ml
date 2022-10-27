@@ -25,8 +25,8 @@ let rec is_l_value w = function
   | GetArr (e, _) | GetRec (e, _) -> is_l_value w e
   | Variable n ->
     (match load w n with
-    | _, VVariable _ -> true
-    | _ -> false)
+     | _, VVariable _ -> true
+     | _ -> false)
   | _ -> false
 ;;
 
@@ -104,9 +104,9 @@ let rec eval_expr w e =
     | Const v -> w, v
     | Variable n ->
       (match KeyMap.find_opt n w with
-      | Some (_, VConst v) | Some (_, VVariable v) -> w, v
-      | None -> w, VCollable n
-      | _ -> raise (PascalInterp (NotAVariable n)))
+       | Some (_, VConst v) | Some (_, VVariable v) -> w, v
+       | None -> w, VCollable n
+       | _ -> raise (PascalInterp (NotAVariable n)))
     | BinOp (op, x, y) ->
       let w, x = eval_expr w x in
       let w, y = eval_expr w y in
@@ -118,41 +118,41 @@ let rec eval_expr w e =
       let w, f = eval_expr w e in
       let w, pv = List.fold_left_map eval_expr w p in
       (match f with
-      | VCollable n -> w, eval_std_function n pv
-      | VFunction (n, _, fp, fw, st) ->
-        let rec helper fp pv w =
-          match fp, pv with
-          | (FPFree (n, _) | FPOut (n, _) | FPConst (n, _)) :: fptl, p :: ptl ->
-            let w =
-              match load w n with
-              | t, VConst _ -> KeyMap.add n (t, VConst p) w
-              | t, VVariable _ -> KeyMap.add n (t, VVariable p) w
-              | _ -> raise (PascalInterp (NotAVariable n))
-            in
-            helper fptl ptl w
-          | [], [] -> w
-          | _ -> raise (PascalInterp RunTimeError)
-        in
-        let fw = helper fp pv fw in
-        let fw = eval_stmt_list fw st in
-        let rec helper fp p w =
-          match fp, p with
-          | FPOut (n, _) :: fptl, p :: ptl ->
-            let w =
-              match load fw n with
-              | _, (VVariable v | VConst v) -> eval_stmt w (Assign (p, Const v))
-              | _ -> raise (PascalInterp RunTimeError)
-            in
-            helper fptl ptl w
-          | _ :: fptl, _ :: ptl -> helper fptl ptl w
-          | [], [] -> w
-          | _ -> raise (PascalInterp RunTimeError)
-        in
-        let w = helper fp p w in
-        (match load fw n with
-        | _, VVariable v -> w, v
-        | _ -> raise (PascalInterp RunTimeError))
-      | v -> raise (PascalInterp (CantCall v)))
+       | VCollable n -> w, eval_std_function n pv
+       | VFunction (n, _, fp, fw, st) ->
+         let rec helper fp pv w =
+           match fp, pv with
+           | (FPFree (n, _) | FPOut (n, _) | FPConst (n, _)) :: fptl, p :: ptl ->
+             let w =
+               match load w n with
+               | t, VConst _ -> KeyMap.add n (t, VConst p) w
+               | t, VVariable _ -> KeyMap.add n (t, VVariable p) w
+               | _ -> raise (PascalInterp (NotAVariable n))
+             in
+             helper fptl ptl w
+           | [], [] -> w
+           | _ -> raise (PascalInterp RunTimeError)
+         in
+         let fw = helper fp pv fw in
+         let fw = eval_stmt_list fw st in
+         let rec helper fp p w =
+           match fp, p with
+           | FPOut (n, _) :: fptl, p :: ptl ->
+             let w =
+               match load fw n with
+               | _, (VVariable v | VConst v) -> eval_stmt w (Assign (p, Const v))
+               | _ -> raise (PascalInterp RunTimeError)
+             in
+             helper fptl ptl w
+           | _ :: fptl, _ :: ptl -> helper fptl ptl w
+           | [], [] -> w
+           | _ -> raise (PascalInterp RunTimeError)
+         in
+         let w = helper fp p w in
+         (match load fw n with
+          | _, VVariable v -> w, v
+          | _ -> raise (PascalInterp RunTimeError))
+       | v -> raise (PascalInterp (CantCall v)))
     | GetRec (r, n) ->
       let w, r = eval_expr w r in
       w, get_rec r n
@@ -187,18 +187,18 @@ and eval_stmt (w : world) : statement -> world =
     | VChar c -> VChar (Char.chr (Char.code c + step))
     | VBool b ->
       (match Bool.to_int b + step with
-      | 0 -> VBool false
-      | 1 -> VBool true
-      | _ -> raise (PascalInterp RunTimeError))
+       | 0 -> VBool false
+       | 1 -> VBool true
+       | _ -> raise (PascalInterp RunTimeError))
     | _ -> raise (PascalInterp RunTimeError)
   in
   function
   | Assign (Variable n, e) ->
     (match load w n with
-    | t, VVariable _ ->
-      let w, v = eval_expr w e in
-      KeyMap.add n (t, VVariable v) w
-    | _ -> raise (PascalInterp (NotAVariable n)))
+     | t, VVariable _ ->
+       let w, v = eval_expr w e in
+       KeyMap.add n (t, VVariable v) w
+     | _ -> raise (PascalInterp (NotAVariable n)))
   | Assign (l, r) ->
     let rec helper w f =
       let arr_add a i v =
@@ -210,8 +210,8 @@ and eval_stmt (w : world) : statement -> world =
         match r with
         | VRecord w ->
           (match load w n with
-          | t, VVariable _ -> VRecord (KeyMap.add n (t, VVariable v) w)
-          | _ -> raise (PascalInterp RunTimeError))
+           | t, VVariable _ -> VRecord (KeyMap.add n (t, VVariable v) w)
+           | _ -> raise (PascalInterp RunTimeError))
         | _ -> raise (PascalInterp RunTimeError)
       in
       function
@@ -221,10 +221,10 @@ and eval_stmt (w : world) : statement -> world =
       | GetRec (e, n) -> helper w (fun a v -> rec_add a n (f (get_rec a n) v)) e
       | Variable n ->
         (match load w n with
-        | t, VVariable v ->
-          let w, e = eval_expr w r in
-          KeyMap.add n (t, VVariable (f v e)) w
-        | _ -> raise (PascalInterp RunTimeError))
+         | t, VVariable v ->
+           let w, e = eval_expr w r in
+           KeyMap.add n (t, VVariable (f v e)) w
+         | _ -> raise (PascalInterp RunTimeError))
       | _ -> raise (PascalInterp RunTimeError)
     in
     helper w (fun _ v -> v) l
@@ -234,8 +234,8 @@ and eval_stmt (w : world) : statement -> world =
   | If (e, ts, es) ->
     let w, b = eval_expr w e in
     (match b with
-    | VBool b -> if b then eval_stmt_list w ts else eval_stmt_list w es
-    | _ -> raise (PascalInterp (InvalidType (VTBool, get_type_val b))))
+     | VBool b -> if b then eval_stmt_list w ts else eval_stmt_list w es
+     | _ -> raise (PascalInterp (InvalidType (VTBool, get_type_val b))))
   | While (e, st) -> loop w e (fun b -> b) st
   | Repeat (e, st) -> loop w e (fun b -> not b) st
   | For (n, s, f, st) ->
