@@ -292,7 +292,9 @@ let check_interp s l =
     List.map
       (fun (n, v) ->
         load w n
-        => fun (_, wv) -> if not (v = wv) then raise (ExpFnd (n, v, wv)) else true)
+        => function
+        | _, wv when not (v = wv) -> raise (ExpFnd (n, v, wv))
+        | _ -> true)
       l
     => fun _ -> true
   | Fail (PascalInterp err) -> raise err

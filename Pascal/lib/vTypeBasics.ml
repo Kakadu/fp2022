@@ -22,8 +22,7 @@ let get_type_val = function
 let%test "VBool type" = get_type_val (VBool true) == VTBool
 
 let rec compare_types t1 t2 =
-  let eval t =
-    match t with
+  let eval = function
     | VTNDString -> VTDString 255
     | ok -> ok
   in
@@ -34,14 +33,13 @@ let rec compare_types t1 t2 =
     compare_types t1 t2
     && List.fold_left2
          (fun b p1 p2 ->
-           if b
-           then (
-             match p1, p2 with
-             | FPFree (_, t1), FPFree (_, t2)
-             | FPConst (_, t1), FPConst (_, t2)
-             | FPOut (_, t1), FPOut (_, t2) -> compare_types t1 t2
-             | _ -> false)
-           else false)
+           b
+           &&
+           match p1, p2 with
+           | FPFree (_, t1), FPFree (_, t2)
+           | FPConst (_, t1), FPConst (_, t2)
+           | FPOut (_, t1), FPOut (_, t2) -> compare_types t1 t2
+           | _ -> false)
          true
          p1
          p2

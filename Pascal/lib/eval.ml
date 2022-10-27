@@ -11,7 +11,8 @@ open ImArray
 let rec eval_binop op v1 v2 =
   let ( <|> ) f1 f2 arg =
     try f1 arg with
-    | _ -> f2 arg
+    | PascalInterp _ -> f2 arg
+    | err -> raise err
   in
   let ( => ) arg f = f arg in
   let error = PascalInterp (BinOpTypeError (op, get_type_val v1, get_type_val v2)) in
