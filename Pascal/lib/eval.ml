@@ -32,88 +32,88 @@ let rec eval_binop op v1 v2 =
   match v1, v2 with
   | VInt v1, VInt v2 ->
     ((fun (op, x, y) ->
-       (match op with
-       | Add -> x + y
-       | Sub -> x - y
-       | Mul -> x * x
-       | Div -> x / y
-       | Mod -> x mod y
-       | And -> x land y
-       | Or -> x lor y
-       | Xor -> x lxor y
-       | RShift -> Int.shift_right x y
-       | LShift -> Int.shift_left x y
-       | _ -> raise error)
-       => fun v -> VInt v)
+       VInt
+         (match op with
+         | Add -> x + y
+         | Sub -> x - y
+         | Mul -> x * x
+         | Div -> x / y
+         | Mod -> x mod y
+         | And -> x land y
+         | Or -> x lor y
+         | Xor -> x lxor y
+         | RShift -> Int.shift_right x y
+         | LShift -> Int.shift_left x y
+         | _ -> raise error))
     <|> (fun (op, x, y) ->
-          (match op with
-          | Greater -> x > y
-          | GreaterEq -> x >= y
-          | Less -> x < y
-          | LessEq -> x <= y
-          | Eq -> x == y
-          | NotEq -> x != y
-          | _ -> raise error)
-          => fun v -> VBool v)
+          VBool
+            (match op with
+            | Greater -> x > y
+            | GreaterEq -> x >= y
+            | Less -> x < y
+            | LessEq -> x <= y
+            | Eq -> x == y
+            | NotEq -> x != y
+            | _ -> raise error))
     <|> fun (op, x, y) ->
-    (match op with
-    | FDiv -> Float.of_int x /. Float.of_int y
-    | _ -> raise error)
-    => fun v -> VFloat v)
+    VFloat
+      (match op with
+      | FDiv -> Float.of_int x /. Float.of_int y
+      | _ -> raise error))
       (op, v1, v2)
   | VFloat v1, VFloat v2 ->
     ((fun (op, x, y) ->
-       (match op with
-       | Add -> x +. y
-       | Sub -> x -. y
-       | Mul -> x *. y
-       | FDiv -> x /. y
-       | _ -> raise error)
-       => fun v -> VFloat v)
+       VFloat
+         (match op with
+         | Add -> x +. y
+         | Sub -> x -. y
+         | Mul -> x *. y
+         | FDiv -> x /. y
+         | _ -> raise error))
     <|> fun (op, x, y) ->
-    (match op with
-    | Greater -> x > y
-    | GreaterEq -> x >= y
-    | Less -> x < y
-    | LessEq -> x <= y
-    | Eq -> x = y
-    | NotEq -> x != y
-    | _ -> raise error)
-    => fun v -> VBool v)
+    VBool
+      (match op with
+      | Greater -> x > y
+      | GreaterEq -> x >= y
+      | Less -> x < y
+      | LessEq -> x <= y
+      | Eq -> x = y
+      | NotEq -> x != y
+      | _ -> raise error))
       (op, v1, v2)
   | VChar v1, VChar v2 ->
     eval_binop op (VString (String.make 1 v1)) (VString (String.make 1 v2))
   | VString v1, VString v2 ->
     ((fun (op, x, y) ->
-       (match op with
-       | Add -> String.concat x [ ""; y ]
-       | _ -> raise error)
-       => fun v -> VString v)
+       VString
+         (match op with
+         | Add -> String.concat x [ ""; y ]
+         | _ -> raise error))
     <|> fun (op, x, y) ->
-    (match op with
-    | Greater -> x > y
-    | GreaterEq -> x >= y
-    | Less -> x < y
-    | LessEq -> x <= y
-    | Eq -> x == y
-    | NotEq -> x != y
-    | _ -> raise error)
-    => fun v -> VBool v)
-      (op, v1, v2)
-  | VBool v1, VBool v2 ->
-    (fun (op, x, y) ->
+    VBool
       (match op with
-      | And -> x && y
-      | Or -> x || y
-      | Xor -> x || (y && (not x) && y)
       | Greater -> x > y
       | GreaterEq -> x >= y
       | Less -> x < y
       | LessEq -> x <= y
       | Eq -> x == y
       | NotEq -> x != y
-      | _ -> raise error)
-      => fun v -> VBool v)
+      | _ -> raise error))
+      (op, v1, v2)
+  | VBool v1, VBool v2 ->
+    (fun (op, x, y) ->
+      VBool
+        (match op with
+        | And -> x && y
+        | Or -> x || y
+        | Xor -> x || (y && (not x) && y)
+        | Greater -> x > y
+        | GreaterEq -> x >= y
+        | Less -> x < y
+        | LessEq -> x <= y
+        | Eq -> x == y
+        | NotEq -> x != y
+        | _ -> raise error))
       (op, v1, v2)
   | _ -> raise error
 ;;
