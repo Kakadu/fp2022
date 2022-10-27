@@ -10,6 +10,7 @@ homepage: "https://github.com/toxakaz/fp2022"
 bug-reports: "st076546@student.spbu.ru"
 depends: [
   "dune" {>= "2.8"}
+  "opal"
   "ppx_inline_test" {with-test}
   "qcheck-core"
   "ppx_expect"
