@@ -120,8 +120,8 @@ let value =
     let* float_part =
       exactly '.'
       >> check_next (function
-             | Some x -> x != '.'
-             | _ -> true)
+           | Some x -> x != '.'
+           | _ -> true)
       >> many digit
     in
     return (float_of_string (cl2s (int_part @ ('.' :: float_part))))
