@@ -30,9 +30,9 @@ type binop =
 
 (** unar operators *)
 type unop =
-  | Plus (** + *)
-  | Minus (** - *)
-  | Not (** not *)
+  | Plus (** ( + ) *)
+  | Minus (** ( - ) *)
+  | Not (** ( not ) *)
 [@@deriving show]
 
 (** virtual types *)
