@@ -43,16 +43,12 @@ and context = {
 }
 [@@deriving show { with_path = false }]
 
-(* type thread_map_data = Data of int * context *)
-
 module Interpreter (M : MONADERROR) = struct
   open M
 
   let thread_data = Hashtbl.create 100
-
   (* to return async task results *)
-  (*let thread_data = ThreadMap.empty (* to return async task results *) *)
-  (*let thread_data1 = [] *)
+  (*let thread_data = [] *)
 
   let init_context variable_map =
     return
@@ -685,11 +681,8 @@ module Interpreter (M : MONADERROR) = struct
       | Eval_expr (e, cont, k) -> eval_expr e cont k
       | Eval_stmt (st, cont, k) -> eval_stmt st cont k
     in
-    (*thread_data.add self rez*)
-    (* List.cons t thread_data1 *)
-    (*List.append thread_data1 [ (self, rez) ] *)
-    Hashtbl.add thread_data self rez
-  (* store return value *)
+    (*List.append thread_data [ (self, rez) ] *)
+    Hashtbl.add thread_data self rez (* store return value *)
 
   and eval_expr in_expr in_ctx class_map =
     let eval_helper e_expr ctx =
@@ -775,7 +768,7 @@ module Interpreter (M : MONADERROR) = struct
               (* say to run a function in parallel *)
               Thread.join th;
               (* wait *)
-              (*let x = List.find (fun t -> fst t = Thread.id th) thread_data1 in
+              (*let x = List.find (fun t -> fst t = Thread.id th) thread_data in
                 snd x *)
               Hashtbl.find thread_data (Thread.id th)
               (* obtain and return a result *)
