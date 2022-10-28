@@ -5,6 +5,7 @@
 open Parser
 open Interpreter_class.Interpreter_for_classes (Interpreter_class.Result)
 open Interpreter.Interpreter (Interpreter_class.Result)
+open Interpreter
 open Tables
 
 let print_ctx_res res_context = function

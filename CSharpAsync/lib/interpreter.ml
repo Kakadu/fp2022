@@ -5,48 +5,54 @@
 open Ast
 open Printf
 open Interpreter_class
+open Tables
+
+type arr = ArrayInt of int array | ArrayString of string array | NoArr
+[@@deriving show { with_path = false }]
+
+type variable = {
+  var_type : _type;
+  arr_value : arr;
+  var_key : key_t;
+  var_value : values;
+  is_const : bool;
+  assignment_count : int;
+  visibility_level : int;
+}
+[@@deriving show { with_path = false }]
+
+type signal = WasBreak | WasContinue | WasReturn | WasThrown | NoSignal
+[@@deriving show { with_path = false }]
+
+type callee =
+  | Eval_expr of expr * context * class_t KeyMap.t
+  | Eval_post_operation of context
+  | Eval_stmt of stmt * context * class_t KeyMap.t
+[@@deriving show { with_path = false }]
+
+and context = {
+  variable_map : variable KeyMap.t;
+  current_method_type : _type;
+  current_method_async : bool;
+  last_expr_result : values;
+  runtime_signal : signal;
+  count_of_nested_cycles : int;
+  visibility_level : int;
+  post_inc : key_t list;
+  post_dec : key_t list;
+}
+[@@deriving show { with_path = false }]
+
+(* type thread_map_data = Data of int * context *)
 
 module Interpreter (M : MONADERROR) = struct
   open M
-  open Tables
 
-  type arr = ArrayInt of int array | ArrayString of string array | NoArr
-  [@@deriving show { with_path = false }]
+  let thread_data = Hashtbl.create 100
 
-  type variable = {
-    var_type : _type;
-    arr_value : arr;
-    var_key : key_t;
-    var_value : values;
-    is_const : bool;
-    assignment_count : int;
-    visibility_level : int;
-  }
-  [@@deriving show { with_path = false }]
-
-  type signal = WasBreak | WasContinue | WasReturn | WasThrown | NoSignal
-  [@@deriving show { with_path = false }]
-
-  type callee =
-    | Eval_expr of expr * context * class_t KeyMap.t
-    | Eval_post_operation of context
-    | Eval_stmt of stmt * context * class_t KeyMap.t
-  [@@deriving show { with_path = false }]
-
-  and context = {
-    variable_map : variable KeyMap.t;
-    current_method_type : _type;
-    current_method_async : bool;
-    last_expr_result : values;
-    runtime_signal : signal;
-    count_of_nested_cycles : int;
-    visibility_level : int;
-    post_inc : key_t list;
-    post_dec : key_t list;
-  }
-  [@@deriving show { with_path = false }]
-
-  let thread_data = Hashtbl.create 100 (* to return async task results *)
+  (* to return async task results *)
+  (*let thread_data = ThreadMap.empty (* to return async task results *) *)
+  (*let thread_data1 = [] *)
 
   let init_context variable_map =
     return
@@ -679,7 +685,11 @@ module Interpreter (M : MONADERROR) = struct
       | Eval_expr (e, cont, k) -> eval_expr e cont k
       | Eval_stmt (st, cont, k) -> eval_stmt st cont k
     in
-    Hashtbl.add thread_data self rez (* store return value *)
+    (*thread_data.add self rez*)
+    (* List.cons t thread_data1 *)
+    (*List.append thread_data1 [ (self, rez) ] *)
+    Hashtbl.add thread_data self rez
+  (* store return value *)
 
   and eval_expr in_expr in_ctx class_map =
     let eval_helper e_expr ctx =
@@ -765,6 +775,8 @@ module Interpreter (M : MONADERROR) = struct
               (* say to run a function in parallel *)
               Thread.join th;
               (* wait *)
+              (*let x = List.find (fun t -> fst t = Thread.id th) thread_data1 in
+                snd x *)
               Hashtbl.find thread_data (Thread.id th)
               (* obtain and return a result *)
           | _ -> error "Attempt to run from a non-async context")
