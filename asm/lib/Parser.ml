@@ -126,7 +126,7 @@ let code_line_parser =
     trim @@ word
     >>= fun x ->
     let w = String.uppercase_ascii x in
-    if is_mnemonic w then return (Mnemonic w) else failwith "Invalid command"
+    if is_mnemonic w then return (Mnemonic w) else failwith @@ "Invalid command " ^ x
   in
   let sep = trim @@ char ',' in
   let command (Mnemonic cmd) = cmd in
@@ -158,26 +158,28 @@ let data_line_parser =
     trim word
     >>= fun x ->
     let w = String.uppercase_ascii x in
-    if is_reg w
-    then failwith "Var's name must not be equal the name of reg"
+    if is_reg w || is_data_dec w
+    then failwith "Var's name must not be equal the name of reg or datatype"
     else return (fun dt y -> Variable (x, dt, y))
   in
   let sep = trim @@ char ',' in
-  var >>= fun v -> data_t >>= fun dt -> sep_by sep word >>= fun l -> return (v dt l)
+  var
+  >>= fun v ->
+  data_t >>= fun dt -> trim @@ sep_by sep (word <|> nums) >>= fun l -> return (v dt l)
 ;;
 
 let sec_parser =
   trim @@ (string "section" *> whitespaces *> char '.' *> word)
   >>= function
-  | "code" | "text" -> many code_line_parser
-  | "data" -> failwith "none implemented"
+  | "code" | "text" -> many code_line_parser >>= fun values -> return (Code values)
+  | "data" -> many data_line_parser >>= fun values -> return (Data values)
   | _ -> failwith "Invalid section"
 ;;
 
-let pr = many code_line_parser
+let parser = many sec_parser
 
 let eval str =
-  match parse_string ~consume:All data_line_parser str with
+  match parse_string ~consume:All parser str with
   | Ok v -> v
   | Error msg -> failwith msg
 ;;

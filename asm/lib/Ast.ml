@@ -28,7 +28,7 @@ type data_type = DataType of string [@@deriving show { with_path = false }]
 type var = Variable of string * data_type * string list
 [@@deriving show { with_path = false }]
 
-type section =
-  | Code of command list
+type ast =
+  | Code of code_section list
   | Data of var list
 [@@deriving show { with_path = false }]
