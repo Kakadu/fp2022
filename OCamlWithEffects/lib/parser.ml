@@ -9,7 +9,6 @@ type dispatch =
   { parse_tuple : dispatch -> expression Angstrom.t
   ; parse_list : dispatch -> expression Angstrom.t
   ; parse_fun : dispatch -> expression Angstrom.t
-  ; parse_expression : dispatch -> expression Angstrom.t
   ; parse_conditional : dispatch -> expression Angstrom.t
   ; parse_matching : dispatch -> expression Angstrom.t
   ; parse_binary_operation : dispatch -> expression Angstrom.t
@@ -18,6 +17,7 @@ type dispatch =
   ; parse_data_constructor : dispatch -> expression Angstrom.t
   ; parse_unary_operation : dispatch -> expression Angstrom.t
   ; parse_list_constructing : dispatch -> expression Angstrom.t
+  ; parse_expression : dispatch -> expression Angstrom.t
   }
 
 (* Functions for constructing expressions *)
@@ -53,8 +53,9 @@ let edata_constructor constructor_name expressions =
 
 let eunary_operation operation expression = EUnaryOperation (operation, expression)
 let econstruct_list head tail = EConstructList (head, tail)
+(* -------------------------------------- *)
 
-(* Binary operators smart constructors *)
+(* Smart constructors for binary operators*)
 let badd _ = Add
 let bsub _ = Sub
 let bmul _ = Mul
@@ -69,9 +70,11 @@ let band _ = AND
 let bor _ = OR
 (* -------------------------------------- *)
 
-(* Unary operator smart constructors *)
+(* Smart constructors for unary operators *)
 let uminus _ = Minus
 let unot _ = Not
+(* -------------------------------------- *)
+
 let space_predicate x = x == ' ' || x == '\n' || x == '\t' || x == '\r'
 let remove_spaces = take_while space_predicate
 
@@ -174,11 +177,18 @@ let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
 let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun" ]
 
 let parse_identifier =
-  parse_entity
-  >>= fun entity ->
-  if List.exists (( = ) entity) keywords || List.exists (( = ) entity) data_constructors
-  then fail "Parsing error: keyword used."
-  else return @@ eidentifier entity
+  let parse_identifier =
+    parse_entity
+    >>= fun entity ->
+    if List.exists (( = ) entity) keywords || List.exists (( = ) entity) data_constructors
+    then fail "Parsing error: keyword used."
+    else return @@ eidentifier entity
+  in
+  many parse_literal
+  >>= function
+  (* TODO: true123 *)
+  | [] -> parse_identifier
+  | _ -> fail "Parsing error: not an identifier."
 ;;
 
 (* Tests for parsing identifiers *)
@@ -190,37 +200,23 @@ let%test _ =
   parse_string ~consume:Prefix parse_identifier "  f x" = Result.ok @@ EIdentifier "f"
 ;;
 
-(* Write new parsers (except tuple) here! *)
-let parsers_except d =
-  [ parse_literal
-  ; d.parse_fun d
-  ; d.parse_list d
-  ; d.parse_conditional d
-  ; d.parse_matching d
-  ; d.parse_data_constructor d
-  ; parse_identifier
-  ; d.parse_let_in d
-  ]
-;;
-
-(* -------------------------------------- *)
-
 let parse_tuple d =
   fix
   @@ fun self ->
   remove_spaces
   *> ((let parse_content =
          choice
-           [ d.parse_list d
-           ; parens @@ d.parse_fun d
-           ; parens @@ d.parse_conditional d
-           ; parens @@ d.parse_matching d
-           ; d.parse_binary_operation d
-           ; parens @@ d.parse_let_in d
-           ; d.parse_application d
-           ; d.parse_data_constructor d
-           ; d.parse_unary_operation d
+           [ d.parse_unary_operation d
+           ; parens self
            ; d.parse_list_constructing d
+           ; d.parse_list d
+           ; d.parse_application d
+           ; d.parse_fun d
+           ; d.parse_conditional d
+           ; d.parse_matching d
+           ; d.parse_binary_operation d
+           ; d.parse_let_in d
+           ; d.parse_data_constructor d
            ; parse_literal
            ; parse_identifier
            ]
@@ -241,16 +237,17 @@ let parse_list d =
   and separator = remove_spaces *> char ';' *> remove_spaces <|> remove_spaces
   and parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
+      ; d.parse_list d
+      ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -266,16 +263,17 @@ let parse_fun d =
   *>
   let parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_list d
+      ; d.parse_application d
+      ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -284,10 +282,7 @@ let parse_fun d =
   <|> string "fun"
       *> lift2
            efun
-           (many1 (parse_entity >>= fun v -> if v = "->" then fail "" else return v)
-           <* remove_spaces
-           <* string "->"
-           <* remove_spaces)
+           (many1 parse_entity <* remove_spaces <* string "->" <* remove_spaces)
            (parse_content <* remove_spaces)
 ;;
 
@@ -295,17 +290,17 @@ let parse_fun d =
 let declaration_helper constructing_function d =
   let parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_list d
+      ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -331,17 +326,17 @@ let parse_let_in d =
   >>= fun parsed_rec ->
   let parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_list d
+      ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -365,16 +360,17 @@ let parse_conditional d =
   *>
   let parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_list d
+      ; d.parse_application d
       ; d.parse_fun d
+      ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -395,16 +391,17 @@ let parse_matching d =
   *>
   let parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_list d
+      ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
+      ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -461,17 +458,14 @@ let parse_binary_operation d =
   let ( <||> ) = chainl1 in
   let parse_content =
     choice
-      [ d.parse_tuple d
-      ; d.parse_list d
-      ; d.parse_fun d
+      [ d.parse_unary_operation d
+      ; d.parse_list_constructing d
+      ; d.parse_application d
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; parens @@ self
+      ; parens self
       ; d.parse_let_in d
-      ; d.parse_application d
       ; d.parse_data_constructor d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
       ; parse_literal
       ; parse_identifier
       ]
@@ -483,9 +477,9 @@ let parse_binary_operation d =
   <||> equality
   <||> logical_and
   <||> logical_or
-  >>= function
-  | EBinaryOperation (operator, left_operand, right_operand) ->
-    return @@ ebinary_operation operator left_operand right_operand
+  >>= fun result ->
+  match result with
+  | EBinaryOperation (_, _, _) -> return result
   | _ -> fail "Parsing error: not binary operation."
 ;;
 
@@ -497,16 +491,17 @@ let parse_application d =
      <|>
      let operand_parser =
        choice
-         [ d.parse_tuple d
+         [ parens @@ d.parse_unary_operation d
+         ; d.parse_tuple d
+         ; d.parse_list_constructing d
          ; d.parse_list d
+         ; parens @@ d.parse_application d
          ; d.parse_fun d
          ; d.parse_conditional d
          ; d.parse_matching d
          ; d.parse_binary_operation d
          ; d.parse_let_in d
          ; d.parse_data_constructor d
-         ; d.parse_unary_operation d
-         ; d.parse_list_constructing d
          ; parse_literal
          ; parse_identifier
          ]
@@ -525,16 +520,17 @@ let parse_data_constructor d =
   *>
   let parse_content =
     choice
-      [ d.parse_tuple d
+      [ d.parse_unary_operation d
+      ; d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_list d
+      ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
       ; d.parse_let_in d
-      ; d.parse_application d
-      ; d.parse_unary_operation d
-      ; d.parse_list_constructing d
+      ; d.parse_data_constructor d
       ; parse_literal
       ; parse_identifier
       ]
@@ -558,46 +554,73 @@ let parse_unary_operation d =
   *>
   let parse_content =
     choice
-      [ d.parse_tuple d
-      ; d.parse_list d
-      ; d.parse_fun d
+      [ d.parse_application d
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; d.parse_binary_operation d
-      ; d.parse_let_in d
-      ; d.parse_application d
-      ; d.parse_data_constructor d
-      ; d.parse_list_constructing d
+      ; parens @@ d.parse_binary_operation d
+      ; parens self
       ; parse_literal
       ; parse_identifier
       ]
   in
   parens self
   <|>
-  let parse_unary_operator = choice [ char '-' >>| uminus; char '!' >>| unot ] in
+  let parse_unary_operator = choice [ char '-' >>| uminus; string "not" >>| unot ] in
   lift2 eunary_operation parse_unary_operator parse_content
+;;
+
+let parse_unary_operation d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *>
+  let parse_content_minus =
+    let indent = many1 (satisfy space_predicate) in
+    choice
+      [ parens self <|> indent *> self
+      ; parens @@ d.parse_application d <|> indent *> d.parse_application d
+      ; parens @@ d.parse_conditional d <|> indent *> d.parse_conditional d
+      ; parens @@ d.parse_matching d <|> indent *> d.parse_matching d
+      ; parse_literal
+      ; parse_identifier
+      ; parens @@ d.parse_binary_operation d
+      ]
+  and parse_content_not =
+    choice
+      [ parens self
+      ; parens @@ d.parse_application d
+      ; parens @@ d.parse_conditional d
+      ; parens @@ d.parse_matching d
+      ; parens @@ d.parse_binary_operation d
+      ; parse_literal
+      ; parse_identifier
+      ]
+  in
+  parens self
+  <|> lift2 eunary_operation (char '-' >>| uminus) parse_content_minus
+  <|> lift2 eunary_operation (string "not" >>| unot) parse_content_not
 ;;
 
 let parse_expression d =
   choice
-    [ d.parse_tuple d
+    [ d.parse_unary_operation d
+    ; d.parse_tuple d
+    ; d.parse_list_constructing d
     ; d.parse_list d
+    ; d.parse_application d
     ; d.parse_fun d
     ; d.parse_conditional d
     ; d.parse_matching d
     ; d.parse_binary_operation d
     ; d.parse_let_in d
-    ; d.parse_application d
     ; d.parse_data_constructor d
-    ; d.parse_unary_operation d
-    ; d.parse_list_constructing d
     ; parse_literal
     ; parse_identifier
     ]
 ;;
 
-let parse_list_constructing d =
-  fix
+let parse_list_constructing _ = fail "HAHAHA LOL KEK"
+(* fix
   @@ fun self ->
   remove_spaces
   *> (parens self
@@ -619,14 +642,12 @@ let parse_list_constructing d =
          ; parse_identifier
          ]
      in
-     lift2 econstruct_list (parse_content <* separator) (self <|> parse_content))
-;;
+     lift2 econstruct_list (parse_content <* separator) (self <|> parse_content)) *)
 
 let default =
   { parse_tuple
   ; parse_list
   ; parse_fun
-  ; parse_expression
   ; parse_conditional
   ; parse_matching
   ; parse_binary_operation
@@ -635,13 +656,13 @@ let default =
   ; parse_data_constructor
   ; parse_unary_operation
   ; parse_list_constructing
+  ; parse_expression
   }
 ;;
 
 let parse_tuple = default.parse_tuple default
 let parse_list = default.parse_list default
 let parse_fun = default.parse_fun default
-let parse_expression = default.parse_expression default
 let parse_declaration = parse_declaration default
 let parse_conditional = default.parse_conditional default
 let parse_matching = default.parse_matching default
@@ -650,6 +671,9 @@ let parse_let_in = default.parse_let_in default
 let parse_application = default.parse_application default
 let parse_unary_operation = default.parse_unary_operation default
 let parse_list_constructing = default.parse_list_constructing default
+let parse_data_constructor = default.parse_data_constructor default
+let parse_expression = default.parse_expression default
+let parse = Error "TODO"
 
 (* 
 (* Tests for list parsing *)
@@ -667,8 +691,6 @@ let%test _ =
          ; ELiteral (LString "pear")
          ]
 ;;
-
-(*
 
 let%test _ =
   parse_string ~consume:Prefix parse_expression "  [ 'h' ; 'e' ; 'l' ; 'l' ; 'o'  ]   "
@@ -1212,7 +1234,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "- ((fun x y -> x + y) 1 2)"
+  parse_string ~consume:Prefix parse_expression "- ((fun x y -> (x + y)) 1 2)"
   = Result.ok
     @@ EUnaryOperation
          ( Minus
@@ -1226,18 +1248,24 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "if !x then -1 + x else !(x * (-x))"
+  parse_string ~consume:Prefix parse_expression " ( 1 + 2 + 3 ) "
+  = Result.ok
+    @@ EBinaryOperation
+         ( Add
+         , EBinaryOperation (Add, ELiteral (LInt 1), ELiteral (LInt 2))
+         , ELiteral (LInt 3) )
+;;
+
+let%test _ =
+  parse_string ~consume:Prefix parse_expression " if not x then -1 else 0 "
   = Result.ok
     @@ EIf
          ( EUnaryOperation (Not, EIdentifier "x")
-         , EBinaryOperation
-             (Add, EUnaryOperation (Minus, ELiteral (LInt 1)), EIdentifier "x")
-         , EUnaryOperation
-             ( Not
-             , EBinaryOperation
-                 (Mul, EIdentifier "x", EUnaryOperation (Minus, EIdentifier "x")) ) )
+         , EUnaryOperation (Minus, ELiteral (LInt 1))
+         , ELiteral (LInt 0) )
 ;;
 
+(*
 (* Tests for list construction *)
 
 let%test _ =
@@ -1255,5 +1283,3 @@ let%test _ =
          ; EConstructList (EIdentifier "x", EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
          ]
 ;; *)
-
-let parse = Error "TODO"

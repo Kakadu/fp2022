@@ -1,0 +1,8 @@
+(library
+ (name OCamlWithEffectsTests)
+ (public_name OCamlWithEffects.Tests)
+ (modules ParserTests)
+ (libraries base OCamlWithEffects.Lib)
+ (preprocess
+  (pps ppx_expect))
+ (inline_tests))
