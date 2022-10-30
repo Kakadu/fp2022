@@ -18,6 +18,8 @@ depends: [
   "odoc" {with-doc}
   "ocamlformat" {build}
   "base"
+  "ppx_variants_conv"
+  "ppx_fields_conv"
 ]
 build: [
   ["dune" "subst"] {dev}

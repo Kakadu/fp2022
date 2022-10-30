@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Chizhov Anton *)
+
+(** SPDX-License-Identifier: CC0-1.0 *)
+
 open Angstrom
 
 module type MONAD_FAIL = sig

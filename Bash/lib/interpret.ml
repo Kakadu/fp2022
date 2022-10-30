@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Kakadu and contributors *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Ast
 open Utils
 
@@ -69,8 +73,7 @@ module Interpret (M : MONAD_FAIL) = struct
     { local; global = { global with functions = StrMap.add name v global.functions } }
   ;;
 
-  let val_or_empty ~after f =
-    match f with
+  let val_or_empty ~after = function
     | Some v -> after v
     | None -> ""
   ;;
