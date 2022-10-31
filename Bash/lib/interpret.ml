@@ -5,7 +5,15 @@
 open Ast
 open Utils
 
-module Result : MONAD_FAIL with type 'a t = ('a, string) result = struct
+module type MonadFail = sig
+  include Base.Monad.Infix
+
+  val return : 'a -> 'a t
+  val fail : string -> 'a t
+  val ( <|> ) : 'a t -> (unit -> 'a t) -> 'a t
+end
+
+module Result : MonadFail with type 'a t = ('a, string) result = struct
   type 'a t = ('a, string) result
 
   let return = Result.ok
@@ -20,7 +28,7 @@ module Result : MONAD_FAIL with type 'a t = ('a, string) result = struct
   ;;
 end
 
-module Interpret (M : MONAD_FAIL) = struct
+module Interpret (M : MonadFail) = struct
   open M
 
   (* simple variables are also indexed arrays *)
@@ -33,7 +41,7 @@ module Interpret (M : MONAD_FAIL) = struct
   type local_environment = { vars : variable StrMap.t }
   [@@deriving show { with_path = false }]
 
-  type global_environment =
+  type environment =
     { vars : variable StrMap.t
     ; functions : group StrMap.t
     ; retcode : int
@@ -45,7 +53,7 @@ module Interpret (M : MONAD_FAIL) = struct
 
   type session_env =
     { local : local_environment
-    ; global : global_environment
+    ; global : environment
     }
   [@@deriving show { with_path = false }]
 
@@ -369,10 +377,14 @@ module Interpret (M : MONAD_FAIL) = struct
 
   let eval_func env { name; body } = return (set_fn env name body)
 
-  let rec eval ?(env = default_session_env) = function
-    | Command any_cmd :: tl -> eval_any_cmd env any_cmd >>= fun env -> eval ~env tl
-    | Func f :: tl -> eval_func env f >>= fun env -> eval ~env tl
-    | [] -> return env
+  let eval script =
+    let rec eval_inner ?(env = default_session_env) = function
+      | Command any_cmd :: tl ->
+        eval_any_cmd env any_cmd >>= fun env -> eval_inner ~env tl
+      | Func f :: tl -> eval_func env f >>= fun env -> eval_inner ~env tl
+      | [] -> return env
+    in
+    eval_inner script >>| fun { global } -> global
   ;;
 end
 
@@ -389,9 +401,9 @@ let test_env_vars =
     match Parser.parse input with
     | Ok script ->
       (match eval script with
-       | Ok env when env.global.vars = expected -> true
+       | Ok global when global.vars = expected -> true
        | Ok env ->
-         pp_session_env Format.std_formatter env;
+         pp_environment Format.std_formatter env;
          false
        | Error e ->
          print_string e;
@@ -404,8 +416,8 @@ let test_env_vars =
     match Parser.parse input with
     | Ok script ->
       (match eval script with
-       | Ok env ->
-         pp_session_env Format.std_formatter env;
+       | Ok global ->
+         pp_environment Format.std_formatter global;
          false
        | Error _ -> true)
     | Error e ->
@@ -556,4 +568,21 @@ let%test _ =
        ; "fact", IndexedArray (IntMap.singleton 0 "120")
        ; "i", IndexedArray (IntMap.singleton 0 "6")
        ])
+;;
+
+let%test _ =
+  test_env_vars.ok
+    {|
+    function factorial () {
+      if (($1=1))
+      then
+        fact=1
+      else
+        factorial $(($1 - 1))
+        fact=$((fact * $1))
+      fi
+    }
+    factorial 5
+  |}
+    (StrMap.from_list [ "fact", IndexedArray (IntMap.singleton 0 "120") ])
 ;;

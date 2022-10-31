@@ -30,4 +30,5 @@
   (ocamlformat :build)
   base
   ppx_variants_conv
-  ppx_fields_conv))
+  ppx_fields_conv
+  batteries))

@@ -8,7 +8,7 @@ open Parser
 let interpret script =
   let open Interpret.Interpret (Interpret.Result) in
   match eval script with
-  | Ok env -> pp_session_env Format.std_formatter env
+  | Ok env -> pp_environment Format.std_formatter env
   | Error e -> Printf.printf "Interpretation error: %s" e
 ;;
 

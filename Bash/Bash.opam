@@ -20,6 +20,7 @@ depends: [
   "base"
   "ppx_variants_conv"
   "ppx_fields_conv"
+  "batteries"
 ]
 build: [
   ["dune" "subst"] {dev}

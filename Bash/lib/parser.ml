@@ -50,6 +50,9 @@ let sc = char ';'
 (* take dollar  *)
 let dollar = char '$'
 
+(* take unsigned int *)
+let u_int = take_while1 is_digit >>| int_of_string
+
 (* take signed int *)
 let int =
   let sign = option "" (string "-" <|> string "+") in
@@ -228,13 +231,17 @@ let text_p ~arg_ctx =
 ;;
 
 let expr_p =
-  let var = trim var_p >>| variable in
+  let chainl1 op e =
+    let rec go acc = lift2 (fun f -> f acc) op e >>= go <|> return acc in
+    e >>= go
+  in
+  let create pos = { name = string_of_int pos; subscript = "0" } in
+  let var = trim (var_p <|> (dollar *> u_int >>| create)) >>| variable in
   let num = trim int >>| number in
   let assn = lift2 assignment (trim var_p <* char '=') in
   fix (fun expr ->
     let factor = parens expr <|> num <|> var in
-    assn expr
-    <|> List.fold_right (fun el acc -> Utils.chainl1 acc el) operators_order factor)
+    assn expr <|> List.fold_right chainl1 operators_order factor)
 ;;
 
 (**      Param expansion parsers      *)
@@ -291,7 +298,7 @@ let substitute =
 
 (* main parameter expansion function *)
 let param_exp =
-  let positional = braces int <|> (take ~pred:is_digit 1 >>| int_of_string) in
+  let positional = braces u_int <|> (take ~pred:is_digit 1 >>| int_of_string) in
   let var_exp = lift varexpansion var_p in
   let expansions = [ length; substring; substr_removal; substitute; var_exp ] in
   lift
@@ -429,7 +436,7 @@ and arg ~arg_ctx () =
       [ "do"; "done"; "if"; "for"; "case"; "in"; "esac"; "then"; "else"; "elif"; "fi" ]
   in
   let process_many x =
-    Utils.product
+    Batteries.List.n_cartesian_product
     @@ List.map
          (function
           | BracedExpansion braced_exp -> process_braced_expansion braced_exp
@@ -1230,17 +1237,17 @@ let%test _ =
          ; AtomString [ Text "postsomething" ]
          ]
        ; [ AtomString [ Text "from" ]
-         ; AtomString [ Text "b" ]
-         ; AtomString [ Text "inn" ]
-         ; DoubleQuotedString [ Text "some" ]
-         ; AtomString [ Text "c" ]
-         ; AtomString [ Text "postsomething" ]
-         ]
-       ; [ AtomString [ Text "from" ]
          ; AtomString [ Text "a" ]
          ; AtomString [ Text "inn" ]
          ; DoubleQuotedString [ Text "some" ]
          ; AtomString [ Text "d" ]
+         ; AtomString [ Text "postsomething" ]
+         ]
+       ; [ AtomString [ Text "from" ]
+         ; AtomString [ Text "b" ]
+         ; AtomString [ Text "inn" ]
+         ; DoubleQuotedString [ Text "some" ]
+         ; AtomString [ Text "c" ]
          ; AtomString [ Text "postsomething" ]
          ]
        ; [ AtomString [ Text "from" ]
