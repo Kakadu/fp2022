@@ -10,7 +10,9 @@ module type MonadFail = sig
 
   val return : 'a -> 'a t
   val fail : string -> 'a t
-  val ( <|> ) : 'a t -> (unit -> 'a t) -> 'a t
+  val ( <|> ) : 'a t -> 'a t -> 'a t
+  val ( *> ) : 'a t -> 'b -> 'b t
+  val ( <* ) : 'a t -> 'b -> 'a t
 end
 
 module Result : sig
@@ -20,7 +22,9 @@ module Result : sig
   val fail : string -> 'a t
   val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
   val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
-  val ( <|> ) : 'a t -> (unit -> 'a t) -> 'a t
+  val ( <|> ) : 'a t -> 'a t -> 'a t
+  val ( *> ) : 'a t -> 'b -> 'b t
+  val ( <* ) : 'a t -> 'b -> 'a t
 end
 
 module Interpret (M : MonadFail) : sig
@@ -33,8 +37,9 @@ module Interpret (M : MonadFail) : sig
 
   type environment =
     { vars : variable StrMap.t
-    ; functions : group StrMap.t
+    ; functions : script StrMap.t
     ; retcode : int
+    ; fds : Unix.file_descr IntMap.t
     }
   [@@deriving show { with_path = false }]
 

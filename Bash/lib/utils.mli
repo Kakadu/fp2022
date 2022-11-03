@@ -5,6 +5,9 @@
 (* Checks if one of predicates is true *)
 val some_pred : ('a -> bool) list -> 'a -> bool
 
+(* Checks if all predicates are true *)
+val all_pred : ('a -> bool) list -> 'a -> bool
+
 (* Computes diff between l1 and l2 *)
 val diff : 'a list -> 'a list -> 'a list
 

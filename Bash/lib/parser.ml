@@ -71,6 +71,12 @@ let take ?(pred = Fun.const true) i =
 (* function, that can receive predicate as optional labeled param with *)
 let take_ch ~pred = take ~pred 1 >>| fun x -> x.[0]
 
+(* take word while not end_char or meta symbol *)
+let take_while_not ?(end_chars = [ '}' ]) () =
+  take_while1
+    (Utils.all_pred [ (fun c -> List.for_all (( != ) c) end_chars); Fun.negate is_meta ])
+;;
+
 (* names cannot start by digit *)
 let is_valid_name = function
   | s when is_digit (String.get s 0) -> fail "Variable name cannot start with digit"
@@ -204,8 +210,7 @@ let backslash arg_ctx =
   let lift p = lift2 p (string "\\") (take 1) in
   match arg_ctx with
   | InnerDQS ->
-    lift (fun slash ch ->
-      match ch with
+    lift (fun slash -> function
       | ch when List.mem ch [ "$"; "'"; "\""; "\\"; "\n" ] -> ch
       | "\n" -> ""
       | ch -> slash ^ ch)
@@ -274,7 +279,7 @@ let substr_removal =
     create
     var_p
     (string "#" <|> string "%" >>= fun ch -> option "" (string ch) >>| ( ^ ) ch)
-    (take_while1 (fun c -> c != '}' && (not @@ is_meta c)))
+    (take_while_not ())
   |> lift substrremoval
 ;;
 
@@ -291,8 +296,8 @@ let substitute =
     create
     var_p
     subst_type_p
-    (take_while1 (fun c -> c != '}' && c != '/' && (not @@ is_meta c)))
-    (option "" (char '/' *> take_while1 (fun c -> c != '}' && (not @@ is_meta c))))
+    (take_while_not ~end_chars:[ '}'; '/' ] ())
+    (option "" (char '/' *> take_while_not ()))
   |> lift substitute
 ;;
 
@@ -593,19 +598,19 @@ and compound_p () =
 
 and any_command ?(arg_ctx = Default) () =
   compound_p () >>| compound <|> (pipe ~arg_ctx () >>| simple)
-;;
 
-let parse_function () =
+and parse_function () =
   let create name body = func @@ Fields_of_func.create ~name ~body in
   lift2
     create
     (string "function" *> trim name <* option "" (string "()"))
-    (trim @@ group_p ())
-;;
+    (trim @@ braces (return () >>= parse_script))
 
-let parse_script () =
+and parse_script () =
   delim_spaces_sc
-  *> many1 (choice [ parse_function (); any_command () >>| command ] <* delim_spaces_sc)
+  *> many1
+       (choice [ return () >>= parse_function; any_command () >>| command ]
+       <* delim_spaces_sc)
 ;;
 
 let parse str =
@@ -2536,19 +2541,20 @@ let%test _ =
     (Func
        { name = "what"
        ; body =
-           [ Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "a1"; subscript = "0" }
-                              ; value = [ AtomString [ Text "5" ] ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
+           [ Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars =
+                             [ AtomVariable
+                                 { key = { name = "a1"; subscript = "0" }
+                                 ; value = [ AtomString [ Text "5" ] ]
+                                 }
+                             ]
+                         ; cmd = []
+                         }
+                     ]))
            ]
        })
 ;;
@@ -2561,17 +2567,18 @@ let%test _ =
     (Func
        { name = "name"
        ; body =
-           [ Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars = []
-                      ; cmd =
-                          [ SingleArg [ AtomString [ Text "echo" ] ]
-                          ; SingleArg [ AtomString [ Text "hello" ] ]
-                          ]
-                      }
-                  ])
+           [ Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars = []
+                         ; cmd =
+                             [ SingleArg [ AtomString [ Text "echo" ] ]
+                             ; SingleArg [ AtomString [ Text "hello" ] ]
+                             ]
+                         }
+                     ]))
            ]
        })
 ;;
@@ -2585,46 +2592,50 @@ let%test _ =
     (Func
        { name = "fn1"
        ; body =
-           [ Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "some"; subscript = "0" }
-                              ; value =
-                                  [ AtomString
-                                      [ ArithmExpansion
-                                          (Assignment
-                                             ( { name = "i"; subscript = "0" }
-                                             , Variable { name = "j"; subscript = "0" } ))
-                                      ]
-                                  ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
-           ; Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "some"; subscript = "0" }
-                              ; value =
-                                  [ AtomString
-                                      [ ArithmExpansion
-                                          (Less
-                                             ( Variable { name = "i"; subscript = "0" }
-                                             , Variable { name = "j"; subscript = "0" } ))
-                                      ]
-                                  ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
+           [ Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars =
+                             [ AtomVariable
+                                 { key = { name = "some"; subscript = "0" }
+                                 ; value =
+                                     [ AtomString
+                                         [ ArithmExpansion
+                                             (Assignment
+                                                ( { name = "i"; subscript = "0" }
+                                                , Variable { name = "j"; subscript = "0" }
+                                                ))
+                                         ]
+                                     ]
+                                 }
+                             ]
+                         ; cmd = []
+                         }
+                     ]))
+           ; Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars =
+                             [ AtomVariable
+                                 { key = { name = "some"; subscript = "0" }
+                                 ; value =
+                                     [ AtomString
+                                         [ ArithmExpansion
+                                             (Less
+                                                ( Variable { name = "i"; subscript = "0" }
+                                                , Variable { name = "j"; subscript = "0" }
+                                                ))
+                                         ]
+                                     ]
+                                 }
+                             ]
+                         ; cmd = []
+                         }
+                     ]))
            ]
        })
 ;;
@@ -2638,38 +2649,41 @@ let%test _ =
     (Func
        { name = "what"
        ; body =
-           [ Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "a1"; subscript = "0" }
-                              ; value = [ AtomString [ Text "5" ] ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
-           ; Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "b1"; subscript = "0" }
-                              ; value =
-                                  [ AtomString
-                                      [ ArithmExpansion
-                                          (Plus
-                                             (Number 10, Asterisk (Number 227, Number 328)))
-                                      ]
-                                  ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
+           [ Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars =
+                             [ AtomVariable
+                                 { key = { name = "a1"; subscript = "0" }
+                                 ; value = [ AtomString [ Text "5" ] ]
+                                 }
+                             ]
+                         ; cmd = []
+                         }
+                     ]))
+           ; Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars =
+                             [ AtomVariable
+                                 { key = { name = "b1"; subscript = "0" }
+                                 ; value =
+                                     [ AtomString
+                                         [ ArithmExpansion
+                                             (Plus
+                                                ( Number 10
+                                                , Asterisk (Number 227, Number 328) ))
+                                         ]
+                                     ]
+                                 }
+                             ]
+                         ; cmd = []
+                         }
+                     ]))
            ]
        })
 ;;
@@ -2677,44 +2691,57 @@ let%test _ =
 let%test _ =
   ok_fn
     {|function what () {
-  a1=5
-  b1=$((10+(227 * 328)))
-}|}
+        a1=5
+        function what2 () {
+          a3=9
+        }
+        what2
+      }|}
     (Func
        { name = "what"
        ; body =
-           [ Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "a1"; subscript = "0" }
-                              ; value = [ AtomString [ Text "5" ] ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
-           ; Simple
-               (Operands
-                  [ AtomOperand
-                      { invert = false
-                      ; env_vars =
-                          [ AtomVariable
-                              { key = { name = "b1"; subscript = "0" }
-                              ; value =
-                                  [ AtomString
-                                      [ ArithmExpansion
-                                          (Plus
-                                             (Number 10, Asterisk (Number 227, Number 328)))
-                                      ]
-                                  ]
-                              }
-                          ]
-                      ; cmd = []
-                      }
-                  ])
+           [ Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars =
+                             [ AtomVariable
+                                 { key = { name = "a1"; subscript = "0" }
+                                 ; value = [ AtomString [ Text "5" ] ]
+                                 }
+                             ]
+                         ; cmd = []
+                         }
+                     ]))
+           ; Func
+               { name = "what2"
+               ; body =
+                   [ Command
+                       (Simple
+                          (Operands
+                             [ AtomOperand
+                                 { invert = false
+                                 ; env_vars =
+                                     [ AtomVariable
+                                         { key = { name = "a3"; subscript = "0" }
+                                         ; value = [ AtomString [ Text "9" ] ]
+                                         }
+                                     ]
+                                 ; cmd = []
+                                 }
+                             ]))
+                   ]
+               }
+           ; Command
+               (Simple
+                  (Operands
+                     [ AtomOperand
+                         { invert = false
+                         ; env_vars = []
+                         ; cmd = [ SingleArg [ AtomString [ Text "what2" ] ] ]
+                         }
+                     ]))
            ]
        })
 ;;

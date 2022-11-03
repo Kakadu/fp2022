@@ -9,12 +9,14 @@ Author: Chizhov Anton
 Features done:
 
 - Parser (without redirections)
-- Interpreter of functions, arithmetic expressions (without running third-party programs)
+- Part of interpreter
+- Start third-party programs
 
 Features in progress:
 
 - Parsing redirections (and add test for them)
-- Running third-party-programs
+- Evaluating script files
 - Evaluate expansions, which are not evaluated at the moment
+- Filename expansion, word splitting
 - Add tests for interpretator
 - Add repl

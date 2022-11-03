@@ -3,6 +3,7 @@
 (** SPDX-License-Identifier: CC0-1.0 *)
 
 let some_pred preds el = List.exists (fun fn -> fn el) preds
+let all_pred preds el = List.for_all (fun fn -> fn el) preds
 
 (* computes diff between l1 and l2 *)
 let diff l1 l2 = List.filter (fun x -> not (List.mem x l2)) l1
