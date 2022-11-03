@@ -91,8 +91,7 @@ let semantic_test =
   let rec semantic_test_in func c = function
     | h :: _ as w ->
       KeyMap.for_all
-        (fun _ v ->
-          match v with
+        (fun _ -> function
           | VTFunction _, VConst (VFunction (_, _, _, fw, fc)) ->
             semantic_test_in true fc (fw :: w)
           | _ -> true)
