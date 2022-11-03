@@ -9,11 +9,13 @@ exception VariableNotFound of name
 exception TypeNotFound of name
 exception NotAType of name
 exception NotAConst of name
+exception NonConstCall
 exception NotAVariable of name
 exception NotAStdFunction of name
 exception BinOpTypeError of binop * vtype * vtype
 exception UnOpTypeError of unop * vtype
 exception StdFunctionTypeError of name * vtype list
+exception GlobalFunctionExpected of name
 exception RecordTypeError of vtype
 exception RecordFieldError of vtype * name
 exception ArrayTypeError of vtype

@@ -7,7 +7,6 @@ open Ast
 
 let ( let* ) = ( >>= )
 let ( &> ) p x = p => fun _ -> x
-let cl2s cl = String.concat "" (List.map (String.make 1) cl)
 
 let use_parser parser input_string =
   parser (LazyStream.of_string (String.lowercase_ascii input_string))
@@ -30,7 +29,7 @@ let check_parser_fail parser input_string =
 
 let word =
   let start = letter <|> exactly '_' in
-  lexeme start <~> many (start <|> digit) => cl2s
+  lexeme start <~> many (start <|> digit) => implode
 ;;
 
 let%test "word usual" = check_parser word "someVariable_123" "somevariable_123"
@@ -91,6 +90,7 @@ let key_words =
        ; "downto"
        ; "continue"
        ; "break"
+       ; "exit"
        ])
 ;;
 
@@ -114,7 +114,7 @@ let%test "name digit the first" = check_parser_fail name "1_someVariable"
 let%test "name when key_word given" = check_parser_fail name "begin"
 
 let value =
-  let integer = many1 digit => cl2s => int_of_string in
+  let integer = many1 digit => implode => int_of_string in
   let float =
     let* int_part = many1 digit in
     let* float_part =
@@ -124,7 +124,7 @@ let value =
            | _ -> true)
       >> many digit
     in
-    return (float_of_string (cl2s (int_part @ ('.' :: float_part))))
+    return (float_of_string (implode (int_part @ ('.' :: float_part))))
   in
   let symbol =
     any
@@ -136,11 +136,11 @@ let value =
   let char =
     let ascii =
       let* ord = exactly '@' >> many1 digit in
-      return (Char.chr (int_of_string (cl2s ord)))
+      return (Char.chr (int_of_string (implode ord)))
     in
     between (exactly '\'') (exactly '\'') (ascii <|> symbol)
   in
-  let string = between (exactly '\'') (exactly '\'') (many1 symbol) => cl2s in
+  let string = between (exactly '\'') (exactly '\'') (many1 symbol) => implode in
   let bool =
     key_word
     >>= function
@@ -200,7 +200,7 @@ let rec expr s =
   let func =
     let* f = many (satisfy (( != ) '(')) in
     let* params = parens (sep_by expr (token ",")) in
-    match use_parser (expr << spaces) (cl2s f) with
+    match use_parser (expr << spaces) (implode f) with
     | Some (f, LazyStream.Nil) -> return (Call (f, params))
     | _ -> mzero
   in
@@ -257,6 +257,20 @@ let%test "a + - b * c" =
     expr
     "a + - b * c"
     (BinOp (Add, Variable "a", BinOp (Mul, UnOp (Minus, Variable "b"), Variable "c")))
+;;
+
+let%test "(a + b) * c" =
+  check_parser
+    expr
+    "(a + b) * c"
+    (BinOp (Mul, BinOp (Add, Variable "a", Variable "b"), Variable "c"))
+;;
+
+let%test "(2 + 2) * 10" =
+  check_parser
+    expr
+    "(2 + 2) * 10"
+    (BinOp (Mul, BinOp (Add, Const (VInt 2), Const (VInt 2)), Const (VInt 10)))
 ;;
 
 let%test "(a[1, 2][3] shl b) * c" =
@@ -334,8 +348,18 @@ let rec statement s =
   in
   let break_st = token "break" &> Break in
   let continue_st = token "continue" &> Continue in
+  let exit_st = token "exit" &> Exit in
   choice
-    [ assign_st; if_st; while_st; repeat_st; for_st; break_st; continue_st; proc_call_st ]
+    [ assign_st
+    ; if_st
+    ; while_st
+    ; repeat_st
+    ; for_st
+    ; break_st
+    ; continue_st
+    ; exit_st
+    ; proc_call_st
+    ]
     s
 ;;
 
@@ -576,19 +600,19 @@ let%test "Hello world" =
 let%test "Create and use add func" =
   check_parser
     pascal_program
-    "\n\
-    \      var\n\
-    \        x, y : integer;\n\
-    \        function add (x, y : integer) : integer;\n\
-    \        begin\n\
-    \          add := x + y;\n\
-    \        end;\n\
-    \      begin\n\
-    \        readln(x);\n\
-    \        readln(y);\n\
-    \        writeln(\'x + y = \', add(x, y));\n\
-    \      end.\n\
-    \    "
+    {|
+      var
+        x, y : integer;
+        function add (x, y : integer) : integer;
+        begin
+          add := x + y;
+        end;
+        begin
+          readln(x);
+          readln(y);
+          writeln('x + y = ', add(x, y));
+        end.
+    |}
     ( [ DNDVariable ("x", VTInt)
       ; DNDVariable ("y", VTInt)
       ; DFunction

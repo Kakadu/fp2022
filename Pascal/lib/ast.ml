@@ -2,10 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-type name = string
-
-val pp_name : Ppx_show_runtime.Format.formatter -> name -> unit
-val show_name : name -> string
+type name = string [@@deriving show { with_path = false }]
 
 (** binary operators *)
 type binop =
@@ -26,18 +23,14 @@ type binop =
   | LessEq (** ( <= ) *)
   | RShift (** ( bit shift right ) *)
   | LShift (** ( bit shift left ) *)
-
-val pp_binop : Ppx_show_runtime.Format.formatter -> binop -> unit
-val show_binop : binop -> string
+[@@deriving show { with_path = false }]
 
 (** unar operators *)
 type unop =
   | Plus (** ( + ) *)
   | Minus (** ( - ) *)
   | Not (** ( not ) *)
-
-val pp_unop : Ppx_show_runtime.Format.formatter -> unop -> unit
-val show_unop : unop -> string
+[@@deriving show { with_path = false }]
 
 (** virtual types *)
 type vtype =
@@ -56,6 +49,7 @@ type vtype =
       (** array type with calculated interval : (from <val> with <size> of <type>) *)
   | VTCustom of name (** custom type *)
   | VTVoid (** special type for procedure declaration *)
+[@@deriving show { with_path = false }]
 
 (** virtual values *)
 and value =
@@ -71,12 +65,14 @@ and value =
       (** array value : from <val> with <size> of <type>, contains <arr>*)
   | VVoid
       (** special type for procedure declaration or for an unassigned function variable *)
+[@@deriving show { with_path = false }]
 
 (** function parameters *)
 and fun_param =
   | FPFree of name * vtype (** standard parameter *)
   | FPOut of name * vtype (** out parameter *)
   | FPConst of name * vtype (** const parameter *)
+[@@deriving show { with_path = false }]
 
 (** expression *)
 and expr =
@@ -87,6 +83,7 @@ and expr =
   | Call of expr * expr list (** function calling *)
   | GetRec of expr * name (** record field getting *)
   | GetArr of expr * expr (** array field getting *)
+[@@deriving show { with_path = false }]
 
 (** statement *)
 and statement =
@@ -99,6 +96,7 @@ and statement =
   | Break (** break *)
   | Continue (** continue *)
   | Exit (** exit *)
+[@@deriving show { with_path = false }]
 
 (** definition *)
 and define =
@@ -109,6 +107,7 @@ and define =
   | DConst of name * expr (** const definition by expr *)
   | DDConst of name * value (** const definition by value *)
   | DFunction of name * vtype * fun_param list * t (** function definition *)
+[@@deriving show { with_path = false }]
 
 (** world item *)
 and variable =
@@ -116,28 +115,10 @@ and variable =
   | VVariable of value (** variable *)
   | VFunctionResult of value (** variable for function result *)
   | VType (** type *)
+[@@deriving show { with_path = false }]
 
 (** world, which contains all info about variables *)
-and world = (vtype * variable) KeyMap.t
+and world = (vtype * variable) KeyMap.t [@@deriving show { with_path = false }]
 
 (** Pascal program of definition list and statement list *)
-and t = define list * statement list
-
-val pp_vtype : Ppx_show_runtime.Format.formatter -> vtype -> unit
-val show_vtype : vtype -> string
-val pp_value : Ppx_show_runtime.Format.formatter -> value -> unit
-val show_value : value -> string
-val pp_fun_param : Ppx_show_runtime.Format.formatter -> fun_param -> unit
-val show_fun_param : fun_param -> string
-val pp_expr : Ppx_show_runtime.Format.formatter -> expr -> unit
-val show_expr : expr -> string
-val pp_statement : Ppx_show_runtime.Format.formatter -> statement -> unit
-val show_statement : statement -> string
-val pp_define : Ppx_show_runtime.Format.formatter -> define -> unit
-val show_define : define -> string
-val pp_variable : Ppx_show_runtime.Format.formatter -> variable -> unit
-val show_variable : variable -> string
-val pp_world : Ppx_show_runtime.Format.formatter -> world -> unit
-val show_world : world -> string
-val pp : Ppx_show_runtime.Format.formatter -> t -> unit
-val show : t -> string
+and t = define list * statement list [@@deriving show { with_path = false }]

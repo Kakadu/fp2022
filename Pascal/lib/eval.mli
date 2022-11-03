@@ -10,26 +10,36 @@ val eval_unop : unop -> value -> value
 val eval_unop_type : unop -> vtype -> vtype
 val eval_std_function : name -> value list -> value
 val eval_std_function_type : name -> vtype list -> vtype
-val get_rec : value -> name -> value
-val get_rec_type : vtype -> name -> vtype
+
+(** field -> record -> value *)
+val get_rec : name -> value -> value
+
+(** field -> record -> vtype *)
+val get_rec_type : name -> vtype -> vtype
+
+(** arr start -> ind value -> real ind*)
 val iter_arr : value -> value -> int
+
+(** index -> array -> value *)
 val get_arr : value -> value -> value
+
+(** index -> array -> vtype *)
 val get_arr_type : vtype -> vtype -> vtype
 
-(** loader -> eval_function -> world -> expr -> value*)
+(** loader -> eval_function -> expr -> Worlds.t -> (value, Worlds.t) *)
 val eval_expr_base
-  :  (world -> name -> value)
-  -> (world -> value -> expr list -> value)
-  -> world
+  :  (name -> Worlds.t -> value)
+  -> (expr -> expr list -> Worlds.t -> value * Worlds.t)
   -> expr
-  -> value
+  -> Worlds.t
+  -> value * Worlds.t
 
-(** type_loader -> eval_function_type -> world -> expr -> type*)
+(** loader -> eval_function -> expr -> Worlds.t -> (vtype, Worlds.t) *)
 val eval_expr_base_type
-  :  (world -> name -> vtype)
-  -> (world -> vtype -> expr list -> vtype)
-  -> world
+  :  (name -> Worlds.t -> vtype)
+  -> (expr -> expr list -> Worlds.t -> vtype * Worlds.t)
   -> expr
-  -> vtype
+  -> Worlds.t
+  -> vtype * Worlds.t
 
-val eval_expr_const : world -> expr -> value
+val eval_expr_const : expr -> Worlds.t -> value

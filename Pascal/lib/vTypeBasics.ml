@@ -3,8 +3,6 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
-open KeyMap
-open Exceptions
 
 let get_type_val = function
   | VBool _ -> VTBool
@@ -15,7 +13,6 @@ let get_type_val = function
   | VRecord w -> VTDRecord (KeyMap.map (fun (t, _) -> t) w)
   | VFunction (_, t, p, _, _) -> VTFunction (p, t)
   | VArray (v, s, t, _) -> VTDArray (v, s, t)
-  | VCollable n -> raise (PascalInterp (InvalidCall n))
   | VVoid -> VTVoid
 ;;
 

@@ -11,13 +11,14 @@
   KeyMap
   ImArray
   Exceptions
+  Monadic
   Ast
+  Worlds
   Parser
   VTypeBasics
   Eval
   VarLoader
   Interpreter)
- (modules_without_implementation Ast)
  (libraries base opal ppx_show.runtime)
  (preprocess
   (pps ppx_expect ppx_show))

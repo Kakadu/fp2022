@@ -3,10 +3,9 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
-open KeyMap
 open Exceptions
 open VTypeBasics
-open ImArray
+open Monadic
 
 let rec eval_binop op v1 v2 =
   let ( <|> ) f1 f2 arg =
@@ -37,7 +36,7 @@ let rec eval_binop op v1 v2 =
          (match op with
           | Add -> x + y
           | Sub -> x - y
-          | Mul -> x * x
+          | Mul -> x * y
           | Div -> x / y
           | Mod -> x mod y
           | And -> x land y
@@ -302,29 +301,28 @@ let eval_std_function_type n pt =
   | _ -> raise error
 ;;
 
-let get_rec v n =
-  match v with
-  | VRecord w ->
+let get_rec n = function
+  | VRecord w as v ->
     (match KeyMap.find_opt n w with
-     | Some (_, VConst v) | Some (_, VVariable v) -> v
-     | _ -> raise (PascalInterp (RecordFieldError (get_type_val v, n))))
-  | _ -> raise (PascalInterp (RecordTypeError (get_type_val v)))
+     | Some (_, (VConst v | VVariable v | VFunctionResult v)) -> v
+     | Some (_, VType) | None ->
+       raise (PascalInterp (RecordFieldError (get_type_val v, n))))
+  | v -> raise (PascalInterp (RecordTypeError (get_type_val v)))
 ;;
 
 let%test "get_rec test" =
   get_rec
-    (VRecord (KeyMap.of_seq (List.to_seq [ "i", (VTInt, VVariable (VInt 42)) ])))
     "i"
+    (VRecord (KeyMap.of_seq (List.to_seq [ "i", (VTInt, VVariable (VInt 42)) ])))
   = VInt 42
 ;;
 
-let get_rec_type t n =
-  match t with
-  | VTDRecord w ->
+let get_rec_type n = function
+  | VTDRecord w as t ->
     (match KeyMap.find_opt n w with
      | Some t -> t
      | _ -> raise (PascalInterp (RecordFieldError (t, n))))
-  | _ -> raise (PascalInterp (RecordTypeError t))
+  | t -> raise (PascalInterp (RecordTypeError t))
 ;;
 
 let iter_arr s f =
@@ -338,87 +336,127 @@ let iter_arr s f =
 let%test "iter arr int" = iter_arr (VInt 10) (VInt 32) = 22
 let%test "iter arr bool" = iter_arr (VBool false) (VBool true) = 1
 
-let get_arr v ind =
-  match v with
-  | VArray (start, size, _, arr) ->
+let get_arr ind = function
+  | VArray (start, size, _, arr) as v ->
     let act_ind = iter_arr start ind in
     if act_ind < 0 || act_ind >= size
     then raise (PascalInterp (ArrayOutOfInd (get_type_val v, ind)))
     else ImArray.get arr act_ind
-  | _ -> raise (PascalInterp (ArrayTypeError (get_type_val v)))
+  | v -> raise (PascalInterp (ArrayTypeError (get_type_val v)))
 ;;
 
 let%test "get arr" =
   get_arr
-    (VArray (VChar 'a', 3, VTInt, ImArray.of_list [ VInt 1; VInt 2; VInt 3 ]))
     (VChar 'c')
+    (VArray (VChar 'a', 3, VTInt, ImArray.of_list [ VInt 1; VInt 2; VInt 3 ]))
   = VInt 3
 ;;
 
-let get_arr_type t ind =
-  match t with
+let get_arr_type ind = function
   | VTDArray (start, _, t) when compare_types (get_type_val start) ind -> t
-  | _ -> raise (PascalInterp (ArrayTypeError t))
+  | t -> raise (PascalInterp (ArrayTypeError t))
 ;;
 
-let rec eval_expr_base load eval_function world =
-  let eval_expr e = eval_expr_base load eval_function world e in
-  let eval_function = eval_function world in
-  let load = load world in
+let load_all n w = Worlds.load_all n w, w
+
+let rec eval_expr_base load_f eval_function =
+  let eval_expr expr world = eval_expr_base load_f eval_function expr world in
   function
-  | Const v -> v
-  | Variable n -> load n
-  | BinOp (op, x, y) -> eval_binop op (eval_expr x) (eval_expr y)
-  | UnOp (op, x) -> eval_unop op (eval_expr x)
-  | Call (e, p) -> eval_function (eval_expr e) p
-  | GetRec (r, n) -> get_rec (eval_expr r) n
-  | GetArr (a, i) -> get_arr (eval_expr a) (eval_expr i)
+  | Const v -> return v
+  | Variable n -> fun w -> return (load_f n w) w
+  | BinOp (op, x, y) ->
+    let* x = eval_expr x in
+    let* y = eval_expr y in
+    return (eval_binop op x y)
+  | UnOp (op, x) -> eval_expr x => eval_unop op
+  | Call (f, p) -> eval_function f p
+  | GetRec (r, n) -> eval_expr r => get_rec n
+  | GetArr (a, i) ->
+    let* a = eval_expr a in
+    let* i = eval_expr i in
+    return (get_arr i a)
 ;;
 
-let rec eval_expr_base_type load_type eval_function_type world =
-  let eval_expr e = eval_expr_base_type load_type eval_function_type world e in
-  let eval_function = eval_function_type world in
-  let load = load_type world in
+let rec eval_expr_base_type load_f eval_function =
+  let eval_expr expr world = eval_expr_base_type load_f eval_function expr world in
   function
-  | Const v -> get_type_val v
-  | Variable n -> load n
-  | BinOp (op, x, y) -> eval_binop_type op (eval_expr x) (eval_expr y)
-  | UnOp (op, x) -> eval_unop_type op (eval_expr x)
-  | Call (e, p) -> eval_function (eval_expr e) p
-  | GetRec (r, n) -> get_rec_type (eval_expr r) n
-  | GetArr (a, i) -> get_arr_type (eval_expr a) (eval_expr i)
+  | Const v -> return (get_type_val v)
+  | Variable n -> fun w -> return (load_f n w) w
+  | BinOp (op, x, y) ->
+    let* x = eval_expr x in
+    let* y = eval_expr y in
+    return (eval_binop_type op x y)
+  | UnOp (op, x) -> eval_expr x => eval_unop_type op
+  | Call (f, p) -> eval_function f p
+  | GetRec (r, n) -> eval_expr r => get_rec_type n
+  | GetArr (a, i) ->
+    let* a = eval_expr a in
+    let* i = eval_expr i in
+    return (get_arr_type i a)
 ;;
 
-let rec eval_expr_const w e =
-  let const_eval_function w f p =
-    match f with
-    | VCollable n -> eval_std_function n (List.map (eval_expr_const w) p)
-    | _ -> raise (PascalInterp (CantCall f))
-  in
-  let const_loader w n =
-    match KeyMap.find_opt n w with
-    | Some (VTFunction _, _) -> raise (PascalInterp (NotAConst n))
-    | Some (_, VConst v) -> v
-    | None -> VCollable n
+let rec eval_expr_const e =
+  let const_loader n w =
+    match Worlds.load n w with
+    | VTFunction _, _ -> raise (PascalInterp (NotAConst n))
+    | _, VConst v -> v
     | _ -> raise (PascalInterp (NotAConst n))
   in
-  (eval_expr_base const_loader const_eval_function) w e
+  let const_eval_function f p w =
+    match f with
+    | Variable f ->
+      let vl = List.map (fun e -> eval_expr_const e w) p in
+      return (eval_std_function f vl) w
+    | _ -> raise (PascalInterp NonConstCall)
+  in
+  use (eval_expr_base const_loader const_eval_function e)
 ;;
 
-let%test "eval expr partal" = eval_expr_const KeyMap.empty (Const (VInt 42)) = VInt 42
+let%test "eval expr partal" = eval_expr_const (Const (VInt 42)) [] = VInt 42
 
 let%test "eval expr 1 + 1" =
-  eval_expr_const KeyMap.empty (BinOp (Add, Const (VInt 1), Const (VInt 1))) = VInt 2
+  eval_expr_const (BinOp (Add, Const (VInt 1), Const (VInt 1))) [] = VInt 2
+;;
+
+let%test "eval expr const (2 + 2) * 2" =
+  eval_expr_const
+    (BinOp (Mul, BinOp (Add, Const (VInt 2), Const (VInt 2)), Const (VInt 2)))
+    []
+  = VInt 8
 ;;
 
 let%test "eval expr const variables" =
   eval_expr_const
-    (KeyMap.of_seq
-       (List.to_seq [ "x", (VTInt, VConst (VInt 32)); "y", (VTInt, VConst (VInt 10)) ]))
     (BinOp (Add, Variable "x", Variable "y"))
+    [ KeyMap.of_seq
+        (List.to_seq [ "x", (VTInt, VConst (VInt 32)); "y", (VTInt, VConst (VInt 10)) ])
+    ]
   = VInt 42
 ;;
 
 let%test "eval expr const round" =
-  eval_expr_const KeyMap.empty (Call (Variable "round", [ Const (VFloat 3.) ])) = VInt 3
+  eval_expr_const (Call (Variable "round", [ Const (VFloat 3.) ])) [] = VInt 3
+;;
+
+let%test "eval expr const custom function" =
+  try
+    eval_expr_const
+      (Call (Variable "mf", [ Const (VBool true) ]))
+      [ KeyMap.of_seq
+          (List.to_seq
+             [ "mf", (VTFunction ([ FPFree ("b", VTBool) ], VTBool), VConst VVoid) ])
+      ]
+    = VBool true
+  with
+  | PascalInterp (NotAStdFunction "mf") -> true
+  | _ -> false
+;;
+
+let%test "eval expr const in another world" =
+  eval_expr_const
+    (BinOp (Add, Variable "x", Variable "y"))
+    [ KeyMap.of_seq (List.to_seq [ "x", (VTInt, VConst (VInt 32)) ])
+    ; KeyMap.of_seq (List.to_seq [ "y", (VTInt, VConst (VInt 10)) ])
+    ]
+  = VInt 42
 ;;
