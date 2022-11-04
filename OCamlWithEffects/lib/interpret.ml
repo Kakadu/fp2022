@@ -12,7 +12,7 @@ end
 type error_message = string
 type number_of_arguments = int
 
-type environment = (id, value, id -> id -> bool) Base.Map.t
+type environment = (id, value, Base.String.comparator_witness) Base.Map.t
 
 and value =
   | VInt of int
@@ -30,7 +30,7 @@ and value =
   | VADT of data_constructor_name * value list
 
 module Interpret (M : MONAD_FAIL) : sig
-  val run : expression list -> ('a, error_message) M.t
+  val run : expression list -> (value, error_message) M.t
 end = struct
   open M
 
@@ -204,10 +204,25 @@ end = struct
         return eval_false_branch
       | _ ->
         fail
-          "Runtime error: expression  was expected of type bool because it is in the \
+          "Runtime error: expression was expected of type bool because it is in the \
            condition of an if-statement.")
     | _ -> fail ""
   ;;
 
-  let run _ = M.fail "Not implemented"
+  let run (program : expression list) =
+    let environment = Map.empty (module Base.String) in
+    let rec helper environment = function
+      | [ h ] -> eval h environment
+      | h :: t ->
+        let* result = eval h environment in
+        (match h with
+        | EDeclaration (name, _, _) ->
+          helper (Map.update environment name ~f:(fun _ -> result)) t
+        | ERecursiveDeclaration (name, _, _) ->
+          helper (Map.update environment name ~f:(fun _ -> result)) t
+        | _ -> fail "Runtime error: declaration was expected.")
+      | _ -> return VUnit
+    in
+    helper environment program
+  ;;
 end
