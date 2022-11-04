@@ -44,12 +44,11 @@ end = struct
     match expression with
     | ELiteral literal ->
       (match literal with
-      | LInt x -> return @@ return @@ VInt x
-      | LString x -> return @@ return @@ VString x
-      | LBool x -> return @@ return @@ VBool x
-      | LChar x -> return @@ return @@ VChar x
-      | LUnit -> return VUnit
-      | LUnit -> return @@ VUnit)
+      | LInt x -> return @@ VInt x
+      | LString x -> return @@ VString x
+      | LBool x -> return @@ VBool x
+      | LChar x -> return @@ VChar x
+      | LUnit -> return VUnit)
     | EBinaryOperation (operation, left_operand, right_operand) ->
       let* left_operand = eval left_operand environment in
       let* right_operand = eval right_operand environment in
