@@ -169,6 +169,37 @@ end = struct
       if number_of_args == 0
       then eval function_body environment
       else return @@ VFun (id_list, function_body, environment, number_of_args)
+    | EFun (arguments_list, function_body) ->
+      return
+      @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
+    | EDeclaration (_, arguments_list, function_body) ->
+      return
+      @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
+    | ERecursiveDeclaration (name, arguments_list, function_body) ->
+      let rec fix f = f (fix f) in
+      let result =
+        fix
+        @@ fun self ->
+        VFun
+          ( arguments_list
+          , function_body
+          , Map.update environment name ~f:(fun _ -> self)
+          , List.length arguments_list )
+      in
+      return result
+    | EIf (condition, true_branch, false_branch) ->
+      let* eval_conditional = eval condition environment in
+      (match eval_conditional with
+      | VBool true ->
+        let* eval_true_branch = eval true_branch environment in
+        return eval_true_branch
+      | VBool false ->
+        let* eval_false_branch = eval false_branch environment in
+        return eval_false_branch
+      | _ ->
+        fail
+          "Runtime error: expression  was expected of type bool because it is in the \
+           condition of an if-statement.")
     | _ -> fail ""
   ;;
 
