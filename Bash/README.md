@@ -15,7 +15,6 @@ Features done:
 Features in progress:
 
 - Parsing redirections (and add test for them)
-- Evaluating script files
 - Evaluate expansions, which are not evaluated at the moment
 - Filename expansion, word splitting
 - Add tests for interpretator

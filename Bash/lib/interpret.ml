@@ -99,13 +99,15 @@ module Interpret (M : MonadFail) = struct
   let default_session_env = { local = StrMap.empty; global = default_global_env }
   let reset_local_env { global } = { local = StrMap.empty; global }
   let set_local_env env local = { env with local }
-  let set_retcode env i = { env with global = { env.global with retcode = i } }
+  let set_retcode env retcode = { env with global = { env.global with retcode } }
 
-  let set_fd env key value =
-    { env with global = { env.global with fds = IntMap.add key value env.global.fds } }
+  let set_std_fd env fd_type =
+    let set_fd env key value =
+      { env with global = { env.global with fds = IntMap.add key value env.global.fds } }
+    in
+    set_fd env (type_to_std_fd fd_type)
   ;;
 
-  let set_std_fd env fd_type = set_fd env (type_to_std_fd fd_type)
   let get_std_fd { global = { fds } } fd_type = IntMap.find (type_to_std_fd fd_type) fds
 
   (* duplicate standard fds *)
@@ -185,10 +187,10 @@ module Interpret (M : MonadFail) = struct
            | AssocArray _ -> "")
         (get_var_by_name env name)
     | VarExpansion var -> (get_var_value env var).as_str
-    | Length _ -> failwith "Not imlpemeted yet"
-    | Substring _ -> failwith "Not imlpemeted yet"
-    | SubstrRemoval _ -> failwith "Not imlpemeted yet"
-    | Substitute _ -> failwith "Not imlpemeted yet"
+    | Length var -> string_of_int (String.length (get_var_value env var).as_str)
+    | Substring _ -> failwith "Not imlpemented yet"
+    | SubstrRemoval _ -> failwith "Not imlpemented yet"
+    | Substitute _ -> failwith "Not imlpemented yet"
   ;;
 
   (* helper functions to evaluate list's elements *)
@@ -260,7 +262,7 @@ module Interpret (M : MonadFail) = struct
 
   and eval_command_substitution env operands =
     let fd_in, fd_out = pipe () in
-    let up_env = set_fd env 1 fd_out in
+    let up_env = set_std_fd env StdOut fd_out in
     eval_operands up_env operands
     >>| fun { global = { retcode } } ->
     close fd_out;
@@ -306,7 +308,7 @@ module Interpret (M : MonadFail) = struct
        After brace expansion processing we will have:
        ab=10 a=30
        echo ${a}b ${a}d ${a}e
-       After processing this command we will have output "30"
+       After processing this command we will have output "30b 30d 30e"
 
        And in this function we process VarNameExpansion to support this bash feature.
     *)
@@ -582,7 +584,9 @@ module Interpret (M : MonadFail) = struct
     | [] -> return env
 
   and eval_compound env = function
-    | Group _ -> failwith "Not implemented yet"
+    | Group _ ->
+      failwith
+        {|Not supported (the assignment states that support Grouping Commands is not needed)|}
     | Loop loop -> eval_loop env loop
     | IfCompound if_compound -> eval_if_compound env if_compound
     | CaseIn _ -> failwith "Not implemented yet"
@@ -618,18 +622,8 @@ end
 
 open Interpret (Result)
 
-type 'a test_type =
-  { ok :
-      ?local_vars:variable StrMap.t
-      -> ?global_vars:variable StrMap.t
-      -> ?retcode:int
-      -> name
-      -> bool
-  ; fail : string -> bool
-  }
-
 (* Tests local and global variables *)
-let test =
+let test_ok, test_fail =
   (* common logic for ok and fail tests:
      parse input optimistically and evaluate script  *)
   let test_inner input =
@@ -658,13 +652,13 @@ let test =
       false
     | Error _ -> true
   in
-  { ok; fail }
+  ok, fail
 ;;
 
 (* Test simple assignment *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=10
     b=$a|}
     ~global_vars:
@@ -677,7 +671,7 @@ let%test _ =
 (* Test if else compound *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|if ((1>2));
     then
       a=10
@@ -692,7 +686,7 @@ let%test _ =
 (* Test loops *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|
   i=1
   until ((i>10));
@@ -704,7 +698,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
   i=1
   while ((i<10));
@@ -716,7 +710,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|num=5
   fact=1
 
@@ -733,7 +727,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     for e in some what;
     do
@@ -749,13 +743,13 @@ let%test _ =
 (* Test command substitution *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=$(echo hello)|}
     ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "hello") ])
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=$(echo $(echo hello2))|}
     ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "hello2") ])
 ;;
@@ -763,7 +757,7 @@ let%test _ =
 (* Test functions *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|function what () {
       a1=5
       a2=$2
@@ -780,7 +774,7 @@ let%test _ =
 
 (* local variables in second fn are hidden for what fn *)
 let%test _ =
-  test.ok
+  test_ok
     {|function what () {
       c1=5
       a2=$1
@@ -803,7 +797,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     function factorial () {
       num=$1
@@ -825,7 +819,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     function factorial () {
       if (($1=1))
@@ -842,7 +836,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     function factorial () {
       if (( $1 <= 1 )); then
@@ -858,7 +852,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     function what () {
       b=$(echo hello)
@@ -869,7 +863,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     function what () {
       d=$1
@@ -888,7 +882,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|function what () {
         a1=5
         function what2 () {
@@ -906,7 +900,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|function what () {
         a1=5
         function what2 () {
@@ -924,7 +918,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|function what () {
         a1=$1
         function what2 () {
@@ -944,7 +938,7 @@ let%test _ =
 (* Tests for multiple args *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=`echo "some"'some'{b,d,e}d`|}
     ~global_vars:
       (StrMap.from_list
@@ -953,7 +947,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|
     ab=10
     ad=28
@@ -966,23 +960,72 @@ let%test _ =
          ])
 ;;
 
+let%test _ =
+  test_ok
+    {|
+    ab=10 a=30
+    d=`echo ${a}{a,b,c}`|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "ab", IndexedArray (IntMap.singleton 0 "10")
+         ; "a", IndexedArray (IntMap.singleton 0 "30")
+         ; "d", IndexedArray (IntMap.singleton 0 "30a 30b 30c")
+         ])
+;;
+
 (* Tests for simple pipes  *)
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=$(echo hello|cat)|}
     ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "hello") ])
     ~retcode:0
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=hello |echo why|cat|}
     ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "hello") ])
 ;;
 
 let%test _ =
-  test.ok
+  test_ok
     {|a=`echo why|cat|echo why2|cat`|}
     ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "why2") ])
+;;
+
+(* Tests for param expansion *)
+
+(* Test length *)
+let%test _ =
+  test_ok
+    {|a=echo
+    b=${#a[0]}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "echo")
+         ; "b", IndexedArray (IntMap.singleton 0 "4")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=echo
+    b=${#a[1]}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "echo")
+         ; "b", IndexedArray (IntMap.singleton 0 "0")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=(key=value)
+    b=${#a[key]}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", AssocArray (StrMap.singleton "key" "value")
+         ; "b", IndexedArray (IntMap.singleton 0 "5")
+         ])
 ;;

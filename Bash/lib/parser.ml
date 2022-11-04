@@ -626,13 +626,8 @@ let pp_error ppf = function
   | `ParsingError s -> Format.fprintf ppf "%s" s
 ;;
 
-type 'a test_p_type =
-  { ok : (Format.formatter -> 'a -> unit) -> 'a t -> name -> 'a -> bool
-  ; fail : (Format.formatter -> 'a -> unit) -> 'a t -> name -> bool
-  }
-
 (** returns two parsers that can be used for positive and negative tests  *)
-let test =
+let test_ok, test_fail =
   let ok ppf parser input expected =
     match parse_string ~consume:All parser input with
     | Ok res when expected = res -> true
@@ -650,13 +645,13 @@ let test =
       false
     | _ -> true
   in
-  { ok; fail }
+  ok, fail
 ;;
 
 (* Test int parser *)
 
-let ok_int = test.ok (fun _ -> print_int) int
-let fail_int = test.fail (fun _ -> print_int) int
+let ok_int = test_ok (fun _ -> print_int) int
+let fail_int = test_fail (fun _ -> print_int) int
 
 let%test _ = ok_int "10" 10
 let%test _ = ok_int "+102890" 102890
@@ -668,8 +663,8 @@ let%test _ = fail_int "200-"
 
 (** Test variable parser (also tests name parser) *)
 
-let ok_var = test.ok pp_var var_p
-let fail_var = test.fail pp_var var_p
+let ok_var = test_ok pp_var var_p
+let fail_var = test_fail pp_var var_p
 
 let%test _ = ok_var "ka" { name = "ka"; subscript = "0" }
 let%test _ = ok_var "_ka" { name = "_ka"; subscript = "0" }
@@ -687,8 +682,8 @@ let%test _ = fail_var "sub[]]"
 
 (* Tests text_p parser inner single quoted string *)
 
-let ok_sqs = test.ok pp_name (text_p ~arg_ctx:InnerSQS)
-let fail_sqs = test.fail pp_name (text_p ~arg_ctx:InnerSQS)
+let ok_sqs = test_ok pp_name (text_p ~arg_ctx:InnerSQS)
+let fail_sqs = test_fail pp_name (text_p ~arg_ctx:InnerSQS)
 
 let%test _ = ok_sqs "ka" "ka"
 let%test _ = ok_sqs {|"some"|} {|"some"|}
@@ -708,8 +703,8 @@ let%test _ = fail_sqs {|"'"|}
 
 (* Tests text_p parser inner double quoted string *)
 
-let ok_dqs = test.ok pp_name (text_p ~arg_ctx:InnerDQS)
-let fail_dqs = test.fail pp_name (text_p ~arg_ctx:InnerDQS)
+let ok_dqs = test_ok pp_name (text_p ~arg_ctx:InnerDQS)
+let fail_dqs = test_fail pp_name (text_p ~arg_ctx:InnerDQS)
 
 let%test _ = ok_dqs "simple" "simple"
 let%test _ = ok_dqs "ka\\kadu" "ka\\kadu"
@@ -726,8 +721,8 @@ let%test _ = fail_dqs {|$so"me|}
 
 (* Tests text_p parser inner atom string *)
 
-let ok_ias = test.ok pp_name (text_p ~arg_ctx:InnerAS)
-let fail_ias = test.fail pp_name (text_p ~arg_ctx:InnerAS)
+let ok_ias = test_ok pp_name (text_p ~arg_ctx:InnerAS)
+let fail_ias = test_fail pp_name (text_p ~arg_ctx:InnerAS)
 
 let%test _ = ok_ias "simple" "simple"
 let%test _ = ok_ias "12some12" "12some12"
@@ -751,8 +746,8 @@ let%test _ = fail_ias {|{what}|}
 
 (* Arithmetic expressions parser tests *)
 
-let ok_expr = test.ok pp_expr expr_p
-let fail_expr = test.fail pp_expr expr_p
+let ok_expr = test_ok pp_expr expr_p
+let fail_expr = test_fail pp_expr expr_p
 
 let%test _ = ok_expr {|1|} (Number 1)
 let%test _ = ok_expr {|1+2|} (Plus (Number 1, Number 2))
@@ -801,8 +796,8 @@ let%test _ = fail_expr {|8*|}
 
 (** Param expansion parsers tests *)
 
-let ok_pe = test.ok pp_atom_string param_exp
-let fail_pe = test.fail pp_atom_string param_exp
+let ok_pe = test_ok pp_atom_string param_exp
+let fail_pe = test_fail pp_atom_string param_exp
 
 (** VarNameExpansion parser *)
 
@@ -1075,11 +1070,11 @@ let%test _ = fail_pe {|${//pa}|}
 (* Simple string and brace expansion parser tests *)
 
 let ok_sub_arg =
-  test.ok pp_braced_expansion_or_simple_string (sub_arg ~arg_ctx:Default ())
+  test_ok pp_braced_expansion_or_simple_string (sub_arg ~arg_ctx:Default ())
 ;;
 
 let fail_sub_arg =
-  test.fail pp_braced_expansion_or_simple_string (sub_arg ~arg_ctx:Default ())
+  test_fail pp_braced_expansion_or_simple_string (sub_arg ~arg_ctx:Default ())
 ;;
 
 let%test _ = ok_sub_arg {|simple|} (SimpleString (AtomString [ Text "simple" ]))
@@ -1183,8 +1178,8 @@ let%test _ = fail_sub_arg {|{1..4.}|}
 
 (* Argument parser tests *)
 
-let ok_arg = test.ok pp_arg (arg ~arg_ctx:Default ())
-let fail_arg = test.fail pp_arg (arg ~arg_ctx:Default ())
+let ok_arg = test_ok pp_arg (arg ~arg_ctx:Default ())
+let fail_arg = test_fail pp_arg (arg ~arg_ctx:Default ())
 
 let%test _ =
   ok_arg
@@ -1271,8 +1266,8 @@ let%test _ = fail_arg {|"some'some{b,d}d|}
 
 (* Environment variable assignment parser tests *)
 
-let ok_env_var = test.ok pp_var_assign (env_var ~arg_ctx:Default ())
-let fail_env_var = test.fail pp_var_assign (env_var ~arg_ctx:Default ())
+let ok_env_var = test_ok pp_var_assign (env_var ~arg_ctx:Default ())
+let fail_env_var = test_fail pp_var_assign (env_var ~arg_ctx:Default ())
 
 let%test _ =
   ok_env_var
@@ -1558,8 +1553,8 @@ let%test _ = fail_env_var {|a=d${a}{b,d}"c"|}
 
 (* Pipe parser tests *)
 
-let ok_pipe = test.ok pp_pipe (pipe ~arg_ctx:Default ())
-let fail_pipe = test.fail pp_pipe (pipe ~arg_ctx:Default ())
+let ok_pipe = test_ok pp_pipe (pipe ~arg_ctx:Default ())
+let fail_pipe = test_fail pp_pipe (pipe ~arg_ctx:Default ())
 
 let%test _ =
   ok_pipe
@@ -1890,8 +1885,8 @@ let%test _ = fail_pipe {|echo || pritn)|}
 
 (* Loop parser tests *)
 
-let ok_loop = test.ok pp_loop (loop_p ())
-let fail_loop = test.fail pp_loop (loop_p ())
+let ok_loop = test_ok pp_loop (loop_p ())
+let fail_loop = test_fail pp_loop (loop_p ())
 
 let%test _ =
   ok_loop
@@ -2167,8 +2162,8 @@ let%test _ =
 
 (* Other compounds parser tests *)
 
-let ok_compound = test.ok pp_compound (compound_p ())
-let fail_compound = test.fail pp_compound (compound_p ())
+let ok_compound = test_ok pp_compound (compound_p ())
+let fail_compound = test_fail pp_compound (compound_p ())
 
 let%test _ =
   ok_compound
@@ -2530,8 +2525,8 @@ let%test _ =
 
 (* Functions parser tests *)
 
-let ok_fn = test.ok pp_command_or_func (parse_function ())
-let fail_fn = test.fail pp_command_or_func (parse_function ())
+let ok_fn = test_ok pp_command_or_func (parse_function ())
+let fail_fn = test_fail pp_command_or_func (parse_function ())
 
 let%test _ =
   ok_fn
