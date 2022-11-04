@@ -20,7 +20,6 @@ exception RecordTypeError of vtype
 exception RecordFieldError of vtype * name
 exception ArrayTypeError of vtype
 exception ArrayOutOfInd of vtype * value
-exception NotAFunction of name
 exception InvalidCall of name
 exception CantCall of value
 exception InvalidType of vtype * vtype
@@ -29,6 +28,4 @@ exception ParserError
 exception SemanticError
 exception LeftValError
 exception TypeError
-exception RealizationError
-exception NotAConstExpr
 exception PascalInterp of exn

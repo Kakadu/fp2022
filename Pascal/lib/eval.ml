@@ -13,7 +13,6 @@ let rec eval_binop op v1 v2 =
     | PascalInterp _ -> f2 arg
     | err -> raise err
   in
-  let ( => ) arg f = f arg in
   let error = PascalInterp (BinOpTypeError (op, get_type_val v1, get_type_val v2)) in
   let v1, v2 =
     let evolution v =
