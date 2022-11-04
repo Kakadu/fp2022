@@ -2,6 +2,7 @@ open Angstrom
 open Ast
 open List
 open String
+open Printf
 
 type input = string
 
@@ -86,6 +87,7 @@ let%test _ =
 let parens parser = remove_spaces *> char '(' *> parser <* remove_spaces <* char ')'
 
 let parse_literal =
+  Printf.printf "I'm in parse_literal\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -160,6 +162,7 @@ let%test _ =
 ;;
 
 let parse_entity =
+  Printf.printf "I'm in parse_entity\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -177,6 +180,7 @@ let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
 let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun" ]
 
 let parse_identifier =
+  Printf.printf "I'm in parse_identifier\n";
   let parse_identifier =
     parse_entity
     >>= fun entity ->
@@ -201,6 +205,7 @@ let%test _ =
 ;;
 
 let parse_tuple d =
+  Printf.printf "I'm in parse_tuple\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -229,6 +234,7 @@ let parse_tuple d =
 ;;
 
 let parse_list d =
+  Printf.printf "I'm in parse_list\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -257,6 +263,7 @@ let parse_list d =
 ;;
 
 let parse_fun d =
+  Printf.printf "I'm in parse_fun\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -313,6 +320,7 @@ let declaration_helper constructing_function d =
 ;;
 
 let parse_declaration d =
+  Printf.printf "I'm in parse_declaration\n";
   remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
   >>= fun parsed_rec ->
   match parsed_rec with
@@ -322,6 +330,7 @@ let parse_declaration d =
 ;;
 
 let parse_let_in d =
+  Printf.printf "I'm in parse_let_in\n";
   remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
   >>= fun parsed_rec ->
   let parse_content =
@@ -354,6 +363,7 @@ let parse_let_in d =
 (* -------------------*)
 
 let parse_conditional d =
+  Printf.printf "I'm in parse_conditional\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -385,6 +395,7 @@ let parse_conditional d =
 ;;
 
 let parse_matching d =
+  Printf.printf "I'm in parse_matching\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -425,6 +436,7 @@ let parse_matching d =
 ;;
 
 let parse_binary_operation d =
+  Printf.printf "I'm in parse_binary_operation\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -483,6 +495,7 @@ let parse_binary_operation d =
 ;;
 
 let parse_application d =
+  Printf.printf "I'm in parse_application\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -519,6 +532,7 @@ let parse_application d =
 ;;
 
 let parse_data_constructor d =
+  Printf.printf "I'm in parse_data_constructor\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -553,6 +567,7 @@ let parse_data_constructor d =
 ;;
 
 let parse_unary_operation d =
+  Printf.printf "I'm in parse_unary_operation\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -587,6 +602,7 @@ let parse_unary_operation d =
 ;;
 
 let parse_list_constructing d =
+  Printf.printf "I'm in parse_list_constructing\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -647,19 +663,19 @@ let default =
   }
 ;;
 
-let parse_tuple = default.parse_tuple default
-let parse_list = default.parse_list default
-let parse_fun = default.parse_fun default
+let parse_tuple = parse_tuple default
+let parse_list = parse_list default
+let parse_fun = parse_fun default
 let parse_declaration = parse_declaration default
-let parse_conditional = default.parse_conditional default
-let parse_matching = default.parse_matching default
-let parse_binary_operation = default.parse_binary_operation default
-let parse_let_in = default.parse_let_in default
-let parse_application = default.parse_application default
-let parse_unary_operation = default.parse_unary_operation default
-let parse_list_constructing = default.parse_list_constructing default
-let parse_data_constructor = default.parse_data_constructor default
-let parse_expression = default.parse_expression default
+let parse_conditional = parse_conditional default
+let parse_matching = parse_matching default
+let parse_binary_operation = parse_binary_operation default
+let parse_let_in = parse_let_in default
+let parse_application = parse_application default
+let parse_unary_operation = parse_unary_operation default
+let parse_list_constructing = parse_list_constructing default
+let parse_data_constructor = parse_data_constructor default
+let parse_expression = parse_expression default
 let parse = Error "TODO"
 
 (* 
