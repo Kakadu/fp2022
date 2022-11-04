@@ -175,6 +175,9 @@ end = struct
       if number_of_args == 0
       then eval function_body environment
       else return @@ VFun (id_list, function_body, environment, number_of_args)
+    | EFun (arguments_list, function_body) ->
+      return
+      @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
     | _ -> fail ""
   ;;
 
