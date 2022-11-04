@@ -30,7 +30,7 @@ type binop =
 val pp_binop : Ppx_show_runtime.Format.formatter -> binop -> unit
 val show_binop : binop -> string
 
-(** unar operators *)
+(** unary operators *)
 type unop =
   | Plus (** ( + ) *)
   | Minus (** ( - ) *)

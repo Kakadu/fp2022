@@ -86,7 +86,7 @@ let rec eval_binop op v1 v2 =
     ((fun (op, x, y) ->
        VString
          (match op with
-          | Add -> String.concat x [ ""; y ]
+          | Add -> x ^ y
           | _ -> raise error))
     <|> fun (op, x, y) ->
     VBool

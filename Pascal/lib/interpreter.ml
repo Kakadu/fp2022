@@ -317,22 +317,17 @@ let interpret s =
 ;;
 
 exception ExpFnd of name * variable * variable
-exception StrExp of string
 
 let check_interp s l =
-  try
-    let w = interpret_no_catch s in
-    List.map
-      (fun (n, v) ->
-        Worlds.load n [ w ]
-        |> function
-        | _, wv when not (v = wv) -> raise (ExpFnd (n, v, wv))
-        | _ -> true)
-      l
-    |> fun _ -> true
-  with
-  | ExpFnd (n, v1, v2) ->
-    raise (StrExp (String.concat n [ ""; show_variable v1; show_variable v2 ]))
+  let w = interpret_no_catch s in
+  List.map
+    (fun (n, v) ->
+      Worlds.load n [ w ]
+      |> function
+      | _, wv when not (v = wv) -> raise (ExpFnd (n, v, wv))
+      | _ -> true)
+    l
+  |> fun _ -> true
 ;;
 
 let%test "2 + 2 * 2" =
@@ -454,10 +449,10 @@ let%test "func as arg" =
   check_interp
     {|
       type
-        intf = function : integer;
+        int_f = function : integer;
       var
         x : integer;
-        f : intf;
+        f : int_f;
         function some_f : integer;
         begin
           some_f := 42;

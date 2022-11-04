@@ -196,18 +196,18 @@ let unop =
 ;;
 
 let rec expr s =
-  let parens p = between (token "(") (token ")") p in
+  let parentheses p = between (token "(") (token ")") p in
   let func =
     let* f = many (satisfy (( != ) '(')) in
-    let* params = parens (sep_by expr (token ",")) in
+    let* params = parentheses (sep_by expr (token ",")) in
     match use_parser (expr << spaces) (implode f) with
     | Some (f, LazyStream.Nil) -> return (Call (f, params))
     | _ -> mzero
   in
   let const = value => fun r -> Const r in
   let variable = name => fun r -> Variable r in
-  let factor = choice [ func; variable; const; parens expr ] in
-  let unpak =
+  let factor = choice [ func; variable; const; parentheses expr ] in
+  let unpack =
     let rec helper obj =
       let rec_unpack =
         let* field = token "." >> name in
@@ -227,7 +227,7 @@ let rec expr s =
       let* obj = greater in
       return (List.fold_left (fun exp op -> UnOp (op, exp)) obj ops)
     in
-    List.fold_left use_unop unpak unop
+    List.fold_left use_unop unpack unop
   in
   let parse_binop =
     let use_binop greater curr =
@@ -377,7 +377,7 @@ let%test "if _ then statement" =
     (If (Variable "a", [ Assign (Variable "b", Const (VInt 10)) ], []))
 ;;
 
-let%test "if _ then begend else begend" =
+let%test "if _ then begin end else begin end" =
   check_parser
     statement
     "if a then begin b := 15; end else begin h := 8 end"
@@ -501,10 +501,10 @@ let rec definition s =
     let* ptoc = token "function" &> false <|> (token "procedure" &> true) in
     let* func_name = name in
     let* func_type = function_arg ptoc << token ";" in
-    let* funct_prog = program in
+    let* func_prog = program in
     match func_type with
     | VTFunction (params, result_type) ->
-      return (DFunction (func_name, result_type, params, funct_prog))
+      return (DFunction (func_name, result_type, params, func_prog))
     | _ -> mzero
   in
   let block =

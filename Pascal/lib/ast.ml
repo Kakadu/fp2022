@@ -25,7 +25,7 @@ type binop =
   | LShift (** ( bit shift left ) *)
 [@@deriving show { with_path = false }]
 
-(** unar operators *)
+(** unary operators *)
 type unop =
   | Plus (** ( + ) *)
   | Minus (** ( - ) *)
