@@ -193,6 +193,19 @@ end = struct
           , List.length arguments_list )
       in
       return result
+    | EIf (condition, true_branch, false_branch) ->
+      let* eval_conditional = eval condition environment in
+      (match eval_conditional with
+      | VBool true ->
+        let* eval_true_branch = eval true_branch environment in
+        return eval_true_branch
+      | VBool false ->
+        let* eval_false_branch = eval false_branch environment in
+        return eval_false_branch
+      | _ ->
+        fail
+          "Runtime error: expression  was expected of type bool because it is in the \
+           condition of an if-statement.")
     | _ -> fail ""
   ;;
 
