@@ -178,6 +178,21 @@ end = struct
     | EFun (arguments_list, function_body) ->
       return
       @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
+    | EDeclaration (_, arguments_list, function_body) ->
+      return
+      @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
+    | ERecursiveDeclaration (name, arguments_list, function_body) ->
+      let rec fix f = f (fix f) in
+      let result =
+        fix
+        @@ fun self ->
+        VFun
+          ( arguments_list
+          , function_body
+          , Map.update environment name ~f:(fun _ -> self)
+          , List.length arguments_list )
+      in
+      return result
     | _ -> fail ""
   ;;
 
