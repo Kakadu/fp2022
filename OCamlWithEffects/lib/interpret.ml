@@ -10,7 +10,7 @@ module type MONAD_FAIL = sig
 end
 
 type error_message = string
-type number_of_arguments = int
+type recursive = bool
 
 type environment = (id, value, Base.String.comparator_witness) Base.Map.t
 
@@ -22,11 +22,7 @@ and value =
   | VUnit
   | VList of value list
   | VTuple of value list
-  | VFun of
-      id list
-      * expression
-      * environment
-      * number_of_arguments (* expression contains body of the function *)
+  | VFun of id list * expression * environment * recursive
   | VADT of data_constructor_name * value list
 
 module Interpret (M : MONAD_FAIL) : sig
@@ -52,49 +48,43 @@ end = struct
     | EBinaryOperation (operation, left_operand, right_operand) ->
       let* left_operand = eval left_operand environment in
       let* right_operand = eval right_operand environment in
-      let rec value_is_equal (VADT (x_name, x_data)) (VADT (y_name, y_data)) =
-        x_name = y_name
-        && (for_all ~f:(function
-              | VInt x, VInt y -> x = y
-              | VString x, VString y -> x = y
-              | VBool x, VBool y -> x = y
-              | VChar x, VChar y -> x = y
-              | VList x, VList y -> x = y
-              | VADT (x_name, x_data), VADT (y_name, y_data) ->
-                value_is_equal (VADT (x_name, x_data)) (VADT (y_name, y_data))
-              | _, _ -> false)
-           @@ zip_exn x_data y_data)
-      in
-      let value_check_types (VADT (_, x_data)) (VADT (_, y_data)) =
-        for_all ~f:(function
-          | VInt _, VInt _ -> true
-          | VString _, VString _ -> true
-          | VBool _, VBool _ -> true
-          | VChar _, VChar _ -> true
-          | VList _, VList _ -> true
-          | VADT (_, _), VADT (_, _) -> true
-          | _, _ -> false)
-        @@ zip_exn x_data y_data
+      let rec vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data)) =
+        if not (x_name = y_name)
+        then return @@ false
+        else (
+          let helper x_data y_data =
+            match hd x_data, hd y_data with
+            | None, None -> return @@ true
+            | None, _ | _, None -> return @@ false
+            | Some (VInt x), Some (VInt y) -> return @@ (x = y)
+            | Some (VString x), Some (VString y) -> return @@ (x = y)
+            | Some (VBool x), Some (VBool y) -> return @@ (x = y)
+            | Some (VChar x), Some (VChar y) -> return @@ (x = y)
+            | Some (VList x), Some (VList y) -> return @@ (x = y)
+            | Some (VADT (x_name, x_data)), Some (VADT (y_name, y_data)) ->
+              vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+            | _, _ -> fail "Runtime error: mismatching types."
+          in
+          let rec go x_data y_data =
+            helper x_data y_data
+            >>= fun prev ->
+            match tl x_data, tl y_data with
+            | None, None -> return true
+            | None, _ | _, None -> return false
+            | Some x_tail, Some y_tail ->
+              let* tail = go x_tail y_tail in
+              return (prev && tail)
+          in
+          go x_data y_data)
       in
       (match operation, left_operand, right_operand with
       (* Operations on ADT *)
       | Eq, VADT (x_name, x_data), VADT (y_name, y_data) ->
-        if not @@ value_check_types (VADT (x_name, x_data)) (VADT (y_name, y_data))
-        then fail "Runtime error: mismatching types."
-        else
-          return
-          @@ VBool
-               (x_name = y_name
-               && value_is_equal (VADT (x_name, x_data)) (VADT (y_name, y_data)))
+        vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+        >>= fun x -> return @@ VBool x
       | NEq, VADT (x_name, x_data), VADT (y_name, y_data) ->
-        if not @@ value_check_types (VADT (x_name, x_data)) (VADT (y_name, y_data))
-        then fail "Runtime error: mismatching types."
-        else
-          return
-          @@ VBool
-               (x_name <> y_name
-               && (not @@ value_is_equal (VADT (x_name, x_data)) (VADT (y_name, y_data)))
-               )
+        vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+        >>= fun x -> return @@ VBool (not x)
       | _, VADT (_, _), VADT (_, _) -> fail "Runtime error: unsupported operation."
       (* Arithmetic operations *)
       | Add, VInt x, VInt y -> return @@ VInt (x + y)
@@ -154,15 +144,21 @@ end = struct
       | (AND | OR), _, _ -> fail "Runtime error: bool type was expected.")
     | EIdentifier name ->
       (match Map.find environment name with
-      | Some v -> return v
+      | Some v ->
+        (match v with
+        | VFun (id_list, function_body, environment, true) ->
+          return
+          @@ VFun
+               (id_list, function_body, Map.update environment name ~f:(fun _ -> v), true)
+        | _ -> return v)
       | None -> fail "Runtime error: unbound value.")
     | EApplication (function_expr, argument_expr) ->
-      let* eval_function = eval function_expr environment in
       let* eval_argument = eval argument_expr environment in
-      let* id_list, function_body, environment, number_of_args =
+      let* eval_function = eval function_expr environment in
+      let* id_list, function_body, environment, recursive =
         match eval_function with
-        | VFun (id_list, function_body, environment, number_of_args) ->
-          return (id_list, function_body, environment, number_of_args)
+        | VFun (id_list, function_body, environment, recursive) ->
+          return (id_list, function_body, environment, recursive)
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
       let* id, id_list =
@@ -170,38 +166,27 @@ end = struct
         | Some v1, Some v2 -> return (v1, v2)
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
-      let environment = Map.update environment id ~f:(fun _ -> eval_argument)
-      and number_of_args = number_of_args - 1 in
-      if number_of_args == 0
+      let environment = Map.update environment id ~f:(fun _ -> eval_argument) in
+      if id_list = []
       then eval function_body environment
-      else return @@ VFun (id_list, function_body, environment, number_of_args)
+      else return @@ VFun (id_list, function_body, environment, recursive)
     | EFun (arguments_list, function_body) ->
-      return
-      @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
+      (match arguments_list with
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
     | EDeclaration (_, arguments_list, function_body) ->
-      return
-      @@ VFun (arguments_list, function_body, environment, List.length arguments_list)
-    | ERecursiveDeclaration (name, arguments_list, function_body) ->
-      let rec fix f = f (fix f) in
-      let result =
-        fix
-        @@ fun self ->
-        VFun
-          ( arguments_list
-          , function_body
-          , Map.update environment name ~f:(fun _ -> self)
-          , List.length arguments_list )
-      in
-      return result
+      (match arguments_list with
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
+    | ERecursiveDeclaration (_, arguments_list, function_body) ->
+      (match arguments_list with
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, true))
     | EIf (condition, true_branch, false_branch) ->
       let* eval_conditional = eval condition environment in
       (match eval_conditional with
-      | VBool true ->
-        let* eval_true_branch = eval true_branch environment in
-        return eval_true_branch
-      | VBool false ->
-        let* eval_false_branch = eval false_branch environment in
-        return eval_false_branch
+      | VBool true -> eval true_branch environment
+      | VBool false -> eval false_branch environment
       | _ ->
         fail
           "Runtime error: expression was expected of type bool because it is in the \
@@ -226,3 +211,85 @@ end = struct
     helper environment program
   ;;
 end
+
+module InterpretResult = Interpret (struct
+  include Base.Result
+
+  let ( let* ) m f = bind m ~f
+end)
+
+let test_program =
+  [ EDeclaration
+      ( "f"
+      , [ "x"; "y"; "z" ]
+      , EBinaryOperation
+          (Add, EBinaryOperation (Mul, EIdentifier "x", EIdentifier "y"), EIdentifier "z")
+      )
+  ; EDeclaration
+      ( "main"
+      , []
+      , EApplication
+          ( EApplication
+              (EApplication (EIdentifier "f", ELiteral (LInt 5)), ELiteral (LInt 10))
+          , ELiteral (LInt 10) ) )
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 60)
+
+let test_program =
+  [ EDeclaration
+      ( "f"
+      , [ "x" ]
+      , EIf
+          ( EBinaryOperation (Eq, EIdentifier "x", ELiteral (LBool true))
+          , ELiteral (LInt 1)
+          , ELiteral (LInt 2) ) )
+  ; EDeclaration ("main", [], EApplication (EIdentifier "f", ELiteral (LBool false)))
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 2)
+
+(* let rec factorial n acc = if n <= 1 then acc else factorial (n - 1) (acc * n) *)
+(* let main = factorial 5 1 *)
+let test_program =
+  [ ERecursiveDeclaration
+      ( "factorial"
+      , [ "n"; "acc" ]
+      , EIf
+          ( EBinaryOperation (LTE, EIdentifier "n", ELiteral (LInt 1))
+          , EIdentifier "acc"
+          , EApplication
+              ( EApplication
+                  ( EIdentifier "factorial"
+                  , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) )
+              , EBinaryOperation (Mul, EIdentifier "acc", EIdentifier "n") ) ) )
+  ; EDeclaration
+      ( "main"
+      , []
+      , EApplication
+          (EApplication (EIdentifier "factorial", ELiteral (LInt 5)), ELiteral (LInt 1))
+      )
+  ]
+;;
+
+let%test _ =
+  match InterpretResult.run test_program with
+  | Base.Result.Ok (VInt 1) -> true
+  | _ -> false
+;;
+
+let test_program =
+  [ EDeclaration
+      ("f", [ "x"; "y" ], EBinaryOperation (Add, EIdentifier "x", EIdentifier "y"))
+  ; EDeclaration
+      ( "main"
+      , []
+      , EApplication
+          (EApplication (EIdentifier "f", ELiteral (LInt 5)), ELiteral (LInt 10)) )
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 15)
+let%test _ = Poly.( = ) (InterpretResult.run []) @@ Result.Ok VUnit
