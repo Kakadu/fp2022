@@ -9,22 +9,19 @@ let get_type_val = function
   | VInt _ -> VTInt
   | VFloat _ -> VTFloat
   | VChar _ -> VTChar
-  | VString s -> VTDString (String.length s)
+  | VString s -> VTString (String.length s)
   | VRecord w -> VTDRecord (KeyMap.map (fun (t, _) -> t) w)
   | VFunction (_, t, p, _, _) -> VTFunction (p, t)
-  | VArray (v, s, t, _) -> VTDArray (v, s, t)
+  | VArray (v, s, t, _) -> VTArray (v, s, t)
   | VVoid -> VTVoid
 ;;
 
 let%test "VBool type" = get_type_val (VBool true) == VTBool
 
-let rec compare_types t1 t2 =
-  let eval = function
-    | VTNDString -> VTDString 255
-    | ok -> ok
-  in
-  match eval t1, eval t2 with
-  | VTDString _, VTDString _ -> true
+let rec compare_types : vtype -> vtype -> bool =
+ fun t1 t2 ->
+  match t1, t2 with
+  | VTString _, VTString _ -> true
   | VTDRecord w1, VTDRecord w2 -> KeyMap.equal compare_types w1 w2
   | VTFunction (p1, t1), VTFunction (p2, t2) ->
     compare_types t1 t2
@@ -40,7 +37,7 @@ let rec compare_types t1 t2 =
          true
          p1
          p2
-  | VTDArray (s1, i1, t1), VTDArray (s2, i2, t2) ->
+  | VTArray (s1, i1, t1), VTArray (s2, i2, t2) ->
     s1 == s2 && i1 == i2 && compare_types t1 t2
   | t1, t2 -> t1 == t2
 ;;

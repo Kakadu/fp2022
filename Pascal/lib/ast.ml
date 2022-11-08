@@ -32,23 +32,33 @@ type unop =
   | Not (** ( not ) *)
 [@@deriving show { with_path = false }]
 
+(** types which parser returns *)
+type ptype =
+  | PTBool (** boolean type *)
+  | PTInt (** integer type *)
+  | PTFloat (** real type *)
+  | PTChar (** char type *)
+  | PTVoid (** special type for procedure declaration *)
+  | PTString (** string type without len, will be used 255 *)
+  | PTDString of expr (** string type with expr len *)
+  | PTRecord of (name * ptype) list (** record type of definitions *)
+  | PTFunction of ptype fun_param list * ptype (** function type *)
+  | PTArray of expr * expr * ptype (** array type with expr..expr interval *)
+  | PTCustom of name (** custom type *)
+[@@deriving show { with_path = false }]
+
 (** virtual types *)
-type vtype =
+and vtype =
   | VTBool (** boolean type *)
   | VTInt (** integer type *)
   | VTFloat (** real type *)
   | VTChar (** char type *)
-  | VTString of expr (** string type with expr len *)
-  | VTNDString (** string type without len, will be used 255 *)
-  | VTDString of int (** string type with len *)
-  | VTRecord of (name * vtype) list (** record type of definitions *)
-  | VTDRecord of vtype KeyMap.t (** record type constructed *)
-  | VTFunction of fun_param list * vtype (** function type *)
-  | VTArray of expr * expr * vtype (** array type with expr..expr interval *)
-  | VTDArray of value * int * vtype
-      (** array type with calculated interval : (from <val> with <size> of <type>) *)
-  | VTCustom of name (** custom type *)
   | VTVoid (** special type for procedure declaration *)
+  | VTString of int (** string type with len *)
+  | VTDRecord of vtype KeyMap.t (** record type constructed *)
+  | VTFunction of vtype fun_param list * vtype (** function type *)
+  | VTArray of value * int * vtype
+      (** array type with calculated interval : (from <val> with <size> of <type>) *)
 [@@deriving show { with_path = false }]
 
 (** virtual values *)
@@ -59,7 +69,7 @@ and value =
   | VChar of char (** char value *)
   | VString of string (** string value *)
   | VRecord of world (** record value *)
-  | VFunction of name * vtype * fun_param list * world * statement list
+  | VFunction of name * vtype * vtype fun_param list * world * statement list
       (** function value : (<name> <result type> <param list> <local world> <realization>) *)
   | VArray of value * int * vtype * value ImArray.t
       (** array value : from <val> with <size> of <type>, contains <arr>*)
@@ -68,10 +78,10 @@ and value =
 [@@deriving show { with_path = false }]
 
 (** function parameters *)
-and fun_param =
-  | FPFree of name * vtype (** standard parameter *)
-  | FPOut of name * vtype (** out parameter *)
-  | FPConst of name * vtype (** const parameter *)
+and 'a fun_param =
+  | FPFree of name * 'a (** standard parameter *)
+  | FPOut of name * 'a (** out parameter *)
+  | FPConst of name * 'a (** const parameter *)
 [@@deriving show { with_path = false }]
 
 (** expression *)
@@ -100,13 +110,13 @@ and statement =
 
 (** definition *)
 and define =
-  | DType of name * vtype (** type definition *)
-  | DNDVariable of name * vtype (** variable definition without assignment *)
-  | DVariable of name * vtype * expr (** variable definition with assignment by expr *)
-  | DDVariable of name * vtype * value (** variable definition with assignment by value *)
+  | DType of name * ptype (** type definition *)
+  | DNDVariable of name * ptype (** variable definition without assignment *)
+  | DVariable of name * ptype * expr (** variable definition with assignment by expr *)
+  | DDVariable of name * ptype * value (** variable definition with assignment by value *)
   | DConst of name * expr (** const definition by expr *)
   | DDConst of name * value (** const definition by value *)
-  | DFunction of name * vtype * fun_param list * t (** function definition *)
+  | DFunction of name * ptype * ptype fun_param list * t (** function definition *)
 [@@deriving show { with_path = false }]
 
 (** world item *)

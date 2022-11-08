@@ -430,15 +430,15 @@ let rec definition s =
         => List.concat
       in
       if proc
-      then return (VTFunction (params, VTVoid))
+      then return (PTFunction (params, PTVoid))
       else
         let* res = token ":" >> vtype in
-        return (VTFunction (params, res))
+        return (PTFunction (params, res))
     in
     helper s
   and vtype s =
     let string_arg =
-      option VTNDString (between (token "[") (token "]") expr => fun e -> VTString e)
+      option PTString (between (token "[") (token "]") expr => fun e -> PTDString e)
     in
     let arr_arg =
       let interval =
@@ -448,7 +448,7 @@ let rec definition s =
       in
       let* intervals = between (token "[") (token "]") (sep_by1 interval (token ",")) in
       let* arr_type = token "of" >> vtype in
-      return (List.fold_right (fun (s, f) t -> VTArray (s, f, t)) intervals arr_type)
+      return (List.fold_right (fun (s, f) t -> PTArray (s, f, t)) intervals arr_type)
     in
     let record_arg =
       sep_by as_var (many1 (token ";"))
@@ -456,21 +456,21 @@ let rec definition s =
       << token "end"
       => List.concat
       >>= compress_DType_list (fun n tp -> n, tp)
-      => fun lst -> VTRecord lst
+      => fun lst -> PTRecord lst
     in
     let simple =
       word
       >>= function
-      | "boolean" -> return VTBool
-      | "integer" -> return VTInt
-      | "real" -> return VTFloat
-      | "char" -> return VTChar
+      | "boolean" -> return PTBool
+      | "integer" -> return PTInt
+      | "real" -> return PTFloat
+      | "char" -> return PTChar
       | "string" -> string_arg
       | "array" -> arr_arg
       | "record" -> record_arg
       | "function" -> function_arg false
       | "procedure" -> function_arg true
-      | n -> return (VTCustom n)
+      | n -> return (PTCustom n)
     in
     simple s
   and as_var s =
@@ -503,7 +503,7 @@ let rec definition s =
     let* func_type = function_arg ptoc << token ";" in
     let* func_prog = program in
     match func_type with
-    | VTFunction (params, result_type) ->
+    | PTFunction (params, result_type) ->
       return (DFunction (func_name, result_type, params, func_prog))
     | _ -> mzero
   in
@@ -540,10 +540,10 @@ let%test "definition 1" =
     "var arr : array [1..10] of array ['a'..'b'] of integer;"
     [ DNDVariable
         ( "arr"
-        , VTArray
+        , PTArray
             ( Const (VInt 1)
             , Const (VInt 10)
-            , VTArray (Const (VChar 'a'), Const (VChar 'b'), VTInt) ) )
+            , PTArray (Const (VChar 'a'), Const (VChar 'b'), PTInt) ) )
     ]
 ;;
 
@@ -551,35 +551,35 @@ let%test "definition 2" =
   check_parser
     definition
     "var a, b: integer;"
-    [ DNDVariable ("a", VTInt); DNDVariable ("b", VTInt) ]
+    [ DNDVariable ("a", PTInt); DNDVariable ("b", PTInt) ]
 ;;
 
 let%test "definition 3" =
   check_parser
     definition
     "type add = function (x : integer; out y : integer) : integer;"
-    [ DType ("add", VTFunction ([ FPFree ("x", VTInt); FPOut ("y", VTInt) ], VTInt)) ]
+    [ DType ("add", PTFunction ([ FPFree ("x", PTInt); FPOut ("y", PTInt) ], PTInt)) ]
 ;;
 
 let%test "definition 4" =
   check_parser
     definition
     "var p : procedure (const x : string);"
-    [ DNDVariable ("p", VTFunction ([ FPConst ("x", VTNDString) ], VTVoid)) ]
+    [ DNDVariable ("p", PTFunction ([ FPConst ("x", PTString) ], PTVoid)) ]
 ;;
 
 let%test "definition 5" =
   check_parser
     definition
     "var i : integer = 42;"
-    [ DVariable ("i", VTInt, Const (VInt 42)) ]
+    [ DVariable ("i", PTInt, Const (VInt 42)) ]
 ;;
 
 let%test "definition 6" =
   check_parser
     definition
     "var r : record i : integer; f : real; end;"
-    [ DNDVariable ("r", VTRecord [ "i", VTInt; "f", VTFloat ]) ]
+    [ DNDVariable ("r", PTRecord [ "i", PTInt; "f", PTFloat ]) ]
 ;;
 
 let pascal_program = program << token "." << many any
@@ -613,12 +613,12 @@ let%test "Create and use add func" =
           writeln('x + y = ', add(x, y));
         end.
     |}
-    ( [ DNDVariable ("x", VTInt)
-      ; DNDVariable ("y", VTInt)
+    ( [ DNDVariable ("x", PTInt)
+      ; DNDVariable ("y", PTInt)
       ; DFunction
           ( "add"
-          , VTInt
-          , [ FPFree ("x", VTInt); FPFree ("y", VTInt) ]
+          , PTInt
+          , [ FPFree ("x", PTInt); FPFree ("y", PTInt) ]
           , ([], [ Assign (Variable "add", BinOp (Add, Variable "x", Variable "y")) ]) )
       ]
     , [ ProcCall (Call (Variable "readln", [ Variable "x" ]))

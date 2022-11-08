@@ -20,8 +20,7 @@ let rec is_l_value e w =
   | _ -> false
 ;;
 
-let rec eval_expr_type : expr -> Worlds.t -> vtype =
- fun e w ->
+let rec eval_expr_type e w =
   let eval_expr e = eval_expr_type e w in
   let loader n w =
     let _, (_, (t, v)), wtl = Worlds.load_all n w in
@@ -60,8 +59,6 @@ let rec eval_expr_type : expr -> Worlds.t -> vtype =
   use (eval_expr_base_type loader eval_function e) w
 ;;
 
-let ( >> ) _ b = b
-
 let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   let eval_expr e = eval_expr_type e w in
   let eval_stmt_list sl = eval_stmt_list_type ~func ~loop sl w in
@@ -69,7 +66,7 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   match s with
   | Assign (l, r) when is_l_value l w -> compare_types (eval_expr l) (eval_expr r)
   | Assign _ -> raise (PascalInterp LeftValError)
-  | ProcCall (Call _ as e) -> eval_expr e >> true
+  | ProcCall (Call _ as e) -> eval_expr e |> fun _ -> true
   | ProcCall _ -> false
   | If (b, t, e) ->
     compare_types (eval_expr b) VTBool && eval_stmt_list t && eval_stmt_list e

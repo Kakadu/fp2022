@@ -5,4 +5,7 @@
 open Ast
 
 (** parse -> semantic test -> interpret *)
+val interpret_no_catch : string -> world
+
+(** parse -> semantic test -> interpret *)
 val interpret : string -> (world, exn) result

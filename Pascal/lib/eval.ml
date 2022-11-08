@@ -134,9 +134,9 @@ let eval_binop_type op t1 t2 =
      | VTInt, VTInt -> VTInt
      | VTInt, VTFloat -> VTFloat
      | VTFloat, VTFloat -> VTFloat
-     | VTChar, VTChar -> VTNDString
-     | VTChar, VTNDString -> VTNDString
-     | VTNDString, VTNDString -> VTNDString
+     | VTChar, VTChar -> VTString 2
+     | VTChar, VTString s -> VTString (s + 1)
+     | VTString s1, VTString s2 -> VTString (s1 + s2)
      | _ -> raise error)
   | Sub | Mul ->
     (match types with
@@ -165,8 +165,8 @@ let eval_binop_type op t1 t2 =
      | VTInt, VTFloat -> VTBool
      | VTFloat, VTFloat -> VTBool
      | VTChar, VTChar -> VTBool
-     | VTChar, VTNDString -> VTBool
-     | VTNDString, VTNDString -> VTBool
+     | VTChar, VTString _ -> VTBool
+     | VTString _, VTString _ -> VTBool
      | VTBool, VTBool -> VTBool
      | _ -> raise error)
 ;;
@@ -352,7 +352,7 @@ let%test "get arr" =
 ;;
 
 let get_arr_type ind = function
-  | VTDArray (start, _, t) when compare_types (get_type_val start) ind -> t
+  | VTArray (start, _, t) when compare_types (get_type_val start) ind -> t
   | t -> raise (PascalInterp (ArrayTypeError t))
 ;;
 
@@ -411,7 +411,7 @@ let rec eval_expr_const e =
   use (eval_expr_base const_loader const_eval_function e)
 ;;
 
-let%test "eval expr partal" = eval_expr_const (Const (VInt 42)) [] = VInt 42
+let%test "eval expr partial" = eval_expr_const (Const (VInt 42)) [] = VInt 42
 
 let%test "eval expr 1 + 1" =
   eval_expr_const (BinOp (Add, Const (VInt 1), Const (VInt 1))) [] = VInt 2

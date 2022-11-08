@@ -15,46 +15,53 @@ let load_variables : define list -> world =
     let tp = VType in
     let def_to_world w =
       let eval_expr e = eval_expr_const e w in
-      let rec load_type = function
-        | VTString e ->
-          VTDString
-            (match eval_expr e with
-             | VInt i when i > 0 -> i
-             | _ -> raise (PascalInterp TypeError))
-        | VTNDString -> VTDString 255
-        | VTDString i when i > 0 -> VTDString i
-        | VTDString _ -> raise (PascalInterp TypeError)
-        | VTRecord l ->
-          let list_to_map =
-            let add_to_map w (n, t) =
-              match w with
-              | w when not (KeyMap.mem n w) -> KeyMap.add n t w
-              | _ -> raise (PascalInterp (DupVarName n))
+      let rec vtype : ptype -> vtype =
+       fun t ->
+        let rec eval = function
+          | PTBool -> VTBool
+          | PTInt -> VTInt
+          | PTFloat -> VTFloat
+          | PTChar -> VTChar
+          | PTVoid -> VTVoid
+          | PTDString e ->
+            VTString
+              (match eval_expr e with
+               | VInt i when i > 0 -> i
+               | _ -> raise (PascalInterp TypeError))
+          | PTString -> VTString 255
+          | PTRecord l ->
+            let list_to_map =
+              let add_to_map w (n, t) =
+                match w with
+                | w when not (KeyMap.mem n w) -> KeyMap.add n (vtype t) w
+                | _ -> raise (PascalInterp (DupVarName n))
+              in
+              List.fold_left add_to_map KeyMap.empty
             in
-            List.fold_left add_to_map KeyMap.empty
-          in
-          load_type (VTDRecord (list_to_map l))
-        | VTDRecord w -> VTDRecord (KeyMap.map load_type w)
-        | VTFunction (p, t) -> VTFunction (load_type_fun_param p, load_type t)
-        | VTArray (e1, e2, t) ->
-          let v1 = eval_expr e1 in
-          let v2 = eval_expr e2 in
-          let size = iter_arr v1 v2 + 1 in
-          load_type (VTDArray (v1, size, t))
-        | VTDArray (((VChar _ | VInt _ | VBool _) as v), s, t) when s > 0 ->
-          VTDArray (v, s, load_type t)
-        | VTDArray _ -> raise (PascalInterp TypeError)
-        | VTCustom n ->
-          (match Worlds.load n w with
-           | t, VType -> t
-           | _ -> raise (PascalInterp (NotAType n)))
-        | (VTBool | VTInt | VTFloat | VTChar | VTVoid) as t -> t
-      and load_type_fun_param pl =
+            VTDRecord (list_to_map l)
+          | PTFunction (p, t) -> VTFunction (vtype_fun_param p, vtype t)
+          | PTArray (e1, e2, t) ->
+            let v1 = eval_expr e1 in
+            let v2 = eval_expr e2 in
+            let size = iter_arr v1 v2 + 1 in
+            VTArray (v1, size, eval t)
+          | PTCustom n ->
+            (match Worlds.load n w with
+             | t, VType -> t
+             | _ -> raise (PascalInterp (NotAType n)))
+        in
+        match eval t with
+        | VTString i as s when i > 0 -> s
+        | VTString _ -> raise (PascalInterp TypeError)
+        | VTArray ((VChar _ | VInt _ | VBool _), s, _) as arr when s > 0 -> arr
+        | VTArray _ -> raise (PascalInterp TypeError)
+        | ok -> ok
+      and vtype_fun_param pl =
         List.map
           (function
-           | FPFree (n, t) -> FPFree (n, load_type t)
-           | FPOut (n, t) -> FPOut (n, load_type t)
-           | FPConst (n, t) -> FPConst (n, load_type t))
+           | FPFree (n, t) -> FPFree (n, vtype t)
+           | FPOut (n, t) -> FPOut (n, vtype t)
+           | FPConst (n, t) -> FPConst (n, vtype t))
           pl
       in
       let rec construct = function
@@ -62,39 +69,39 @@ let load_variables : define list -> world =
         | VTInt -> VInt 0
         | VTFloat -> VFloat 0.
         | VTChar -> VChar (Char.chr 0)
-        | VTDString _ -> VString ""
+        | VTString _ -> VString ""
         | VTDRecord w -> VRecord (KeyMap.map (fun t -> t, VVariable (construct t)) w)
         | VTFunction _ -> VVoid
-        | VTDArray (v, s, t) -> VArray (v, s, t, ImArray.make s (construct t))
+        | VTArray (v, s, t) -> VArray (v, s, t, ImArray.make s (construct t))
         | _ -> VVoid
       in
       function
       | DType (n, t) ->
-        let t = load_type t in
+        let t = vtype t in
         n, (t, tp)
       | DNDVariable (n, t) ->
-        let t = load_type t in
+        let t = vtype t in
         n, (t, var (construct t))
       | DVariable (n, t, e) ->
-        let t = load_type t in
+        let t = vtype t in
         n, (t, var (eval_expr e))
       | DDVariable (n, t, v) ->
-        let t = load_type t in
+        let t = vtype t in
         n, (t, var v)
       | DConst (n, e) ->
         let v = eval_expr e in
         n, (get_type_val v, const v)
       | DDConst (n, v) -> n, (get_type_val v, const v)
       | DFunction (n, t, p, (d, c)) ->
-        let t = load_type t in
-        let p = load_type_fun_param p in
+        let t = vtype t in
         let fun_param_def =
           List.map
             (function
              | FPFree (n, t) | FPOut (n, t) -> DNDVariable (n, t)
-             | FPConst (n, t) -> DDConst (n, construct t))
+             | FPConst (n, t) -> DDConst (n, construct (vtype t)))
             p
         in
+        let p = vtype_fun_param p in
         let fdef = fun_param_def @ d in
         let fw = load_variables_in fdef (KeyMap.empty :: w) in
         let fw =
@@ -134,18 +141,18 @@ let%test "load variables test" =
     world_cmp
     (load_variables
        [ DConst ("n", BinOp (Add, Const (VInt 2), Const (VInt 2)))
-       ; DNDVariable ("a", VTArray (Const (VInt 0), Variable "n", VTBool))
+       ; DNDVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
        ; DFunction
            ( "f"
-           , VTBool
+           , PTBool
            , []
-           , ( [ DNDVariable ("a", VTArray (Const (VInt 0), Variable "n", VTBool))
+           , ( [ DNDVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
                ; DConst ("n", BinOp (Add, Const (VInt 5), Variable "n"))
                ; DFunction
                    ( "ff"
-                   , VTBool
+                   , PTBool
                    , []
-                   , ( [ DNDVariable ("a", VTArray (Const (VInt 0), Variable "n", VTBool))
+                   , ( [ DNDVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
                        ]
                      , [] ) )
                ]
@@ -156,7 +163,7 @@ let%test "load variables test" =
        (List.to_seq
           [ "n", (VTInt, VConst (VInt 4))
           ; ( "a"
-            , ( VTDArray (VInt 0, 5, VTBool)
+            , ( VTArray (VInt 0, 5, VTBool)
               , VVariable (VArray (VInt 0, 5, VTBool, ImArray.make 5 (VBool false))) ) )
           ; ( "f"
             , ( VTFunction ([], VTBool)
@@ -169,7 +176,7 @@ let%test "load variables test" =
                          (List.to_seq
                             [ "f", (VTBool, VFunctionResult (VBool false))
                             ; ( "a"
-                              , ( VTDArray (VInt 0, 5, VTBool)
+                              , ( VTArray (VInt 0, 5, VTBool)
                                 , VVariable
                                     (VArray
                                        (VInt 0, 5, VTBool, ImArray.make 5 (VBool false)))
@@ -188,7 +195,7 @@ let%test "load variables test" =
                                                 , (VTBool, VFunctionResult (VBool false))
                                                 )
                                               ; ( "a"
-                                                , ( VTDArray (VInt 0, 10, VTBool)
+                                                , ( VTArray (VInt 0, 10, VTBool)
                                                   , VVariable
                                                       (VArray
                                                          ( VInt 0

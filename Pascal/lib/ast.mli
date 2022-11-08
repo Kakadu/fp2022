@@ -36,26 +36,32 @@ type unop =
   | Minus (** ( - ) *)
   | Not (** ( not ) *)
 
-val pp_unop : Ppx_show_runtime.Format.formatter -> unop -> unit
-val show_unop : unop -> string
+(** types which parser returns *)
+type ptype =
+  | PTBool (** boolean type *)
+  | PTInt (** integer type *)
+  | PTFloat (** real type *)
+  | PTChar (** char type *)
+  | PTVoid (** special type for procedure declaration *)
+  | PTString (** string type without len, will be used 255 *)
+  | PTDString of expr (** string type with expr len *)
+  | PTRecord of (name * ptype) list (** record type of definitions *)
+  | PTFunction of ptype fun_param list * ptype (** function type *)
+  | PTArray of expr * expr * ptype (** array type with expr..expr interval *)
+  | PTCustom of name (** custom type *)
 
 (** virtual types *)
-type vtype =
+and vtype =
   | VTBool (** boolean type *)
   | VTInt (** integer type *)
   | VTFloat (** real type *)
   | VTChar (** char type *)
-  | VTString of expr (** string type with expr len *)
-  | VTNDString (** string type without len, will be used 255 *)
-  | VTDString of int (** string type with len *)
-  | VTRecord of (name * vtype) list (** record type of definitions *)
-  | VTDRecord of vtype KeyMap.t (** record type constructed *)
-  | VTFunction of fun_param list * vtype (** function type *)
-  | VTArray of expr * expr * vtype (** array type with expr..expr interval *)
-  | VTDArray of value * int * vtype
-      (** array type with calculated interval : (from <val> with <size> of <type>) *)
-  | VTCustom of name (** custom type *)
   | VTVoid (** special type for procedure declaration *)
+  | VTString of int (** string type with len *)
+  | VTDRecord of vtype KeyMap.t (** record type constructed *)
+  | VTFunction of vtype fun_param list * vtype (** function type *)
+  | VTArray of value * int * vtype
+      (** array type with calculated interval : (from <val> with <size> of <type>) *)
 
 (** virtual values *)
 and value =
@@ -65,7 +71,7 @@ and value =
   | VChar of char (** char value *)
   | VString of string (** string value *)
   | VRecord of world (** record value *)
-  | VFunction of name * vtype * fun_param list * world * statement list
+  | VFunction of name * vtype * vtype fun_param list * world * statement list
       (** function value : (<name> <result type> <param list> <local world> <realization>) *)
   | VArray of value * int * vtype * value ImArray.t
       (** array value : from <val> with <size> of <type>, contains <arr>*)
@@ -73,10 +79,10 @@ and value =
       (** special type for procedure declaration or for an unassigned function variable *)
 
 (** function parameters *)
-and fun_param =
-  | FPFree of name * vtype (** standard parameter *)
-  | FPOut of name * vtype (** out parameter *)
-  | FPConst of name * vtype (** const parameter *)
+and 'a fun_param =
+  | FPFree of name * 'a (** standard parameter *)
+  | FPOut of name * 'a (** out parameter *)
+  | FPConst of name * 'a (** const parameter *)
 
 (** expression *)
 and expr =
@@ -102,13 +108,13 @@ and statement =
 
 (** definition *)
 and define =
-  | DType of name * vtype (** type definition *)
-  | DNDVariable of name * vtype (** variable definition without assignment *)
-  | DVariable of name * vtype * expr (** variable definition with assignment by expr *)
-  | DDVariable of name * vtype * value (** variable definition with assignment by value *)
+  | DType of name * ptype (** type definition *)
+  | DNDVariable of name * ptype (** variable definition without assignment *)
+  | DVariable of name * ptype * expr (** variable definition with assignment by expr *)
+  | DDVariable of name * ptype * value (** variable definition with assignment by value *)
   | DConst of name * expr (** const definition by expr *)
   | DDConst of name * value (** const definition by value *)
-  | DFunction of name * vtype * fun_param list * t (** function definition *)
+  | DFunction of name * ptype * ptype fun_param list * t (** function definition *)
 
 (** world item *)
 and variable =
@@ -123,12 +129,26 @@ and world = (vtype * variable) KeyMap.t
 (** Pascal program of definition list and statement list *)
 and t = define list * statement list
 
+val pp_name : Ppx_show_runtime.Format.formatter -> name -> unit
+val show_name : name -> string
+val pp_binop : Ppx_show_runtime.Format.formatter -> binop -> unit
+val show_binop : binop -> string
+val pp_unop : Ppx_show_runtime.Format.formatter -> unop -> unit
+val show_unop : unop -> string
+val pp_ptype : Ppx_show_runtime.Format.formatter -> ptype -> unit
+val show_ptype : ptype -> string
 val pp_vtype : Ppx_show_runtime.Format.formatter -> vtype -> unit
 val show_vtype : vtype -> string
 val pp_value : Ppx_show_runtime.Format.formatter -> value -> unit
 val show_value : value -> string
-val pp_fun_param : Ppx_show_runtime.Format.formatter -> fun_param -> unit
-val show_fun_param : fun_param -> string
+
+val pp_fun_param
+  :  (Format.formatter -> 'a -> unit)
+  -> Format.formatter
+  -> 'a fun_param
+  -> unit
+
+val show_fun_param : (Format.formatter -> 'a -> unit) -> 'a fun_param -> name
 val pp_expr : Ppx_show_runtime.Format.formatter -> expr -> unit
 val show_expr : expr -> string
 val pp_statement : Ppx_show_runtime.Format.formatter -> statement -> unit
