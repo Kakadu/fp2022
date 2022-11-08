@@ -12,8 +12,3 @@ Features done (append only):
 - Parser
 - Semantic checker
 - Interpreter
-
-ToDo
-
-- String iteration
-- "At sign" unary operator for using function as variable correctly
