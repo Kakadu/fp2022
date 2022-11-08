@@ -586,7 +586,11 @@ let%test "for loop" =
         i : integer;
         x : integer = 0;
       begin
-        for i := 0 to 10 do x := i;
+        for i := 0 to 10 do
+          begin
+            x := i;
+            i := 42;
+          end;
       end.
     |}
     [ "x", VVariable (VInt 10); "i", VVariable (VInt 10) ]
@@ -611,22 +615,20 @@ let%test "for loop if _ then break" =
 let%test "fibonacci" =
   check_interp
     {|
+      const n = 10;
       var
-        a, b, c, i, n, x : integer;
+        a, b, i, x : integer;
       begin
         a := 0;
         b := 1;
-        n := 10;
-        for i := 3 to n do begin
-          x := a + b;
-          c := b;
+        for i := 2 to n do begin
           b := a + b;
-          a := c;
-          i := 42;
+          a := b - a;
         end;
+        x := b;
       end.
     |}
-    [ "x", VVariable (VInt 34); "i", VVariable (VInt 10) ]
+    [ "x", VVariable (VInt 55) ]
 ;;
 
 let%test "fibonacci rec" =
@@ -638,14 +640,10 @@ let%test "fibonacci rec" =
         function f (n : integer) : integer;
         begin
           if n = 0 then
-          begin
-            f := 0;
-            exit;
-          end else if n = 1 then
-          begin
-            f := 1;
-            exit;
-          end else
+            f := 0
+          else if n = 1 then
+            f := 1
+          else
             f := f(n - 1) + f(n - 2);
         end;
       begin
@@ -653,4 +651,24 @@ let%test "fibonacci rec" =
       end.
     |}
     [ "i", VVariable (VInt 55) ]
+;;
+
+let%test "factorial rec" =
+  check_interp
+    {|
+      const n = 6;
+      var
+        i : integer;
+        function fac (n : integer) : integer;
+        begin
+          if n = 0 then
+            fac := 1
+          else
+            fac := n * fac(n - 1);
+        end;
+      begin
+        i := fac(n);
+      end.
+    |}
+    [ "i", VVariable (VInt 720) ]
 ;;

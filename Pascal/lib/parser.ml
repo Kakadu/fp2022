@@ -197,16 +197,9 @@ let unop =
 
 let rec expr s =
   let parentheses p = between (token "(") (token ")") p in
-  let func =
-    let* f = many (satisfy (( != ) '(')) in
-    let* params = parentheses (sep_by expr (token ",")) in
-    match use_parser (expr << spaces) (implode f) with
-    | Some (f, LazyStream.Nil) -> return (Call (f, params))
-    | _ -> mzero
-  in
   let const = value => fun r -> Const r in
   let variable = name => fun r -> Variable r in
-  let factor = choice [ func; variable; const; parentheses expr ] in
+  let factor = choice [ variable; const; parentheses expr ] in
   let unpack =
     let rec helper obj =
       let rec_unpack =
@@ -217,7 +210,11 @@ let rec expr s =
         let* ind = between (token "[") (token "]") (sep_by1 expr (token ",")) in
         return (List.fold_left (fun exp i -> GetArr (exp, i)) obj ind)
       in
-      option obj (rec_unpack <|> arr_unpack >>= helper)
+      let call_function =
+        let* params = parentheses (sep_by expr (token ",")) in
+        return (Call (obj, params))
+      in
+      option obj (choice [ rec_unpack; arr_unpack; call_function ] >>= helper)
     in
     factor >>= helper
   in
@@ -421,7 +418,7 @@ let rec definition s =
         let fun_param_free = helper (fun n tp -> FPFree (n, tp)) in
         let fun_param_const = token "const" >> helper (fun n tp -> FPConst (n, tp)) in
         let fun_param_out = token "out" >> helper (fun n tp -> FPOut (n, tp)) in
-        fun_param_const <|> fun_param_out <|> fun_param_free
+        choice [ fun_param_const; fun_param_out; fun_param_free ]
       in
       let* params =
         lexeme
@@ -630,4 +627,41 @@ let%test "Create and use add func" =
                ; Call (Variable "add", [ Variable "x"; Variable "y" ])
                ] ))
       ] )
+;;
+
+let%test "rec factorial func" =
+  check_parser
+    pascal_program
+    {|
+      var
+        function fac (n : integer) : integer;
+        begin
+          if n = 0 then
+            fac := 1
+          else
+            fac := n * fac(n - 1);
+        end;
+      begin
+      end.
+    |}
+    ( [ DFunction
+          ( "fac"
+          , PTInt
+          , [ FPFree ("n", PTInt) ]
+          , ( []
+            , [ If
+                  ( BinOp (Eq, Variable "n", Const (VInt 0))
+                  , [ Assign (Variable "fac", Const (VInt 1)) ]
+                  , [ Assign
+                        ( Variable "fac"
+                        , BinOp
+                            ( Mul
+                            , Variable "n"
+                            , Call
+                                ( Variable "fac"
+                                , [ BinOp (Sub, Variable "n", Const (VInt 1)) ] ) ) )
+                    ] )
+              ] ) )
+      ]
+    , [] )
 ;;
