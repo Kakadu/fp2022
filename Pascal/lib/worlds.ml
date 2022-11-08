@@ -8,23 +8,6 @@ open VTypeBasics
 
 type t = world list
 
-let load_all_opt n =
-  let rec helper acc = function
-    | [] -> None
-    | h :: tl as w ->
-      (match KeyMap.find_opt n h with
-       | Some v -> Some (acc, (n, v), w)
-       | None -> helper (h :: acc) tl)
-  in
-  helper []
-;;
-
-let load_all n w =
-  match load_all_opt n w with
-  | Some v -> v
-  | _ -> raise (PascalInterp (VariableNotFound n))
-;;
-
 let load_opt n = List.find_map (KeyMap.find_opt n)
 
 let load n worlds =
@@ -53,11 +36,60 @@ let replace : name -> vtype * variable -> t -> t =
 
 let mem n = List.exists (KeyMap.mem n)
 
-let root =
+let root w =
   let rec helper acc = function
     | [] -> [], []
     | r :: [] -> acc, [ r ]
     | h :: tl -> helper (h :: acc) tl
   in
-  helper []
+  helper [] w
+;;
+
+let load_const_fun_opt n w =
+  match root w with
+  | _, h :: [] ->
+    (match KeyMap.find_opt n h with
+     | Some ((VTConstFunction _ as t), VConst f) -> Some (t, f)
+     | _ -> None)
+  | _ -> None
+;;
+
+let load_const_fun n w =
+  match load_const_fun_opt n w with
+  | Some f -> f
+  | _ -> raise (PascalInterp (VariableNotFound n))
+;;
+
+let load_fun_all_opt n w =
+  let rec helper acc = function
+    | [] -> None
+    | h :: tl as w ->
+      (match KeyMap.find_opt n h with
+       | Some v -> Some (acc, (n, v), w)
+       | None -> helper (h :: acc) tl)
+  in
+  match helper [] w with
+  | Some (wh, (_, ((VTConstFunction _ as t), VConst v)), wtl) -> Some (wh, (t, v), wtl)
+  | Some (_, (_, ((VTFunction _ as t), VVariable v)), _) ->
+    let wh, wtl = root w in
+    Some (wh, (t, v), wtl)
+  | Some (wh, (_, (_, VFunctionResult _)), h :: (hwf :: _ as wtl)) ->
+    (match KeyMap.find_opt n hwf with
+     | Some ((VTConstFunction _ as t), VConst v) ->
+       let wh = h :: wh in
+       Some (wh, (t, v), wtl)
+     | _ -> None)
+  | _ -> None
+;;
+
+let load_fun_opt n w =
+  match load_fun_all_opt n w with
+  | Some (_, f, _) -> Some f
+  | _ -> None
+;;
+
+let load_fun n w =
+  match load_fun_opt n w with
+  | Some f -> f
+  | _ -> raise (PascalInterp (FunctionNotFound n))
 ;;

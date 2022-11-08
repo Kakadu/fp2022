@@ -362,8 +362,6 @@ let get_arr_type ind = function
   | t -> raise (PascalInterp (ArrayTypeError t))
 ;;
 
-let load_all n w = Worlds.load_all n w, w
-
 let rec eval_expr_base load_f eval_function =
   let eval_expr expr world = eval_expr_base load_f eval_function expr world in
   function

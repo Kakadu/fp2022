@@ -307,9 +307,12 @@ let rec statement s =
     <|> (statement => fun st -> [ st ])
   in
   let assign_st =
-    let* left = expr in
-    let* right = token ":=" >> expr in
-    return (Assign (left, right))
+    let* left = expr << token ":=" in
+    expr
+    => (fun right -> Assign (left, right))
+    <|>
+    let rec at s = (token "@" >> name <|> between (token "(") (token ")") at) s in
+    at => fun right -> AssignFunc (left, right)
   in
   let proc_call_st = expr => fun x -> ProcCall x in
   let if_st =

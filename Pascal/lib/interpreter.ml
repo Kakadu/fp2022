@@ -23,13 +23,8 @@ let rec is_l_value e w =
 let rec eval_expr_type e w =
   let eval_expr e = eval_expr_type e w in
   let loader n w =
-    let _, (_, (t, v)), wtl = Worlds.load_all n w in
-    match t, v with
-    | VTFunction _, VConst _ ->
-      (match wtl with
-       | _ :: [] -> t
-       | _ -> raise (PascalInterp (GlobalFunctionExpected n)))
-    | _, (VVariable _ | VConst _ | VFunctionResult _) -> t
+    match Worlds.load n w with
+    | t, (VVariable _ | VConst _ | VFunctionResult _) -> t
     | _, VType -> raise (PascalInterp (NotAVariable n))
   in
   let eval_function f p w =
@@ -42,14 +37,9 @@ let rec eval_expr_type e w =
     in
     match f with
     | Variable fn ->
-      (match Worlds.load_all_opt fn w with
-       | Some (_, (_, (_, VFunctionResult _)), _ :: h :: _) ->
-         (match KeyMap.find_opt fn h with
-          | Some (VTFunction (fpl, t), _) when compare_param_list fpl p -> return t w
-          | _ -> raise (PascalInterp (InvalidCall fn)))
-       | Some (_, (_, (_, VFunctionResult _)), _) -> raise (PascalInterp (InvalidCall fn))
-       | Some (_, (_, (VTFunction (fpl, t), _)), _) when compare_param_list fpl p ->
-         return t w
+      (match Worlds.load_fun_opt fn w with
+       | Some ((VTFunction (fpl, t) | VTConstFunction (fpl, t)), _)
+         when compare_param_list fpl p -> return t w
        | None ->
          let p = List.map (fun e -> eval_expr e) p in
          return (eval_std_function_type fn p) w
@@ -64,8 +54,14 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   let eval_stmt_list sl = eval_stmt_list_type ~func ~loop sl w in
   let eval_stmt_list_loop sl = eval_stmt_list_type ~func ~loop:true sl w in
   match s with
-  | Assign (l, r) when is_l_value l w -> compare_types (eval_expr l) (eval_expr r)
+  | Assign (l, r) when is_l_value l w ->
+    (match eval_expr r with
+     | VTConstFunction _ -> false
+     | r -> compare_types (eval_expr l) r)
   | Assign _ -> raise (PascalInterp LeftValError)
+  | AssignFunc (l, r) when is_l_value l w ->
+    compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
+  | AssignFunc _ -> raise (PascalInterp LeftValError)
   | ProcCall (Call _ as e) -> eval_expr e |> fun _ -> true
   | ProcCall _ -> false
   | If (b, t, e) ->
@@ -156,21 +152,10 @@ let rec eval_expr e w =
     let w, p = List.fold_left_map (swap eval_expr) w pexp in
     match f with
     | Variable f ->
-      (match Worlds.load_all_opt f w with
-       | Some (wh, (_, (_, VConst (VFunction (n, _, fp, fw, st)))), wtl) ->
+      (match Worlds.load_fun_all_opt f w with
+       | Some (wh, (_, VFunction (n, _, fp, fw, st)), wtl) ->
          let r, wtl = eval_function n fp pexp p fw st wtl in
          r, List.rev_append wh wtl
-       | Some (_, (_, (_, VVariable (VFunction (n, _, fp, fw, st)))), _) ->
-         let wh, wtl = Worlds.root w in
-         let r, wtl = eval_function n fp pexp p fw st wtl in
-         r, List.rev_append wh wtl
-       | Some (wh, (_, (_, VFunctionResult _)), h :: (hwf :: _ as wtl)) ->
-         (match KeyMap.find_opt f hwf with
-          | Some (_, VConst (VFunction (n, _, fp, fw, st))) ->
-            let wh = h :: wh in
-            let r, wtl = eval_function n fp pexp p fw st wtl in
-            r, List.rev_append wh wtl
-          | _ -> raise (PascalInterp RunTimeError))
        | Some _ -> raise (PascalInterp (InvalidCall f))
        | None -> eval_std_function f p, w)
     | e ->
@@ -210,17 +195,7 @@ and eval_stmt s w =
        | _ -> raise (PascalInterp RunTimeError))
     | _ -> raise (PascalInterp RunTimeError)
   in
-  match s with
-  | Assign (Variable n, e) ->
-    (match Worlds.load n w with
-     | t, VVariable _ ->
-       let v, w = eval_expr e w in
-       Worlds.replace n (t, VVariable v) w
-     | t, VFunctionResult _ ->
-       let v, w = eval_expr e w in
-       Worlds.replace n (t, VFunctionResult v) w
-     | _ -> raise (PascalInterp (NotAVariable n)))
-  | Assign (l, r) ->
+  let assign l eval r w =
     let rec helper w f =
       let arr_add a i v =
         match a with
@@ -248,12 +223,20 @@ and eval_stmt s w =
       | Variable n ->
         (match Worlds.load n w with
          | t, VVariable v ->
-           let e, w = eval_expr r w in
+           let e, w = eval r w in
            Worlds.replace n (t, VVariable (f v e)) w
+         | t, VFunctionResult v ->
+           let e, w = eval r w in
+           Worlds.replace n (t, VFunctionResult (f v e)) w
          | _ -> raise (PascalInterp RunTimeError))
       | _ -> raise (PascalInterp RunTimeError)
     in
     helper w (fun _ v -> v) l
+  in
+  match s with
+  | Assign (l, r) -> assign l eval_expr r w
+  | AssignFunc (l, r) ->
+    assign l (fun f w -> Worlds.load_fun f w |> fun (_, v) -> v, w) r w
   | ProcCall e ->
     let _, w = eval_expr e w in
     w
@@ -547,8 +530,9 @@ let%test "func" =
 ;;
 
 let%test "func as arg" =
-  check_interp
-    {|
+  try
+    check_interp
+      {|
       type
         int_f = function : integer;
       var
@@ -561,6 +545,92 @@ let%test "func as arg" =
       begin
         f := some_f;
         x := f();
+      end.
+    |}
+      [ "x", VVariable (VInt 42) ]
+    |> fun _ -> false
+  with
+  | PascalInterp SemanticError -> true
+;;
+
+let%test "func as arg" =
+  check_interp
+    {|
+      type
+        int_f = function : integer;
+      var
+        x : integer;
+        f : int_f;
+        function some_f : integer;
+        begin
+          some_f := 42;
+        end;
+      begin
+        f := @some_f;
+        x := f();
+      end.
+    |}
+    [ "x", VVariable (VInt 42) ]
+;;
+
+let%test "func as arg" =
+  check_interp
+    {|
+      type
+        int_f = function : integer;
+      var
+        x : integer;
+        f : int_f;
+        function some_f : integer;
+        begin
+          some_f := 42;
+        end;
+      begin
+        f := ((@some_f));
+        x := f();
+      end.
+    |}
+    [ "x", VVariable (VInt 42) ]
+;;
+
+let%test "func as arg" =
+  check_interp
+    {|
+      type
+        int_f = function : integer;
+      var
+        x : integer;
+        f, g : int_f;
+        function some_f : integer;
+        begin
+          some_f := 42;
+        end;
+      begin
+        f := @some_f;
+        g := f;
+        x := g();
+      end.
+    |}
+    [ "x", VVariable (VInt 42) ]
+;;
+
+let%test "func as arg" =
+  check_interp
+    {|
+      type
+        int_f = function : integer;
+      var
+        x : integer;
+        f, g : int_f;
+        function some_f : integer;
+        begin
+          f := @some_f;
+          some_f := 42;
+        end;
+      begin
+        some_f();
+        g := f;
+        x := g();
       end.
     |}
     [ "x", VVariable (VInt 42) ]

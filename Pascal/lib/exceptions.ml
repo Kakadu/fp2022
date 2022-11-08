@@ -6,6 +6,7 @@ open Ast
 
 exception DupVarName of name
 exception VariableNotFound of name
+exception FunctionNotFound of name
 exception TypeNotFound of name
 exception NotAType of name
 exception NotAConst of name

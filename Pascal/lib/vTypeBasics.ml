@@ -18,9 +18,12 @@ let get_type_val = function
 
 let%test "VBool type" = get_type_val (VBool true) == VTBool
 
-let rec compare_types : vtype -> vtype -> bool =
- fun t1 t2 ->
-  match t1, t2 with
+let rec compare_types t1 t2 =
+  let eval = function
+    | VTConstFunction (t, p) -> VTFunction (t, p)
+    | ok -> ok
+  in
+  match eval t1, eval t2 with
   | VTString _, VTString _ -> true
   | VTDRecord w1, VTDRecord w2 -> KeyMap.equal compare_types w1 w2
   | VTFunction (p1, t1), VTFunction (p2, t2) ->

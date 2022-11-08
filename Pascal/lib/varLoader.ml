@@ -104,7 +104,7 @@ let load_variables def =
           then raise (PascalInterp (DupVarName n))
           else KeyMap.add n (t, VFunctionResult (construct t)) fw
         in
-        n, (VTFunction (p, t), const (VFunction (n, t, p, fw, c)))
+        n, (VTConstFunction (p, t), const (VFunction (n, t, p, fw, c)))
     in
     let add_to_world w d =
       let name, value = def_to_world w d in

@@ -59,7 +59,8 @@ and vtype =
   | VTVoid (** special type for procedure declaration *)
   | VTString of int (** string type with len *)
   | VTDRecord of vtype KeyMap.t (** record type constructed *)
-  | VTFunction of vtype fun_param list * vtype (** function type *)
+  | VTFunction of vtype fun_param list * vtype (** function variable type *)
+  | VTConstFunction of vtype fun_param list * vtype (** function actual body type *)
   | VTArray of value * int * vtype
       (** array type with calculated interval : (from <val> with <size> of <type>) *)
 
@@ -97,6 +98,7 @@ and expr =
 (** statement *)
 and statement =
   | Assign of expr * expr (** assignment *)
+  | AssignFunc of expr * name (** assignment of function *)
   | ProcCall of expr (** procedure calling *)
   | If of expr * statement list * statement list (** if statement *)
   | While of expr * statement list (** while loop *)
