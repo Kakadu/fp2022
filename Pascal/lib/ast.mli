@@ -109,9 +109,8 @@ and statement =
 (** definition *)
 and define =
   | DType of name * ptype (** type definition *)
-  | DNDVariable of name * ptype (** variable definition without assignment *)
-  | DVariable of name * ptype * expr (** variable definition with assignment by expr *)
-  | DDVariable of name * ptype * value (** variable definition with assignment by value *)
+  | DVariable of name * ptype (** variable definition without assignment *)
+  | DDVariable of name * ptype * expr (** variable definition with assignment by expr *)
   | DConst of name * expr (** const definition by expr *)
   | DDConst of name * value (** const definition by value *)
   | DFunction of name * ptype * ptype fun_param list * t (** function definition *)

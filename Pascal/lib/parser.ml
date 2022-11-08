@@ -405,7 +405,7 @@ let rec definition s =
       List.fold_right
         (fun n acc ->
           match acc, n with
-          | Some l, DNDVariable (n, tp) -> Some (f n tp :: l)
+          | Some l, DVariable (n, tp) -> Some (f n tp :: l)
           | _ -> None)
         lst
         (Some [])
@@ -480,8 +480,8 @@ let rec definition s =
       let* exp = option None (token "=" >> expr => fun exp -> Some exp) in
       let helper n acc =
         match exp with
-        | None -> DNDVariable (n, tp) :: acc
-        | Some exp -> DVariable (n, tp, exp) :: acc
+        | None -> DVariable (n, tp) :: acc
+        | Some exp -> DDVariable (n, tp, exp) :: acc
       in
       return (List.fold_right helper vars [])
     in
@@ -538,7 +538,7 @@ let%test "definition 1" =
   check_parser
     definition
     "var arr : array [1..10] of array ['a'..'b'] of integer;"
-    [ DNDVariable
+    [ DVariable
         ( "arr"
         , PTArray
             ( Const (VInt 1)
@@ -551,7 +551,7 @@ let%test "definition 2" =
   check_parser
     definition
     "var a, b: integer;"
-    [ DNDVariable ("a", PTInt); DNDVariable ("b", PTInt) ]
+    [ DVariable ("a", PTInt); DVariable ("b", PTInt) ]
 ;;
 
 let%test "definition 3" =
@@ -565,21 +565,21 @@ let%test "definition 4" =
   check_parser
     definition
     "var p : procedure (const x : string);"
-    [ DNDVariable ("p", PTFunction ([ FPConst ("x", PTString) ], PTVoid)) ]
+    [ DVariable ("p", PTFunction ([ FPConst ("x", PTString) ], PTVoid)) ]
 ;;
 
 let%test "definition 5" =
   check_parser
     definition
     "var i : integer = 42;"
-    [ DVariable ("i", PTInt, Const (VInt 42)) ]
+    [ DDVariable ("i", PTInt, Const (VInt 42)) ]
 ;;
 
 let%test "definition 6" =
   check_parser
     definition
     "var r : record i : integer; f : real; end;"
-    [ DNDVariable ("r", PTRecord [ "i", PTInt; "f", PTFloat ]) ]
+    [ DVariable ("r", PTRecord [ "i", PTInt; "f", PTFloat ]) ]
 ;;
 
 let pascal_program = program << token "." << many any
@@ -613,8 +613,8 @@ let%test "Create and use add func" =
           writeln('x + y = ', add(x, y));
         end.
     |}
-    ( [ DNDVariable ("x", PTInt)
-      ; DNDVariable ("y", PTInt)
+    ( [ DVariable ("x", PTInt)
+      ; DVariable ("y", PTInt)
       ; DFunction
           ( "add"
           , PTInt

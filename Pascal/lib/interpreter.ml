@@ -225,6 +225,11 @@ and eval_stmt s w =
       let arr_add a i v =
         match a with
         | VArray (s, l, t, a) -> VArray (s, l, t, ImArray.set a (iter_arr s i) v)
+        | VString s ->
+          (match i, v with
+           | VInt i, VChar v ->
+             VString (String.mapi (fun ci c -> if ci = i then v else c) s)
+           | _ -> raise (PascalInterp RunTimeError))
         | _ -> raise (PascalInterp RunTimeError)
       in
       let rec_add r n v =
@@ -424,6 +429,105 @@ let%test "array rec" =
       end.
     |}
     [ "x", VVariable (VInt 42); "y", VVariable (VInt 41); "z", VVariable (VInt 1) ]
+;;
+
+let%test "string add char" =
+  check_interp
+    {|
+      var
+        s : string;
+        c : char;
+      begin
+        s := 'str';
+        c := 'n';
+        s := c + s;
+      end.
+    |}
+    [ "s", VVariable (VString "nstr") ]
+;;
+
+let%test "string overflow" =
+  try
+    check_interp
+      {|
+      var
+        s : string[2];
+      begin
+        s := 'str';
+      end.
+    |}
+      [ "s", VVariable (VString "str") ]
+    |> fun _ -> false
+  with
+  | PascalInterp (ArrayOutOfInd (VTString _, _)) -> true
+;;
+
+let%test "string overflow" =
+  check_interp
+    {|
+      var
+        s : string[2];
+      begin
+        s := 'st';
+      end.
+    |}
+    [ "s", VVariable (VString "st") ]
+;;
+
+let%test "string overflow" =
+  try
+    check_interp
+      {|
+      var
+        s : string[2] = 'abc';
+      begin
+      end.
+    |}
+      [ "s", VVariable (VString "str") ]
+    |> fun _ -> false
+  with
+  | PascalInterp (ArrayOutOfInd (VTString _, _)) -> true
+;;
+
+let%test "string not overflow" =
+  check_interp
+    {|
+      var
+        s : string[2] = 'ab';
+      begin
+      end.
+    |}
+    [ "s", VVariable (VString "ab") ]
+;;
+
+let%test "string sum" =
+  check_interp
+    {|
+      var
+        s : string;
+      begin
+        s := 'hello' + ' ' + 'world!';
+      end.
+    |}
+    [ "s", VVariable (VString "hello world!") ]
+;;
+
+let%test "string as array" =
+  check_interp
+    {|
+      var
+        s : string = '0123456';
+        c1, c2 : char;
+      begin
+        c1 := s[3];
+        s[3] := 'x';
+        c2 := s[3];
+      end.
+    |}
+    [ "c1", VVariable (VChar '3')
+    ; "c2", VVariable (VChar 'x')
+    ; "s", VVariable (VString "012x456")
+    ]
 ;;
 
 let%test "func" =

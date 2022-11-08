@@ -4,6 +4,7 @@
 
 open Ast
 open Exceptions
+open VTypeBasics
 
 type t = world list
 
@@ -32,10 +33,18 @@ let load n worlds =
   | _ -> raise (PascalInterp (VariableNotFound n))
 ;;
 
-let replace n v w =
+let replace : name -> vtype * variable -> t -> t =
+ fun n (t, v) w ->
   let rec helper acc = function
-    | h :: tl when KeyMap.mem n h -> acc, KeyMap.add n v h :: tl
-    | h :: tl -> helper (h :: acc) tl
+    | h :: tl ->
+      (match KeyMap.find_opt n h with
+       | Some (ht, _) when compare_types ht t ->
+         (match ht, v with
+          | VTString sz, (VVariable (VString s as vs) | VConst (VString s as vs))
+            when String.length s > sz -> raise (PascalInterp (ArrayOutOfInd (ht, vs)))
+          | _ -> acc, KeyMap.add n (ht, v) h :: tl)
+       | Some _ -> raise (PascalInterp RunTimeError)
+       | None -> helper (h :: acc) tl)
     | [] -> raise (PascalInterp (VariableNotFound n))
   in
   let h, tl = helper [] w in

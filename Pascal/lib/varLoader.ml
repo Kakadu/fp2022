@@ -79,15 +79,12 @@ let load_variables : define list -> world =
       | DType (n, t) ->
         let t = vtype t in
         n, (t, tp)
-      | DNDVariable (n, t) ->
+      | DVariable (n, t) ->
         let t = vtype t in
         n, (t, var (construct t))
-      | DVariable (n, t, e) ->
+      | DDVariable (n, t, e) ->
         let t = vtype t in
         n, (t, var (eval_expr e))
-      | DDVariable (n, t, v) ->
-        let t = vtype t in
-        n, (t, var v)
       | DConst (n, e) ->
         let v = eval_expr e in
         n, (get_type_val v, const v)
@@ -97,7 +94,7 @@ let load_variables : define list -> world =
         let fun_param_def =
           List.map
             (function
-             | FPFree (n, t) | FPOut (n, t) -> DNDVariable (n, t)
+             | FPFree (n, t) | FPOut (n, t) -> DVariable (n, t)
              | FPConst (n, t) -> DDConst (n, construct (vtype t)))
             p
         in
@@ -116,7 +113,7 @@ let load_variables : define list -> world =
       match w with
       | [] -> [ KeyMap.add name value KeyMap.empty ]
       | h :: _ when KeyMap.mem name h -> raise (PascalInterp (DupVarName name))
-      | h :: tl -> KeyMap.add name value h :: tl
+      | h :: tl -> Worlds.replace name value (KeyMap.add name value h :: tl)
     in
     match List.fold_left (fun w d -> add_to_world w d) w def with
     | [] -> KeyMap.empty
@@ -141,19 +138,18 @@ let%test "load variables test" =
     world_cmp
     (load_variables
        [ DConst ("n", BinOp (Add, Const (VInt 2), Const (VInt 2)))
-       ; DNDVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
+       ; DVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
        ; DFunction
            ( "f"
            , PTBool
            , []
-           , ( [ DNDVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
+           , ( [ DVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
                ; DConst ("n", BinOp (Add, Const (VInt 5), Variable "n"))
                ; DFunction
                    ( "ff"
                    , PTBool
                    , []
-                   , ( [ DNDVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool))
-                       ]
+                   , ( [ DVariable ("a", PTArray (Const (VInt 0), Variable "n", PTBool)) ]
                      , [] ) )
                ]
              , [] ) )

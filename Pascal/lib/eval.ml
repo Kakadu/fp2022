@@ -341,6 +341,11 @@ let get_arr ind = function
     if act_ind < 0 || act_ind >= size
     then raise (PascalInterp (ArrayOutOfInd (get_type_val v, ind)))
     else ImArray.get arr act_ind
+  | VString s ->
+    (match ind with
+     | VInt ind when ind < String.length s -> VChar (String.get s ind)
+     | VInt _ -> raise (PascalInterp (ArrayOutOfInd (VTString (String.length s), ind)))
+     | _ -> raise (PascalInterp (InvalidType (VTInt, get_type_val ind))))
   | v -> raise (PascalInterp (ArrayTypeError (get_type_val v)))
 ;;
 
@@ -353,6 +358,7 @@ let%test "get arr" =
 
 let get_arr_type ind = function
   | VTArray (start, _, t) when compare_types (get_type_val start) ind -> t
+  | VTString _ when compare_types VTInt ind -> VTChar
   | t -> raise (PascalInterp (ArrayTypeError t))
 ;;
 
