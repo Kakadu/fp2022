@@ -414,6 +414,24 @@ let%test "array rec" =
     [ "x", VVariable (VInt 42); "y", VVariable (VInt 41); "z", VVariable (VInt 1) ]
 ;;
 
+let%test "array overflow" =
+  try
+    check_interp
+      {|
+        var
+          x, y, z : integer;
+          a : array [0..1] of integer;
+        begin
+          a[42] := 42;
+          x := 0;
+        end.
+      |}
+      [ "x", VVariable (VInt 0) ]
+    |> fun _ -> false
+  with
+  | PascalInterp (ArrayOutOfInd (VTArray (VInt 0, 2, VTInt), VInt 42)) -> true
+;;
+
 let%test "string add char" =
   check_interp
     {|
@@ -433,12 +451,12 @@ let%test "string overflow" =
   try
     check_interp
       {|
-      var
-        s : string[2];
-      begin
-        s := 'str';
-      end.
-    |}
+        var
+          s : string[2];
+        begin
+          s := 'str';
+        end.
+      |}
       [ "s", VVariable (VString "str") ]
     |> fun _ -> false
   with
@@ -461,11 +479,11 @@ let%test "string overflow" =
   try
     check_interp
       {|
-      var
-        s : string[2] = 'abc';
-      begin
-      end.
-    |}
+        var
+          s : string[2] = 'abc';
+        begin
+        end.
+      |}
       [ "s", VVariable (VString "str") ]
     |> fun _ -> false
   with
@@ -533,20 +551,20 @@ let%test "func as arg" =
   try
     check_interp
       {|
-      type
-        int_f = function : integer;
-      var
-        x : integer;
-        f : int_f;
-        function some_f : integer;
+        type
+          int_f = function : integer;
+        var
+          x : integer;
+          f : int_f;
+          function some_f : integer;
+          begin
+            some_f := 42;
+          end;
         begin
-          some_f := 42;
-        end;
-      begin
-        f := some_f;
-        x := f();
-      end.
-    |}
+          f := some_f;
+          x := f();
+        end.
+      |}
       [ "x", VVariable (VInt 42) ]
     |> fun _ -> false
   with
