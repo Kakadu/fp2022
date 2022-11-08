@@ -7,16 +7,14 @@ open Exceptions
 open Eval
 open VTypeBasics
 
-let load_variables : define list -> world =
- fun def ->
+let load_variables def =
   let rec load_variables_in def w =
     let var v = VVariable v in
     let const v = VConst v in
     let tp = VType in
     let def_to_world w =
       let eval_expr e = eval_expr_const e w in
-      let rec vtype : ptype -> vtype =
-       fun t ->
+      let rec load t =
         let rec eval = function
           | PTBool -> VTBool
           | PTInt -> VTInt
@@ -33,13 +31,13 @@ let load_variables : define list -> world =
             let list_to_map =
               let add_to_map w (n, t) =
                 match w with
-                | w when not (KeyMap.mem n w) -> KeyMap.add n (vtype t) w
+                | w when not (KeyMap.mem n w) -> KeyMap.add n (load t) w
                 | _ -> raise (PascalInterp (DupVarName n))
               in
               List.fold_left add_to_map KeyMap.empty
             in
             VTDRecord (list_to_map l)
-          | PTFunction (p, t) -> VTFunction (vtype_fun_param p, vtype t)
+          | PTFunction (p, t) -> VTFunction (load_fun_param p, load t)
           | PTArray (e1, e2, t) ->
             let v1 = eval_expr e1 in
             let v2 = eval_expr e2 in
@@ -56,12 +54,12 @@ let load_variables : define list -> world =
         | VTArray ((VChar _ | VInt _ | VBool _), s, _) as arr when s > 0 -> arr
         | VTArray _ -> raise (PascalInterp TypeError)
         | ok -> ok
-      and vtype_fun_param pl =
+      and load_fun_param pl =
         List.map
           (function
-           | FPFree (n, t) -> FPFree (n, vtype t)
-           | FPOut (n, t) -> FPOut (n, vtype t)
-           | FPConst (n, t) -> FPConst (n, vtype t))
+           | FPFree (n, t) -> FPFree (n, load t)
+           | FPOut (n, t) -> FPOut (n, load t)
+           | FPConst (n, t) -> FPConst (n, load t))
           pl
       in
       let rec construct = function
@@ -77,28 +75,28 @@ let load_variables : define list -> world =
       in
       function
       | DType (n, t) ->
-        let t = vtype t in
+        let t = load t in
         n, (t, tp)
       | DVariable (n, t) ->
-        let t = vtype t in
+        let t = load t in
         n, (t, var (construct t))
       | DDVariable (n, t, e) ->
-        let t = vtype t in
+        let t = load t in
         n, (t, var (eval_expr e))
       | DConst (n, e) ->
         let v = eval_expr e in
         n, (get_type_val v, const v)
       | DDConst (n, v) -> n, (get_type_val v, const v)
       | DFunction (n, t, p, (d, c)) ->
-        let t = vtype t in
+        let t = load t in
         let fun_param_def =
           List.map
             (function
              | FPFree (n, t) | FPOut (n, t) -> DVariable (n, t)
-             | FPConst (n, t) -> DDConst (n, construct (vtype t)))
+             | FPConst (n, t) -> DDConst (n, construct (load t)))
             p
         in
-        let p = vtype_fun_param p in
+        let p = load_fun_param p in
         let fdef = fun_param_def @ d in
         let fw = load_variables_in fdef (KeyMap.empty :: w) in
         let fw =
