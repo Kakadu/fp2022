@@ -185,7 +185,7 @@ let binop =
       ; LShift, "<<"
       ]
     ; [ Add, "+"; Sub, "-"; Or, "or"; Xor, "xor" ]
-    ; [ Eq, "="; NotEq, "<>"; Less, "<"; LessEq, "<="; Greater, ">"; GreaterEq, ">=" ]
+    ; [ NotEq, "<>"; LessEq, "<="; GreaterEq, ">="; Eq, "="; Less, "<"; Greater, ">" ]
     ]
 ;;
 

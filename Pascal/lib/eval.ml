@@ -268,6 +268,12 @@ let eval_std_function n p =
     (match p with
      | [ VChar v ] -> VInt (Char.code v)
      | _ -> raise type_error)
+  | "length" ->
+    (match p with
+     | [ VChar _ ] -> VInt 1
+     | [ VString s ] -> VInt (String.length s)
+     | [ VArray (_, s, _, _) ] -> VInt s
+     | _ -> raise type_error)
   | _ -> raise error
 ;;
 
@@ -296,6 +302,12 @@ let eval_std_function_type n pt =
   | "ord" ->
     (match pt with
      | [ VTChar ] -> VTChar
+     | _ -> raise type_error)
+  | "length" ->
+    (match pt with
+     | [ VTChar ] -> VTInt
+     | [ VTString _ ] -> VTInt
+     | [ VTArray _ ] -> VTInt
      | _ -> raise type_error)
   | _ -> raise error
 ;;

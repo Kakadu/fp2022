@@ -56,9 +56,10 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   let eval_stmt_list_loop sl = eval_stmt_list_type ~func ~loop:true sl w in
   match s with
   | Assign (l, r) when is_l_value l w ->
-    (match eval_expr r with
-     | VTConstFunction _ -> false
-     | r -> compare_types (eval_expr l) r)
+    (match eval_expr l, eval_expr r with
+     | _, VTConstFunction _ -> false
+     | VTString _, VTChar -> true
+     | l, r -> compare_types l r)
   | AssignFunc (l, r) when is_l_value l w ->
     compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
   | Assign _ | AssignFunc _ -> raise (PascalInterp LeftValError)
@@ -210,14 +211,15 @@ and eval_stmt s w =
         let i, w = eval_expr i w in
         helper w (fun a v -> arr_add a i (f (get_arr i a) v)) e
       | GetRec (e, n) -> helper w (fun a v -> rec_add a n (f (get_rec n a) v)) e
-      | Variable n ->
-        (match Worlds.load n w with
-         | t, VVariable v ->
-           let e, w = eval r w in
-           Worlds.replace n (t, VVariable (f v e)) w
+      | Variable l ->
+        (match Worlds.load l w with
+         | _, VVariable v ->
+           let nv, w = eval r w in
+           let nv = f v nv in
+           Worlds.replace l (get_type_val nv, VVariable nv) w
          | t, VFunctionResult v ->
            let e, w = eval r w in
-           Worlds.replace n (t, VFunctionResult (f v e)) w
+           Worlds.replace l (t, VFunctionResult (f v e)) w
          | _, (VConst _ | VType) -> raise (PascalInterp RunTimeError))
       | _ -> raise (PascalInterp RunTimeError)
     in
@@ -517,6 +519,21 @@ let%test "string as array" =
     ; "c2", VVariable (VChar 'x')
     ; "s", VVariable (VString "012x456")
     ]
+;;
+
+let%test "string as array and length fun" =
+  check_interp
+    {|
+      const n = 5;
+      var
+        s : string;
+      begin
+        if length('hello world') <= n then s := 'hello world'
+        else if length('x') <= n then s := 'x'
+        else s := '!';
+      end.
+    |}
+    [ "s", VVariable (VString "x") ]
 ;;
 
 let%test "func" =

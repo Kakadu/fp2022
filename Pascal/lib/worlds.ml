@@ -26,6 +26,13 @@ let replace : name -> vtype * variable -> t -> t =
           | VTString sz, (VVariable (VString s as vs) | VConst (VString s as vs))
             when String.length s > sz -> raise (PascalInterp (ArrayOutOfInd (ht, vs)))
           | _ -> acc, KeyMap.add n (ht, v) h :: tl)
+       | Some ((VTString i as ht), _) when compare_types VTChar t && i > 0 ->
+         (match v with
+          | VVariable (VChar c) ->
+            acc, KeyMap.add n (ht, VVariable (VString (String.make 1 c))) h :: tl
+          | VConst (VChar c) ->
+            acc, KeyMap.add n (ht, VConst (VString (String.make 1 c))) h :: tl
+          | _ -> raise (PascalInterp RunTimeError))
        | Some _ -> raise (PascalInterp RunTimeError)
        | None -> helper (h :: acc) tl)
     | [] -> raise (PascalInterp (VariableNotFound n))
