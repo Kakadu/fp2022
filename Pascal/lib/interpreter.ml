@@ -373,7 +373,7 @@ let%test "type casting" =
       begin
         x := 32;
         y := 10;
-        r := x + y;
+        r := add(x, y);
       end.
     |}
     [ "r", VVariable (VFloat (Float.of_int 32 +. Float.of_int 10)) ]
