@@ -275,7 +275,7 @@ let eval_std_function n p =
   | "length" ->
     (match p with
      | [ VChar _ ] -> VInt 1
-     | [ VString (s, i) ] -> VInt i
+     | [ VString (_, i) ] -> VInt i
      | [ VArray (_, s, _, _) ] -> VInt s
      | _ -> raise type_error)
   | _ -> raise error
