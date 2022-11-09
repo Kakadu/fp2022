@@ -1,0 +1,21 @@
+(library
+ (name lambda_lib)
+ (public_name Lambda.Lib)
+ (modules
+  Ast
+  ;Lambda
+  ;Interpret
+  Parser
+  ;Printast
+  ;Pprintast
+  ;utils
+  ;Tests
+  Lexer
+  ;Errors
+  ;Mark
+  ;Positions
+  )
+ (libraries core angstrom re)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show))
+ (inline_tests))
