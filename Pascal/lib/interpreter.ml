@@ -463,7 +463,7 @@ let%test "string overflow" =
   | PascalInterp (ArrayOutOfInd (VTString _, _)) -> true
 ;;
 
-let%test "string overflow" =
+let%test "string not overflow" =
   check_interp
     {|
       var
@@ -547,7 +547,7 @@ let%test "func" =
     [ "x", VVariable (VInt 42) ]
 ;;
 
-let%test "func as arg" =
+let%test "func as arg wrong using" =
   try
     check_interp
       {|
