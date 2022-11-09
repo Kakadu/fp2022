@@ -59,6 +59,8 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
     (match eval_expr l, eval_expr r with
      | _, VTConstFunction _ -> false
      | VTString _, VTChar -> true
+     | VTInt, VTFloat -> true
+     | VTFloat, VTInt -> true
      | l, r -> compare_types l r)
   | AssignFunc (l, r) when is_l_value l w ->
     compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
@@ -327,6 +329,22 @@ let%test "(2 + 2) * 2" =
       end.
     |}
     [ "x", VVariable (VInt 8) ]
+;;
+
+let%test "special assigns" =
+  check_interp
+    {|
+      var
+        i : integer;
+        f : real;
+        s : string;
+      begin
+        i := 2.;
+        f := 2;
+        s := 'c';
+      end.
+    |}
+    [ "i", VVariable (VInt 2); "f", VVariable (VFloat 2.); "s", VVariable (VString "c") ]
 ;;
 
 let%test "simple prog" =

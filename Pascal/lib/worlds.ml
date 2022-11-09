@@ -33,6 +33,20 @@ let replace : name -> vtype * variable -> t -> t =
           | VConst (VChar c) ->
             acc, KeyMap.add n (ht, VConst (VString (String.make 1 c))) h :: tl
           | _ -> raise (PascalInterp RunTimeError))
+       | Some ((VTInt as ht), _) when compare_types VTFloat t ->
+         (match v with
+          | VVariable (VFloat v) ->
+            acc, KeyMap.add n (ht, VVariable (VInt (Float.to_int v))) h :: tl
+          | VConst (VFloat v) ->
+            acc, KeyMap.add n (ht, VConst (VInt (Float.to_int v))) h :: tl
+          | _ -> raise (PascalInterp RunTimeError))
+       | Some ((VTFloat as ht), _) when compare_types VTInt t ->
+         (match v with
+          | VVariable (VInt v) ->
+            acc, KeyMap.add n (ht, VVariable (VFloat (Int.to_float v))) h :: tl
+          | VConst (VInt v) ->
+            acc, KeyMap.add n (ht, VConst (VFloat (Int.to_float v))) h :: tl
+          | _ -> raise (PascalInterp RunTimeError))
        | Some _ -> raise (PascalInterp RunTimeError)
        | None -> helper (h :: acc) tl)
     | [] -> raise (PascalInterp (VariableNotFound n))
