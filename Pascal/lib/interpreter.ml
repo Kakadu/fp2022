@@ -547,6 +547,23 @@ let%test "func" =
     [ "x", VVariable (VInt 42) ]
 ;;
 
+let%test "func exit" =
+  check_interp
+    {|
+      var
+        x : integer;
+        function f : integer;
+        begin
+          for f := 0 to 50 do
+            if f = 42 then exit;
+        end;
+      begin
+        x := f();
+      end.
+    |}
+    [ "x", VVariable (VInt 42) ]
+;;
+
 let%test "func as arg wrong using" =
   try
     check_interp
