@@ -9,3 +9,6 @@ val get_type_val : value -> vtype
 
 (** Compare types except types with expr in definition. *)
 val compare_types : vtype -> vtype -> bool
+
+val cast : vtype -> value -> value
+val cast_type : vtype -> vtype -> bool

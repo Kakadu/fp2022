@@ -3,6 +3,7 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
+open Exceptions
 
 let get_type_val = function
   | VBool _ -> VTBool
@@ -46,3 +47,49 @@ let rec compare_types t1 t2 =
 ;;
 
 let%test "simple type cmp" = compare_types VTBool VTBool
+
+let cast t v =
+  match t, v with
+  | t, v when compare_types t (get_type_val v) -> v
+  | VTInt, VFloat v -> VInt (Float.to_int v)
+  | VTFloat, VInt v -> VFloat (Int.to_float v)
+  | VTString i, VChar c when i > 0 -> VString (String.make 1 c)
+  | VTString i, VArray (_, vsz, VTChar, v) ->
+    VString
+      (List.fold_left
+         (fun (i, s) -> function
+           | VChar c when i > 0 -> i - 1, String.make 1 c ^ s
+           | _ -> i, s)
+         (min i vsz, "")
+         (ImArray.to_list v)
+      |> fun (_, s) -> s)
+  | VTArray (ts, tsz, VTChar), VString s ->
+    let _, content_list =
+      Seq.fold_left
+        (fun (i, l) -> function
+          | c when i > 0 -> i - 1, VChar c :: l
+          | _ -> i, l)
+        (min (String.length s) tsz, [])
+        (String.to_seq s)
+    in
+    let arr =
+      ImArray.of_list
+        (List.rev
+           (List.rev_append
+              (List.init (max (tsz - String.length s) 0) (fun _ -> VChar (Char.chr 0)))
+              content_list))
+    in
+    VArray (ts, tsz, VTChar, arr)
+  | _ -> raise (PascalInterp (CantCast (v, t)))
+;;
+
+let cast_type t vt =
+  match t, vt with
+  | t, vt when compare_types t vt -> true
+  | VTInt, VTFloat
+  | VTFloat, VTInt
+  | VTString _, VTArray (_, _, VTChar)
+  | VTArray (_, _, VTChar), VTString _ -> true
+  | VTString i, VTChar when i > 0 -> true
+  | _ -> false
+;;

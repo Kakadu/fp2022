@@ -25,6 +25,7 @@ exception ArrayOutOfInd of vtype * value
 exception InvalidCall of name
 exception CantCall of value
 exception InvalidType of vtype * vtype
+exception CantCast of value * vtype
 exception RunTimeError
 exception ParserError
 exception SemanticError
