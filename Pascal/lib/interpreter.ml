@@ -59,8 +59,7 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   | AssignFunc (l, r) when is_l_value l w ->
     compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
   | Assign _ | AssignFunc _ -> raise (PascalInterp LeftValError)
-  | ProcCall (Call _ as e) -> eval_expr e |> fun _ -> true
-  | ProcCall _ -> false
+  | ProcCall (f, pl) -> eval_expr (Call (f, pl)) |> fun _ -> true
   | If (b, t, e) -> cast_type VTBool (eval_expr b) && eval_stmt_list t && eval_stmt_list e
   | While (b, t) | Repeat (b, t) ->
     cast_type VTBool (eval_expr b) && eval_stmt_list_loop t
@@ -221,8 +220,7 @@ and eval_stmt s w =
   | Assign (l, r) -> assign l eval_expr r w
   | AssignFunc (l, r) ->
     assign l (fun f w -> Worlds.load_const_fun f w |> fun (_, v) -> v, w) r w
-  | ProcCall (Call _ as e) -> eval_expr e w |> fun (_, w) -> w
-  | ProcCall _ -> raise (PascalInterp RunTimeError)
+  | ProcCall (e, pl) -> eval_expr (Call (e, pl)) w |> fun (_, w) -> w
   | If (e, ts, es) ->
     let b, w = eval_expr e w in
     (match b with

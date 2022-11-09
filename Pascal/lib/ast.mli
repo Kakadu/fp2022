@@ -99,7 +99,7 @@ and expr =
 and statement =
   | Assign of expr * expr (** assignment *)
   | AssignFunc of expr * name (** assignment of function *)
-  | ProcCall of expr (** procedure calling *)
+  | ProcCall of expr * expr list (** procedure calling *)
   | If of expr * statement list * statement list (** if statement *)
   | While of expr * statement list (** while loop *)
   | Repeat of expr * statement list (** repeat-until loop *)

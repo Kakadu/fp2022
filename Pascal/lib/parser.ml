@@ -318,7 +318,12 @@ let rec statement s =
     let rec at s = (token "@" >> name <|> between (token "(") (token ")") at) s in
     at => fun right -> AssignFunc (left, right)
   in
-  let proc_call_st = expr => fun x -> ProcCall x in
+  let proc_call_st =
+    expr
+    >>= function
+    | Call (e, pl) -> return (ProcCall (e, pl))
+    | _ -> mzero
+  in
   let if_st =
     let* condition = token "if" >> expr in
     let* then_block = token "then" >> statement_block in
@@ -598,7 +603,7 @@ let%test "Hello world" =
   check_parser
     pascal_program
     "begin writeln(\'hello world\'); end."
-    ([], [ ProcCall (Call (Variable "writeln", [ Const (VString ("hello world", 11)) ])) ])
+    ([], [ ProcCall (Variable "writeln", [ Const (VString ("hello world", 11)) ]) ])
 ;;
 
 let%test "Create and use add func" =
@@ -625,14 +630,13 @@ let%test "Create and use add func" =
           , [ FPFree ("x", PTInt); FPFree ("y", PTInt) ]
           , ([], [ Assign (Variable "add", BinOp (Add, Variable "x", Variable "y")) ]) )
       ]
-    , [ ProcCall (Call (Variable "readln", [ Variable "x" ]))
-      ; ProcCall (Call (Variable "readln", [ Variable "y" ]))
+    , [ ProcCall (Variable "readln", [ Variable "x" ])
+      ; ProcCall (Variable "readln", [ Variable "y" ])
       ; ProcCall
-          (Call
-             ( Variable "writeln"
-             , [ Const (VString ("x + y = ", 8))
-               ; Call (Variable "add", [ Variable "x"; Variable "y" ])
-               ] ))
+          ( Variable "writeln"
+          , [ Const (VString ("x + y = ", 8))
+            ; Call (Variable "add", [ Variable "x"; Variable "y" ])
+            ] )
       ] )
 ;;
 
