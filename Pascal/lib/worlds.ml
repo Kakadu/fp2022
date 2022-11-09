@@ -16,37 +16,15 @@ let load n worlds =
   | _ -> raise (PascalInterp (VariableNotFound n))
 ;;
 
-let replace : name -> vtype * variable -> t -> t =
+let replace : name -> vtype * value -> t -> t =
  fun n (t, v) w ->
   let rec helper acc = function
     | h :: tl ->
       (match KeyMap.find_opt n h with
-       | Some (ht, _) when compare_types ht t ->
-         (match ht, v with
-          | VTString sz, (VVariable (VString s as vs) | VConst (VString s as vs))
-            when String.length s > sz -> raise (PascalInterp (ArrayOutOfInd (ht, vs)))
-          | _ -> acc, KeyMap.add n (ht, v) h :: tl)
-       | Some ((VTString i as ht), _) when compare_types VTChar t && i > 0 ->
-         (match v with
-          | VVariable (VChar c) ->
-            acc, KeyMap.add n (ht, VVariable (VString (String.make 1 c))) h :: tl
-          | VConst (VChar c) ->
-            acc, KeyMap.add n (ht, VConst (VString (String.make 1 c))) h :: tl
-          | _ -> raise (PascalInterp RunTimeError))
-       | Some ((VTInt as ht), _) when compare_types VTFloat t ->
-         (match v with
-          | VVariable (VFloat v) ->
-            acc, KeyMap.add n (ht, VVariable (VInt (Float.to_int v))) h :: tl
-          | VConst (VFloat v) ->
-            acc, KeyMap.add n (ht, VConst (VInt (Float.to_int v))) h :: tl
-          | _ -> raise (PascalInterp RunTimeError))
-       | Some ((VTFloat as ht), _) when compare_types VTInt t ->
-         (match v with
-          | VVariable (VInt v) ->
-            acc, KeyMap.add n (ht, VVariable (VFloat (Int.to_float v))) h :: tl
-          | VConst (VInt v) ->
-            acc, KeyMap.add n (ht, VConst (VFloat (Int.to_float v))) h :: tl
-          | _ -> raise (PascalInterp RunTimeError))
+       | Some (ht, VVariable _) when cast_type ht t ->
+         acc, KeyMap.add n (ht, VVariable (cast ht v)) h :: tl
+       | Some (ht, VFunctionResult _) when cast_type ht t ->
+         acc, KeyMap.add n (ht, VFunctionResult (cast ht v)) h :: tl
        | Some _ -> raise (PascalInterp RunTimeError)
        | None -> helper (h :: acc) tl)
     | [] -> raise (PascalInterp (VariableNotFound n))

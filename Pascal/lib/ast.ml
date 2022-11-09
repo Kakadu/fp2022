@@ -55,7 +55,7 @@ and vtype =
   | VTChar (** char type *)
   | VTVoid (** special type for procedure declaration *)
   | VTString of int (** string type with len *)
-  | VTDRecord of vtype KeyMap.t (** record type constructed *)
+  | VTRecord of vtype KeyMap.t (** record type constructed *)
   | VTFunction of vtype fun_param list * vtype (** function type *)
   | VTConstFunction of vtype fun_param list * vtype (** function actual body type *)
   | VTArray of value * int * vtype
@@ -68,7 +68,7 @@ and value =
   | VInt of int (** integer value *)
   | VFloat of float (** real value *)
   | VChar of char (** char value *)
-  | VString of string (** string value *)
+  | VString of string * int (** string value *)
   | VRecord of world (** record value *)
   | VFunction of name * vtype * vtype fun_param list * world * statement list
       (** function value : (<name> <result type> <param list> <local world> <realization>) *)

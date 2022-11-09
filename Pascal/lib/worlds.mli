@@ -20,7 +20,7 @@ Returns the found variable.
 *)
 val load : name -> t -> vtype * variable
 
-val replace : name -> vtype * variable -> t -> t
+val replace : name -> vtype * value -> t -> t
 val mem : name -> t -> bool
 
 (**

@@ -33,8 +33,8 @@ let rec eval_expr_type e w =
       List.for_all2 (fun p ep ->
         let tep = eval_expr ep in
         match p with
-        | FPFree (_, tp) | FPConst (_, tp) -> compare_types tp tep
-        | FPOut (_, tp) -> is_l_value ep w && compare_types tp tep)
+        | FPFree (_, tp) | FPConst (_, tp) -> cast_type tp tep
+        | FPOut (_, tp) -> is_l_value ep w && cast_type tp tep)
     in
     match f with
     | Variable fn ->
@@ -55,22 +55,15 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   let eval_stmt_list sl = eval_stmt_list_type ~func ~loop sl w in
   let eval_stmt_list_loop sl = eval_stmt_list_type ~func ~loop:true sl w in
   match s with
-  | Assign (l, r) when is_l_value l w ->
-    (match eval_expr l, eval_expr r with
-     | _, VTConstFunction _ -> false
-     | VTString _, VTChar -> true
-     | VTInt, VTFloat -> true
-     | VTFloat, VTInt -> true
-     | l, r -> compare_types l r)
+  | Assign (l, r) when is_l_value l w -> cast_type (eval_expr l) (eval_expr r)
   | AssignFunc (l, r) when is_l_value l w ->
     compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
   | Assign _ | AssignFunc _ -> raise (PascalInterp LeftValError)
   | ProcCall (Call _ as e) -> eval_expr e |> fun _ -> true
   | ProcCall _ -> false
-  | If (b, t, e) ->
-    compare_types (eval_expr b) VTBool && eval_stmt_list t && eval_stmt_list e
+  | If (b, t, e) -> cast_type VTBool (eval_expr b) && eval_stmt_list t && eval_stmt_list e
   | While (b, t) | Repeat (b, t) ->
-    compare_types (eval_expr b) VTBool && eval_stmt_list_loop t
+    cast_type VTBool (eval_expr b) && eval_stmt_list_loop t
   | For (n, s, f, t) ->
     let nt, _ = Worlds.load n w in
     let s = eval_expr s in
@@ -193,10 +186,11 @@ and eval_stmt s w =
       let arr_add a i v =
         match a with
         | VArray (s, l, t, a) -> VArray (s, l, t, ImArray.set a (iter_arr s i) v)
-        | VString s ->
+        | VString (s, _) ->
           (match i, v with
            | VInt i, VChar v ->
-             VString (String.mapi (fun ci c -> if ci = i then v else c) s)
+             let s = String.mapi (fun ci c -> if ci = i then v else c) s in
+             VString (s, String.length s)
            | _ -> raise (PascalInterp RunTimeError))
         | _ -> raise (PascalInterp RunTimeError)
       in
@@ -215,13 +209,9 @@ and eval_stmt s w =
       | GetRec (e, n) -> helper w (fun a v -> rec_add a n (f (get_rec n a) v)) e
       | Variable l ->
         (match Worlds.load l w with
-         | _, VVariable v ->
+         | t, (VVariable v | VFunctionResult v) ->
            let nv, w = eval r w in
-           let nv = f v nv in
-           Worlds.replace l (get_type_val nv, VVariable nv) w
-         | t, VFunctionResult v ->
-           let e, w = eval r w in
-           Worlds.replace l (t, VFunctionResult (f v e)) w
+           Worlds.replace l (t, f v nv) w
          | _, (VConst _ | VType) -> raise (PascalInterp RunTimeError))
       | _ -> raise (PascalInterp RunTimeError)
     in
@@ -251,8 +241,7 @@ and eval_stmt s w =
     let rec helper i w =
       let update_n w =
         match Worlds.load n w with
-        | t, VVariable _ -> Worlds.replace n (t, VVariable i) w
-        | t, VFunctionResult _ -> Worlds.replace n (t, VFunctionResult i) w
+        | t, (VVariable _ | VFunctionResult _) -> Worlds.replace n (t, i) w
         | _ -> raise (PascalInterp RunTimeError)
       in
       let w = update_n w in
@@ -296,15 +285,20 @@ let interpret s =
 exception ExpFnd of name * variable * variable
 
 let check_interp s l =
-  let w = interpret_no_catch s in
-  List.map
-    (fun (n, v) ->
-      Worlds.load n [ w ]
-      |> function
-      | _, wv when not (v = wv) -> raise (ExpFnd (n, v, wv))
-      | _ -> true)
-    l
-  |> fun _ -> true
+  try
+    let w = interpret_no_catch s in
+    List.map
+      (fun (n, v) ->
+        Worlds.load n [ w ]
+        |> function
+        | _, wv when not (v = wv) -> raise (ExpFnd (n, v, wv))
+        | _ -> true)
+      l
+    |> fun _ -> true
+  with
+  | ExpFnd (n, v1, v2) ->
+    Printf.printf "%s : %s | %s\n\n" n (show_variable v1) (show_variable v2);
+    false
 ;;
 
 let%test "2 + 2 * 2" =
@@ -335,16 +329,56 @@ let%test "special assigns" =
   check_interp
     {|
       var
-        i : integer;
         f : real;
-        s : string;
+        s : string[3];
+        a : array[1..5] of char;
+        h : string;
       begin
-        i := 2.;
         f := 2;
         s := 'c';
+        a := 'hello world, i am the string!';
+        h := a;
       end.
     |}
-    [ "i", VVariable (VInt 2); "f", VVariable (VFloat 2.); "s", VVariable (VString "c") ]
+    [ "f", VVariable (VFloat (Float.of_int 2))
+    ; "s", VVariable (VString ("c", 3))
+    ; "h", VVariable (VString ("hello", 255))
+    ]
+;;
+
+let%test "but we can not assigns" =
+  try
+    check_interp
+      {|
+        var
+          i : integer;
+        begin
+          i := 1.;
+        end.
+      |}
+      [ "i", VVariable (VInt 1) ]
+    |> fun _ -> false
+  with
+  | PascalInterp SemanticError -> true
+;;
+
+let%test "type casting" =
+  check_interp
+    {|
+      var
+        x, y : integer;
+        r : real;
+        function add (x, y : real) : real;
+        begin
+          add := x + y;
+        end;
+      begin
+        x := 32;
+        y := 10;
+        r := x + y;
+      end.
+    |}
+    [ "r", VVariable (VFloat (Float.of_int 32 +. Float.of_int 10)) ]
 ;;
 
 let%test "simple prog" =
@@ -452,23 +486,19 @@ let%test "string add char" =
         s := c + s;
       end.
     |}
-    [ "s", VVariable (VString "nstr") ]
+    [ "s", VVariable (VString ("nstr", 255)) ]
 ;;
 
 let%test "string overflow" =
-  try
-    check_interp
-      {|
-        var
-          s : string[2];
-        begin
-          s := 'str';
-        end.
-      |}
-      [ "s", VVariable (VString "str") ]
-    |> fun _ -> false
-  with
-  | PascalInterp (ArrayOutOfInd (VTString _, _)) -> true
+  check_interp
+    {|
+      var
+        s : string[2];
+      begin
+        s := 'str';
+      end.
+    |}
+    [ "s", VVariable (VString ("st", 2)) ]
 ;;
 
 let%test "string not overflow" =
@@ -480,22 +510,18 @@ let%test "string not overflow" =
         s := 'st';
       end.
     |}
-    [ "s", VVariable (VString "st") ]
+    [ "s", VVariable (VString ("st", 2)) ]
 ;;
 
 let%test "string overflow" =
-  try
-    check_interp
-      {|
-        var
-          s : string[2] = 'abc';
-        begin
-        end.
-      |}
-      [ "s", VVariable (VString "str") ]
-    |> fun _ -> false
-  with
-  | PascalInterp (ArrayOutOfInd (VTString _, _)) -> true
+  check_interp
+    {|
+      var
+        s : string[2] = 'abc';
+      begin
+      end.
+    |}
+    [ "s", VVariable (VString ("ab", 2)) ]
 ;;
 
 let%test "string not overflow" =
@@ -506,7 +532,7 @@ let%test "string not overflow" =
       begin
       end.
     |}
-    [ "s", VVariable (VString "ab") ]
+    [ "s", VVariable (VString ("ab", 2)) ]
 ;;
 
 let%test "string sum" =
@@ -518,7 +544,7 @@ let%test "string sum" =
         s := 'hello' + ' ' + 'world!';
       end.
     |}
-    [ "s", VVariable (VString "hello world!") ]
+    [ "s", VVariable (VString ("hello world!", 255)) ]
 ;;
 
 let%test "string as array" =
@@ -535,7 +561,7 @@ let%test "string as array" =
     |}
     [ "c1", VVariable (VChar '3')
     ; "c2", VVariable (VChar 'x')
-    ; "s", VVariable (VString "012x456")
+    ; "s", VVariable (VString ("012x456", 255))
     ]
 ;;
 
@@ -551,7 +577,7 @@ let%test "string as array and length fun" =
         else s := '!';
       end.
     |}
-    [ "s", VVariable (VString "x") ]
+    [ "s", VVariable (VString ("x", 255)) ]
 ;;
 
 let%test "func" =

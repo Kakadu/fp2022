@@ -10,8 +10,8 @@ let get_type_val = function
   | VInt _ -> VTInt
   | VFloat _ -> VTFloat
   | VChar _ -> VTChar
-  | VString s -> VTString (String.length s)
-  | VRecord w -> VTDRecord (KeyMap.map (fun (t, _) -> t) w)
+  | VString (_, i) -> VTString i
+  | VRecord w -> VTRecord (KeyMap.map (fun (t, _) -> t) w)
   | VFunction (_, t, p, _, _) -> VTFunction (p, t)
   | VArray (v, s, t, _) -> VTArray (v, s, t)
   | VVoid -> VTVoid
@@ -26,44 +26,44 @@ let rec compare_types t1 t2 =
   in
   match eval t1, eval t2 with
   | VTString _, VTString _ -> true
-  | VTDRecord w1, VTDRecord w2 -> KeyMap.equal compare_types w1 w2
+  | VTRecord w1, VTRecord w2 -> KeyMap.equal compare_types w1 w2
   | VTFunction (p1, t1), VTFunction (p2, t2) ->
     compare_types t1 t2
-    && List.fold_left2
-         (fun b p1 p2 ->
-           b
-           &&
+    && List.for_all2
+         (fun p1 p2 ->
            match p1, p2 with
            | FPFree (_, t1), FPFree (_, t2)
            | FPConst (_, t1), FPConst (_, t2)
            | FPOut (_, t1), FPOut (_, t2) -> compare_types t1 t2
            | _ -> false)
-         true
          p1
          p2
   | VTArray (s1, i1, t1), VTArray (s2, i2, t2) ->
-    s1 == s2 && i1 == i2 && compare_types t1 t2
-  | t1, t2 -> t1 == t2
+    s1 = s2 && i1 = i2 && compare_types t1 t2
+  | t1, t2 -> t1 = t2
 ;;
 
 let%test "simple type cmp" = compare_types VTBool VTBool
 
 let cast t v =
   match t, v with
-  | t, v when compare_types t (get_type_val v) -> v
-  | VTInt, VFloat v -> VInt (Float.to_int v)
+  | VTFunction _, VVoid -> VVoid
   | VTFloat, VInt v -> VFloat (Int.to_float v)
-  | VTString i, VChar c when i > 0 -> VString (String.make 1 c)
+  | VTString i, VString (s, _) when String.length s > i -> VString (String.sub s 0 i, i)
+  | VTString i, VString (s, _) -> VString (s, i)
+  | VTString i, VChar c when i > 0 -> VString (String.make 1 c, i)
   | VTString i, VArray (_, vsz, VTChar, v) ->
-    VString
-      (List.fold_left
-         (fun (i, s) -> function
-           | VChar c when i > 0 -> i - 1, String.make 1 c ^ s
-           | _ -> i, s)
-         (min i vsz, "")
-         (ImArray.to_list v)
-      |> fun (_, s) -> s)
-  | VTArray (ts, tsz, VTChar), VString s ->
+    let s =
+      List.fold_left
+        (fun (i, s) -> function
+          | VChar c when i > 0 -> i - 1, s ^ String.make 1 c
+          | _ -> i, s)
+        (min i vsz, "")
+        (ImArray.to_list v)
+      |> fun (_, s) -> s
+    in
+    VString (s, i)
+  | VTArray (ts, tsz, VTChar), VString (s, _) ->
     let _, content_list =
       Seq.fold_left
         (fun (i, l) -> function
@@ -80,16 +80,17 @@ let cast t v =
               content_list))
     in
     VArray (ts, tsz, VTChar, arr)
+  | t, v when compare_types t (get_type_val v) -> v
   | _ -> raise (PascalInterp (CantCast (v, t)))
 ;;
 
 let cast_type t vt =
   match t, vt with
-  | t, vt when compare_types t vt -> true
-  | VTInt, VTFloat
   | VTFloat, VTInt
   | VTString _, VTArray (_, _, VTChar)
   | VTArray (_, _, VTChar), VTString _ -> true
   | VTString i, VTChar when i > 0 -> true
+  | _, VTConstFunction _ -> false
+  | t, vt when compare_types t vt -> true
   | _ -> false
 ;;

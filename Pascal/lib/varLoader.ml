@@ -36,7 +36,7 @@ let load_variables def =
               in
               List.fold_left add_to_map KeyMap.empty
             in
-            VTDRecord (list_to_map l)
+            VTRecord (list_to_map l)
           | PTFunction (p, t) -> VTFunction (load_fun_param p, load t)
           | PTArray (e1, e2, t) ->
             let v1 = eval_expr e1 in
@@ -67,8 +67,8 @@ let load_variables def =
         | VTFloat -> VFloat 0.
         | VTChar -> VChar (Char.chr 0)
         | VTVoid -> VVoid
-        | VTString _ -> VString ""
-        | VTDRecord w -> VRecord (KeyMap.map (fun t -> t, VVariable (construct t)) w)
+        | VTString i -> VString ("", i)
+        | VTRecord w -> VRecord (KeyMap.map (fun t -> t, VVariable (construct t)) w)
         | VTFunction _ -> VVoid
         | VTConstFunction _ -> VVoid
         | VTArray (v, s, t) -> VArray (v, s, t, ImArray.make s (construct t))
@@ -107,11 +107,19 @@ let load_variables def =
         n, (VTConstFunction (p, t), const (VFunction (n, t, p, fw, c)))
     in
     let add_to_world w d =
-      let name, value = def_to_world w d in
+      let name, (t, v) = def_to_world w d in
+      let v =
+        match v with
+        | VConst (VFunction _) as v -> v
+        | VVariable v -> VVariable (cast t v)
+        | VConst v -> VConst (cast t v)
+        | VFunctionResult v -> VConst (cast t v)
+        | VType -> VType
+      in
       match w with
-      | [] -> [ KeyMap.add name value KeyMap.empty ]
+      | [] -> [ KeyMap.add name (t, v) KeyMap.empty ]
       | h :: _ when KeyMap.mem name h -> raise (PascalInterp (DupVarName name))
-      | h :: tl -> Worlds.replace name value (KeyMap.add name value h :: tl)
+      | h :: tl -> KeyMap.add name (t, v) h :: tl
     in
     match List.fold_left (fun w d -> add_to_world w d) w def with
     | [] -> KeyMap.empty

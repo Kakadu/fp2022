@@ -18,7 +18,7 @@ let rec eval_binop op v1 v2 =
     let evolution v =
       match v with
       | VInt v -> VFloat (Float.of_int v)
-      | VChar v -> VString (String.make 1 v)
+      | VChar v -> VString (String.make 1 v, 1)
       | v -> v
     in
     if compare_types (get_type_val v1) (get_type_val v2)
@@ -81,13 +81,15 @@ let rec eval_binop op v1 v2 =
        | _ -> raise error))
       (op, v1, v2)
   | VChar v1, VChar v2 ->
-    eval_binop op (VString (String.make 1 v1)) (VString (String.make 1 v2))
-  | VString v1, VString v2 ->
+    eval_binop op (VString (String.make 1 v1, 1)) (VString (String.make 1 v2, 1))
+  | VString (v1, _), VString (v2, _) ->
     ((fun (op, x, y) ->
-       VString
-         (match op with
-          | Add -> x ^ y
-          | _ -> raise error))
+       let s =
+         match op with
+         | Add -> x ^ y
+         | _ -> raise error
+       in
+       VString (s, String.length s))
     <|> fun (op, x, y) ->
     VBool
       (match op with
@@ -239,6 +241,7 @@ let eval_std_function n p =
      | _ -> raise type_error)
   | "round" ->
     (match p with
+     | [ (VInt _ as v) ] -> v
      | [ VFloat v ] -> VInt (Float.to_int (Float.round v))
      | _ -> raise type_error)
   | "sin" ->
@@ -258,6 +261,7 @@ let eval_std_function n p =
      | _ -> raise type_error)
   | "trunc" ->
     (match p with
+     | [ (VInt _ as v) ] -> v
      | [ VFloat v ] -> VInt (Float.to_int (Float.trunc v))
      | _ -> raise type_error)
   | "chr" ->
@@ -271,7 +275,7 @@ let eval_std_function n p =
   | "length" ->
     (match p with
      | [ VChar _ ] -> VInt 1
-     | [ VString s ] -> VInt (String.length s)
+     | [ VString (s, i) ] -> VInt i
      | [ VArray (_, s, _, _) ] -> VInt s
      | _ -> raise type_error)
   | _ -> raise error
@@ -293,7 +297,7 @@ let eval_std_function_type n pt =
      | _ -> raise type_error)
   | "round" | "trunc" ->
     (match pt with
-     | [ VTFloat ] -> VTInt
+     | [ VTInt ] | [ VTFloat ] -> VTInt
      | _ -> raise type_error)
   | "chr" ->
     (match pt with
@@ -329,7 +333,7 @@ let%test "get_rec test" =
 ;;
 
 let get_rec_type n = function
-  | VTDRecord w as t ->
+  | VTRecord w as t ->
     (match KeyMap.find_opt n w with
      | Some t -> t
      | None -> raise (PascalInterp (RecordFieldError (t, n))))
@@ -370,10 +374,10 @@ let get_arr ind = function
     if act_ind < 0 || act_ind >= size
     then raise (PascalInterp (ArrayOutOfInd (get_type_val v, ind)))
     else ImArray.get arr act_ind
-  | VString s ->
+  | VString (s, sz) ->
     (match ind with
-     | VInt ind when ind < String.length s -> VChar (String.get s ind)
-     | VInt _ -> raise (PascalInterp (ArrayOutOfInd (VTString (String.length s), ind)))
+     | VInt ind when ind < sz -> VChar (String.get s ind)
+     | VInt _ -> VChar (Char.chr 0)
      | _ -> raise (PascalInterp (InvalidType (VTInt, get_type_val ind))))
   | v -> raise (PascalInterp (ArrayTypeError (get_type_val v)))
 ;;

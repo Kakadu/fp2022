@@ -153,7 +153,7 @@ let value =
        [ (float => fun r -> VFloat r)
        ; (integer => fun r -> VInt r)
        ; (char => fun r -> VChar r)
-       ; (string => fun r -> VString r)
+       ; (string => fun r -> VString (r, String.length r))
        ; (bool => fun r -> VBool r)
        ]
 ;;
@@ -165,7 +165,11 @@ let%test "value char c" = check_parser value "\'c\'" (VChar 'c')
 let%test "value char ascii 65 (A)" = check_parser value "\'@65\'" (VChar (Char.chr 65))
 let%test "value char quote" = check_parser value "\'\\\'\'" (VChar '\'')
 let%test "value char slash" = check_parser value "\'\\\\\'" (VChar '\\')
-let%test "value string" = check_parser value "\'foo \\\'bar\\\'\'" (VString "foo \'bar\'")
+
+let%test "value string" =
+  check_parser value "\'foo \\\'bar\\\'\'" (VString ("foo \'bar\'", 9))
+;;
+
 let%test "value empty quotes" = check_parser_fail value "\'\'"
 let%test "value bool true" = check_parser value "true" (VBool true)
 let%test "value bool false" = check_parser value "false" (VBool false)
@@ -594,7 +598,7 @@ let%test "Hello world" =
   check_parser
     pascal_program
     "begin writeln(\'hello world\'); end."
-    ([], [ ProcCall (Call (Variable "writeln", [ Const (VString "hello world") ])) ])
+    ([], [ ProcCall (Call (Variable "writeln", [ Const (VString ("hello world", 11)) ])) ])
 ;;
 
 let%test "Create and use add func" =
@@ -626,7 +630,7 @@ let%test "Create and use add func" =
       ; ProcCall
           (Call
              ( Variable "writeln"
-             , [ Const (VString "x + y = ")
+             , [ Const (VString ("x + y = ", 8))
                ; Call (Variable "add", [ Variable "x"; Variable "y" ])
                ] ))
       ] )
