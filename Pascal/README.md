@@ -1,14 +1,5 @@
 <!DOCTYPE html>
 <html>
-
-<head>
-<meta charset="utf-8">
-<title>Pascal readme</title>
-<style>
-    th, td { border-style: ridge }
-</style>
-</head>
-
 <body>
 
 <h2>An implementation of Pascal mini-language</h2>
