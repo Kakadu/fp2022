@@ -2,11 +2,11 @@
 <html>
 
 <head>
-    <meta charset="utf-8">
-    <title>Pascal readme</title>
-    <style>
-        th, td { border-style: ridge }
-    </style>
+<meta charset="utf-8">
+<title>Pascal readme</title>
+<style>
+    th, td { border-style: ridge }
+</style>
 </head>
 
 <body>
