@@ -2,6 +2,10 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
+(**
+Holder for immutable arrays.
+Does not actually construct array, while it not modified.
+*)
 type 'a t =
   | Created of 'a Array.t
   | Empty of int * 'a

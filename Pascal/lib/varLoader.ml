@@ -49,10 +49,9 @@ let load_variables def =
              | _ -> raise (PascalInterp (NotAType n)))
         in
         match eval t with
-        | VTString i as s when i > 0 -> s
-        | VTString _ -> raise (PascalInterp TypeError)
-        | VTArray ((VChar _ | VInt _ | VBool _), s, _) as arr when s > 0 -> arr
-        | VTArray _ -> raise (PascalInterp TypeError)
+        | VTString i when i <= 0 -> raise (PascalInterp TypeError)
+        | VTArray ((VChar _ | VInt _ | VBool _), s, _) when s <= 0 ->
+          raise (PascalInterp TypeError)
         | ok -> ok
       and load_fun_param pl =
         List.map
@@ -67,11 +66,12 @@ let load_variables def =
         | VTInt -> VInt 0
         | VTFloat -> VFloat 0.
         | VTChar -> VChar (Char.chr 0)
+        | VTVoid -> VVoid
         | VTString _ -> VString ""
         | VTDRecord w -> VRecord (KeyMap.map (fun t -> t, VVariable (construct t)) w)
         | VTFunction _ -> VVoid
+        | VTConstFunction _ -> VVoid
         | VTArray (v, s, t) -> VArray (v, s, t, ImArray.make s (construct t))
-        | _ -> VVoid
       in
       function
       | DType (n, t) ->

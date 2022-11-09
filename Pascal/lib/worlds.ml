@@ -79,6 +79,7 @@ let load_fun_all_opt n w =
        let wh = h :: wh in
        Some (wh, (t, v), wtl)
      | _ -> None)
+  | Some _ -> raise (PascalInterp (NotAFunction n))
   | _ -> None
 ;;
 

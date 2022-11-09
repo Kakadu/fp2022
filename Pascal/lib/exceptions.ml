@@ -12,6 +12,7 @@ exception NotAType of name
 exception NotAConst of name
 exception NonConstCall
 exception NotAVariable of name
+exception NotAFunction of name
 exception NotAStdFunction of name
 exception BinOpTypeError of binop * vtype * vtype
 exception UnOpTypeError of unop * vtype

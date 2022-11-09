@@ -17,8 +17,12 @@ val get_rec : name -> value -> value
 (** field -> record -> vtype *)
 val get_rec_type : name -> vtype -> vtype
 
+val iter : value -> int -> value
+
 (** arr start -> ind value -> real ind*)
 val iter_arr : value -> value -> int
+
+val is_iterable : vtype -> bool
 
 (** index -> array -> value *)
 val get_arr : value -> value -> value
@@ -42,4 +46,5 @@ val eval_expr_base_type
   -> Worlds.t
   -> vtype * Worlds.t
 
+(** eval constant expression, can be used only for constants and std functions *)
 val eval_expr_const : expr -> Worlds.t -> value

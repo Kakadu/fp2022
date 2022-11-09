@@ -176,7 +176,7 @@ let eval_unop op v =
   match op with
   | Plus ->
     (match v with
-     | (VInt _ | VFloat _) as ok -> ok
+     | VInt _ | VFloat _ -> v
      | _ -> raise error)
   | Minus ->
     (match v with
@@ -320,8 +320,20 @@ let get_rec_type n = function
   | VTDRecord w as t ->
     (match KeyMap.find_opt n w with
      | Some t -> t
-     | _ -> raise (PascalInterp (RecordFieldError (t, n))))
+     | None -> raise (PascalInterp (RecordFieldError (t, n))))
   | t -> raise (PascalInterp (RecordTypeError t))
+;;
+
+let iter v step =
+  match v with
+  | VInt i -> VInt (i + step)
+  | VChar c -> VChar (Char.chr (Char.code c + step))
+  | VBool b ->
+    (match Bool.to_int b + step with
+     | 0 -> VBool false
+     | 1 -> VBool true
+     | _ -> raise (PascalInterp RunTimeError))
+  | _ -> raise (PascalInterp RunTimeError)
 ;;
 
 let iter_arr s f =
@@ -330,6 +342,11 @@ let iter_arr s f =
   | VChar s, VChar f -> Char.code f - Char.code s
   | VBool s, VBool f -> Bool.to_int f - Bool.to_int s
   | _ -> raise (PascalInterp TypeError)
+;;
+
+let is_iterable = function
+  | VTInt | VTChar | VTBool -> true
+  | _ -> false
 ;;
 
 let%test "iter arr int" = iter_arr (VInt 10) (VInt 32) = 22
@@ -401,7 +418,7 @@ let rec eval_expr_base_type load_f eval_function =
 let rec eval_expr_const e =
   let const_loader n w =
     match Worlds.load n w with
-    | VTFunction _, _ -> raise (PascalInterp (NotAConst n))
+    | (VTFunction _ | VTConstFunction _), _ -> raise (PascalInterp (NotAConst n))
     | _, VConst v -> v
     | _ -> raise (PascalInterp (NotAConst n))
   in

@@ -58,10 +58,9 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
     (match eval_expr r with
      | VTConstFunction _ -> false
      | r -> compare_types (eval_expr l) r)
-  | Assign _ -> raise (PascalInterp LeftValError)
   | AssignFunc (l, r) when is_l_value l w ->
     compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
-  | AssignFunc _ -> raise (PascalInterp LeftValError)
+  | Assign _ | AssignFunc _ -> raise (PascalInterp LeftValError)
   | ProcCall (Call _ as e) -> eval_expr e |> fun _ -> true
   | ProcCall _ -> false
   | If (b, t, e) ->
@@ -70,9 +69,9 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
     compare_types (eval_expr b) VTBool && eval_stmt_list_loop t
   | For (n, s, f, t) ->
     let nt, _ = Worlds.load n w in
-    compare_types nt (eval_expr s)
-    && compare_types nt (eval_expr f)
-    && eval_stmt_list_loop t
+    let s = eval_expr s in
+    let f = eval_expr f in
+    is_iterable s && compare_types f s && compare_types nt s && eval_stmt_list_loop t
   | Break | Continue -> loop
   | Exit -> func
 
@@ -85,8 +84,9 @@ let semantic_test =
     | h :: _ as w ->
       KeyMap.for_all
         (fun _ -> function
-          | VTFunction _, VConst (VFunction (_, _, _, fw, fc)) ->
+          | VTConstFunction _, VConst (VFunction (_, _, _, fw, fc)) ->
             semantic_test_in true fc (fw :: w)
+          | VTConstFunction _, _ -> false
           | _ -> true)
         h
       && eval_stmt_list_type ~func c w
@@ -184,17 +184,6 @@ and eval_stmt s w =
     | VBool _ -> w
     | _ -> raise (PascalInterp RunTimeError)
   in
-  let iter v step =
-    match v with
-    | VInt i -> VInt (i + step)
-    | VChar c -> VChar (Char.chr (Char.code c + step))
-    | VBool b ->
-      (match Bool.to_int b + step with
-       | 0 -> VBool false
-       | 1 -> VBool true
-       | _ -> raise (PascalInterp RunTimeError))
-    | _ -> raise (PascalInterp RunTimeError)
-  in
   let assign l eval r w =
     let rec helper w f =
       let arr_add a i v =
@@ -228,7 +217,7 @@ and eval_stmt s w =
          | t, VFunctionResult v ->
            let e, w = eval r w in
            Worlds.replace n (t, VFunctionResult (f v e)) w
-         | _ -> raise (PascalInterp RunTimeError))
+         | _, (VConst _ | VType) -> raise (PascalInterp RunTimeError))
       | _ -> raise (PascalInterp RunTimeError)
     in
     helper w (fun _ v -> v) l
@@ -236,15 +225,13 @@ and eval_stmt s w =
   match s with
   | Assign (l, r) -> assign l eval_expr r w
   | AssignFunc (l, r) ->
-    assign l (fun f w -> Worlds.load_fun f w |> fun (_, v) -> v, w) r w
-  | ProcCall e ->
-    let _, w = eval_expr e w in
-    w
+    assign l (fun f w -> Worlds.load_const_fun f w |> fun (_, v) -> v, w) r w
+  | ProcCall (Call _ as e) -> eval_expr e w |> fun (_, w) -> w
+  | ProcCall _ -> raise (PascalInterp RunTimeError)
   | If (e, ts, es) ->
     let b, w = eval_expr e w in
     (match b with
-     | VBool b when b -> eval_stmt_list ts w
-     | VBool _ -> eval_stmt_list es w
+     | VBool b -> eval_stmt_list (if b then ts else es) w
      | _ -> raise (PascalInterp (InvalidType (VTBool, get_type_val b))))
   | While (e, st) -> loop e (fun b -> b) st w
   | Repeat (e, st) -> loop e not st w
@@ -626,6 +613,30 @@ let%test "func as arg" =
       end.
     |}
     [ "x", VVariable (VInt 42) ]
+;;
+
+let%test "func as arg wrong using" =
+  try
+    check_interp
+      {|
+        type
+          int_f = function : integer;
+        var
+          x : integer;
+          f, g : int_f;
+          function some_f : integer;
+          begin
+            some_f := 42;
+          end;
+        begin
+          f := @some_f;
+          g := @f;
+          x := g();
+        end.
+      |}
+      [ "x", VVariable (VInt 42) ]
+  with
+  | PascalInterp (VariableNotFound "f") -> true
 ;;
 
 let%test "func as arg" =
