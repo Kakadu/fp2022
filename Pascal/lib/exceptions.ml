@@ -14,6 +14,9 @@ exception NonConstCall
 exception NotAVariable of name
 exception NotAFunction of name
 exception NotAStdFunction of name
+exception NotIterable of vtype
+exception NotInALoop
+exception NotInAFunction
 exception BinOpTypeError of binop * vtype * vtype
 exception UnOpTypeError of unop * vtype
 exception StdFunctionTypeError of name * vtype list
@@ -29,6 +32,6 @@ exception CantCast of value * vtype
 exception RunTimeError
 exception ParserError
 exception SemanticError
-exception LeftValError
+exception LeftValError of expr
 exception TypeError
 exception PascalInterp of exn

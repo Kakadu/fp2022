@@ -55,40 +55,59 @@ let rec eval_stmt_type ?(func = false) ?(loop = false) s w =
   let eval_stmt_list sl = eval_stmt_list_type ~func ~loop sl w in
   let eval_stmt_list_loop sl = eval_stmt_list_type ~func ~loop:true sl w in
   match s with
-  | Assign (l, r) when is_l_value l w -> cast_type (eval_expr l) (eval_expr r)
+  | Assign (l, r) when is_l_value l w ->
+    let l = eval_expr l in
+    let r = eval_expr r in
+    if not (cast_type l r) then raise (PascalInterp (InvalidType (l, r)))
   | AssignFunc (l, r) when is_l_value l w ->
-    compare_types (eval_expr l) (Worlds.load_const_fun r w |> fun (t, _) -> t)
-  | Assign _ | AssignFunc _ -> raise (PascalInterp LeftValError)
-  | ProcCall (f, pl) -> eval_expr (Call (f, pl)) |> fun _ -> true
-  | If (b, t, e) -> cast_type VTBool (eval_expr b) && eval_stmt_list t && eval_stmt_list e
+    let l = eval_expr l in
+    let r = Worlds.load_const_fun r w |> fun (t, _) -> t in
+    if not (compare_types l r) then raise (PascalInterp (InvalidType (l, r)))
+  | Assign (l, _) | AssignFunc (l, _) -> raise (PascalInterp (LeftValError l))
+  | ProcCall (f, pl) -> eval_expr (Call (f, pl)) |> fun _ -> ()
+  | If (b, t, e) ->
+    let b = eval_expr b in
+    if not (cast_type VTBool b)
+    then raise (PascalInterp (InvalidType (VTBool, b)))
+    else eval_stmt_list t |> fun _ -> eval_stmt_list e
   | While (b, t) | Repeat (b, t) ->
-    cast_type VTBool (eval_expr b) && eval_stmt_list_loop t
+    let b = eval_expr b in
+    if not (cast_type VTBool b)
+    then raise (PascalInterp (InvalidType (VTBool, b)))
+    else eval_stmt_list_loop t
   | For (n, s, f, t) ->
     let nt, _ = Worlds.load n w in
     let s = eval_expr s in
     let f = eval_expr f in
-    is_iterable s && compare_types f s && compare_types nt s && eval_stmt_list_loop t
-  | Break | Continue -> loop
-  | Exit -> func
+    if not (is_iterable s)
+    then raise (PascalInterp (NotIterable s))
+    else if not (compare_types f s)
+    then raise (PascalInterp (InvalidType (s, f)))
+    else if not (compare_types nt s)
+    then raise (PascalInterp (InvalidType (s, nt)))
+    else eval_stmt_list_loop t
+  | Break | Continue -> if not loop then raise (PascalInterp NotInALoop)
+  | Exit -> if not func then raise (PascalInterp NotInAFunction)
 
 and eval_stmt_list_type ?(func = false) ?(loop = false) sl w =
-  List.for_all (fun s -> eval_stmt_type ~func ~loop s w) sl
+  List.for_all (fun s -> eval_stmt_type ~func ~loop s w |> fun _ -> true) sl
+  |> fun _ -> ()
 ;;
 
-let semantic_test =
+let with_semantic_test interp stmt world =
   let rec semantic_test_in func c = function
     | h :: _ as w ->
-      KeyMap.for_all
-        (fun _ -> function
-          | VTConstFunction _, VConst (VFunction (_, _, _, fw, fc)) ->
-            semantic_test_in true fc (fw :: w)
-          | VTConstFunction _, _ -> false
-          | _ -> true)
-        h
-      && eval_stmt_list_type ~func c w
-    | _ -> false
+      if KeyMap.for_all
+           (fun _ -> function
+             | VTConstFunction _, VConst (VFunction (_, _, _, fw, fc)) ->
+               semantic_test_in true fc (fw :: w) |> fun _ -> true
+             | VTConstFunction _, _ -> raise (PascalInterp RunTimeError)
+             | _ -> true)
+           h
+      then eval_stmt_list_type ~func c w
+    | _ -> raise (PascalInterp RunTimeError)
   in
-  semantic_test_in false
+  semantic_test_in false stmt world |> fun _ -> interp stmt world
 ;;
 
 exception BreakEx of Worlds.t
@@ -100,7 +119,7 @@ let rec eval_expr e w =
     let _, v = Worlds.load n w in
     match v with
     | VVariable v | VConst v | VFunctionResult v -> v
-    | VType -> raise (PascalInterp RunTimeError)
+    | VType -> raise (PascalInterp (NotAVariable n))
   in
   let eval_function n fp pexp p fw st w =
     let fw =
@@ -130,7 +149,7 @@ let rec eval_expr e w =
     let load n w =
       match Worlds.load n [ w ] with
       | _, (VVariable v | VConst v | VFunctionResult v) -> v
-      | _, VType -> raise (PascalInterp RunTimeError)
+      | _, VType -> raise (PascalInterp (NotAVariable n))
     in
     let w =
       List.fold_left2
@@ -178,7 +197,7 @@ and eval_stmt s w =
        | Error w -> w
        | Ok w -> loop e f sl w)
     | VBool _ -> w
-    | _ -> raise (PascalInterp RunTimeError)
+    | _ -> raise (PascalInterp (InvalidType (VTBool, get_type_val b)))
   in
   let assign l eval r w =
     let rec helper w f =
@@ -190,8 +209,9 @@ and eval_stmt s w =
            | VInt i, VChar v ->
              let s = String.mapi (fun ci c -> if ci = i then v else c) s in
              VString (s, String.length s)
-           | _ -> raise (PascalInterp RunTimeError))
-        | _ -> raise (PascalInterp RunTimeError)
+           | _, VChar _ -> raise (PascalInterp (InvalidType (VTInt, get_type_val i)))
+           | _, _ -> raise (PascalInterp (InvalidType (VTChar, get_type_val v))))
+        | _ -> raise (PascalInterp (NotIterable (get_type_val a)))
       in
       let rec_add r n v =
         match r with
@@ -199,7 +219,7 @@ and eval_stmt s w =
           (match Worlds.load n [ w ] with
            | t, VVariable _ -> VRecord (KeyMap.add n (t, VVariable v) w)
            | _ -> raise (PascalInterp RunTimeError))
-        | _ -> raise (PascalInterp RunTimeError)
+        | _ -> raise (PascalInterp (InvalidType (VTRecord KeyMap.empty, get_type_val r)))
       in
       function
       | GetArr (e, i) ->
@@ -211,8 +231,8 @@ and eval_stmt s w =
          | t, (VVariable v | VFunctionResult v) ->
            let nv, w = eval r w in
            Worlds.replace l (t, f v nv) w
-         | _, (VConst _ | VType) -> raise (PascalInterp RunTimeError))
-      | _ -> raise (PascalInterp RunTimeError)
+         | _, (VConst _ | VType) -> raise (PascalInterp (NotAVariable l)))
+      | e -> raise (PascalInterp (LeftValError e))
     in
     helper w (fun _ v -> v) l
   in
@@ -240,7 +260,7 @@ and eval_stmt s w =
       let update_n w =
         match Worlds.load n w with
         | t, (VVariable _ | VFunctionResult _) -> Worlds.replace n (t, i) w
-        | _ -> raise (PascalInterp RunTimeError)
+        | _ -> raise (PascalInterp (NotAVariable n))
       in
       let w = update_n w in
       match
@@ -267,12 +287,9 @@ let interpret_no_catch s =
   | None -> raise (PascalInterp ParserError)
   | Some (w, st) ->
     let w = [ load_variables w ] in
-    if semantic_test st w
-    then (
-      match eval_stmt_list st w with
-      | w :: [] -> w
-      | _ -> raise (PascalInterp RunTimeError))
-    else raise (PascalInterp SemanticError)
+    (match with_semantic_test eval_stmt_list st w with
+     | w :: [] -> w
+     | _ -> raise (PascalInterp RunTimeError))
 ;;
 
 let interpret s =
@@ -357,7 +374,7 @@ let%test "but we can not assigns" =
       [ "i", VVariable (VInt 1) ]
     |> fun _ -> false
   with
-  | PascalInterp SemanticError -> true
+  | PascalInterp (InvalidType (VTInt, VTFloat)) -> true
 ;;
 
 let%test "type casting" =
@@ -632,7 +649,7 @@ let%test "func as arg wrong using" =
       [ "x", VVariable (VInt 42) ]
     |> fun _ -> false
   with
-  | PascalInterp SemanticError -> true
+  | PascalInterp (InvalidType _) -> true
 ;;
 
 let%test "func as arg" =
@@ -785,7 +802,7 @@ let%test "proc" =
       [ "x", VVariable (VInt 42) ]
     |> fun _ -> false
   with
-  | PascalInterp LeftValError -> true
+  | PascalInterp (LeftValError _) -> true
 ;;
 
 let%test "for loop" =

@@ -25,7 +25,7 @@ let replace : name -> vtype * value -> t -> t =
          acc, KeyMap.add n (ht, VVariable (cast ht v)) h :: tl
        | Some (ht, VFunctionResult _) when cast_type ht t ->
          acc, KeyMap.add n (ht, VFunctionResult (cast ht v)) h :: tl
-       | Some _ -> raise (PascalInterp RunTimeError)
+       | Some _ -> raise (PascalInterp (NotAVariable n))
        | None -> helper (h :: acc) tl)
     | [] -> raise (PascalInterp (VariableNotFound n))
   in

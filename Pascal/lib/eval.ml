@@ -349,7 +349,7 @@ let iter v step =
      | 0 -> VBool false
      | 1 -> VBool true
      | _ -> raise (PascalInterp RunTimeError))
-  | _ -> raise (PascalInterp RunTimeError)
+  | _ -> raise (PascalInterp (NotIterable (get_type_val v)))
 ;;
 
 let iter_arr s f =
