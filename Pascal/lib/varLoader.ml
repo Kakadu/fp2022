@@ -100,10 +100,9 @@ let load_variables def =
         let fdef = fun_param_def @ d in
         let fw = load_variables_in fdef (KeyMap.empty :: w) in
         let fw =
-          match t with
-          | VTVoid -> fw
-          | _ when KeyMap.mem n fw -> raise (PascalInterp (DupVarName n))
-          | _ -> KeyMap.add n (t, VFunctionResult (construct t)) fw
+          if KeyMap.mem n fw
+          then raise (PascalInterp (DupVarName n))
+          else KeyMap.add n (t, VFunctionResult (construct t)) fw
         in
         n, (VTConstFunction (p, t), const (VFunction (n, t, p, fw, c)))
     in

@@ -15,6 +15,7 @@ let rec is_l_value e w =
   | GetArr (e, _) | GetRec (e, _) -> is_l_value e w
   | Variable n ->
     (match Worlds.load n w with
+     | VTVoid, _ -> false
      | _, (VVariable _ | VFunctionResult _) -> true
      | _, (VConst _ | VType) -> false)
   | _ -> false
@@ -680,6 +681,52 @@ let%test "func as arg" =
       end.
     |}
     [ "x", VVariable (VInt 42) ]
+;;
+
+let%test "proc" =
+  check_interp
+    {|
+      type
+        int_f = function : integer;
+      var
+        x : integer;
+        f, g : int_f;
+        procedure some_f (i : integer);
+        begin
+          x := i;
+        end;
+      begin
+        some_f(42);
+      end.
+    |}
+    [ "x", VVariable (VInt 42) ]
+;;
+
+let%test "proc" =
+  try
+    check_interp
+      {|
+        type
+          int_f = function : integer;
+        var
+          x : integer;
+          f, g : int_f;
+          procedure p;
+          begin
+          end;
+          procedure some_f (i : integer);
+          begin
+            some_f := p();
+            x := i;
+          end;
+        begin
+          some_f(42);
+        end.
+      |}
+      [ "x", VVariable (VInt 42) ]
+    |> fun _ -> false
+  with
+  | PascalInterp LeftValError -> true
 ;;
 
 let%test "for loop" =
