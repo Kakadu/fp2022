@@ -1,4 +1,3 @@
-
 (*
 type token = string
 type rule_name = string
@@ -35,3 +34,17 @@ type mly_type =
   ; rules : rule list
   }
 *)
+
+type grammar = string * (string * string list) list
+
+(* String set. Note that set is a functor building an implementation of the set structure given a TOTALLY ORDERED TYPE, so everything is okay there. *)
+module SymbolSet = Set.Make (String)
+
+(* Map where keys are strings. *)
+module SMap = Map.Make (String)
+
+type symbolMap = SymbolSet.t SMap.t
+
+type parseTree =
+  | Term of string
+  | Nonterm of string * parseTree list
