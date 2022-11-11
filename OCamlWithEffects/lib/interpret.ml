@@ -250,6 +250,16 @@ end = struct
       in
       let* contents_list = eval_arguments contents_list in
       return @@ VADT (constructor_name, contents_list)
+    | ETuple list ->
+      let rec eval_arguments = function
+        | [] -> return @@ []
+        | list ->
+          let* head = eval (hd_exn list) environment in
+          let* tail = eval_arguments (tl_exn list) in
+          return @@ (head :: tail)
+      in
+      let* list = eval_arguments list in
+      return @@ VTuple list
     | _ -> fail ""
   ;;
 
@@ -432,4 +442,20 @@ let%test _ =
           ; VADT ("Ok", [ VBool false ])
           ; VADT ("Error", [ VString "failed" ])
           ])
+;;
+
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , ETuple
+          [ ELiteral (LChar 'f')
+          ; EBinaryOperation (Add, ELiteral (LInt 2), ELiteral (LInt (-2)))
+          ] )
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program)
+  @@ Result.Ok (VTuple [ VChar 'f'; VInt 0 ])
 ;;
