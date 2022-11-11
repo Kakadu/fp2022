@@ -197,6 +197,12 @@ end = struct
          fail
            "Runtime error: expression was expected of type bool because it is in the \
             condition of an if-statement.")
+    | EUnaryOperation (operator, operand) ->
+      let* operand = eval operand environment in
+      (match operator, operand with
+       | Minus, VInt x -> return @@ VInt (-x)
+       | Not, VBool x -> return @@ VBool (not x)
+       | _ -> fail "Runtime error: mismatching types.")
     | _ -> fail ""
   ;;
 
