@@ -87,7 +87,6 @@ let%test _ =
 let parens parser = remove_spaces *> char '(' *> parser <* remove_spaces <* char ')'
 
 let parse_literal =
-  Printf.printf "I'm in parse_literal\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -162,7 +161,6 @@ let%test _ =
 ;;
 
 let parse_entity =
-  Printf.printf "I'm in parse_entity\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -180,7 +178,10 @@ let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
 let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun" ]
 
 let parse_identifier =
-  Printf.printf "I'm in parse_identifier\n";
+  fix
+  @@ fun _ ->
+  remove_spaces
+  *>
   let parse_identifier =
     parse_entity
     >>= fun entity ->
@@ -205,7 +206,6 @@ let%test _ =
 ;;
 
 let parse_tuple d =
-  Printf.printf "I'm in parse_tuple\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -234,7 +234,6 @@ let parse_tuple d =
 ;;
 
 let parse_list d =
-  Printf.printf "I'm in parse_list\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -263,7 +262,6 @@ let parse_list d =
 ;;
 
 let parse_fun d =
-  Printf.printf "I'm in parse_fun\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -320,7 +318,8 @@ let declaration_helper constructing_function d =
 ;;
 
 let parse_declaration d =
-  Printf.printf "I'm in parse_declaration\n";
+  fix
+  @@ fun _ ->
   remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
   >>= fun parsed_rec ->
   match parsed_rec with
@@ -330,7 +329,8 @@ let parse_declaration d =
 ;;
 
 let parse_let_in d =
-  Printf.printf "I'm in parse_let_in\n";
+  fix
+  @@ fun self ->
   remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
   >>= fun parsed_rec ->
   let parse_content =
@@ -344,7 +344,7 @@ let parse_let_in d =
       ; d.parse_conditional d
       ; d.parse_matching d
       ; d.parse_binary_operation d
-      ; d.parse_let_in d
+      ; self
       ; d.parse_data_constructor d
       ; parse_literal
       ; parse_identifier
@@ -363,7 +363,6 @@ let parse_let_in d =
 (* -------------------*)
 
 let parse_conditional d =
-  Printf.printf "I'm in parse_conditional\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -395,7 +394,6 @@ let parse_conditional d =
 ;;
 
 let parse_matching d =
-  Printf.printf "I'm in parse_matching\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -436,7 +434,6 @@ let parse_matching d =
 ;;
 
 let parse_binary_operation d =
-  Printf.printf "I'm in parse_binary_operation\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -495,7 +492,6 @@ let parse_binary_operation d =
 ;;
 
 let parse_application d =
-  Printf.printf "I'm in parse_application\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -532,24 +528,23 @@ let parse_application d =
 ;;
 
 let parse_data_constructor d =
-  Printf.printf "I'm in parse_data_constructor\n";
   fix
   @@ fun self ->
   remove_spaces
   *>
   let parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
-      ; d.parse_tuple d
+      [ parens @@ d.parse_list_constructing d
+      ; parens @@ d.parse_unary_operation d
+      ; parens @@ d.parse_tuple d
       ; d.parse_list d
-      ; d.parse_application d
-      ; d.parse_fun d
-      ; d.parse_conditional d
-      ; d.parse_matching d
-      ; d.parse_binary_operation d
-      ; d.parse_let_in d
-      ; self
+      ; parens @@ d.parse_application d
+      ; parens @@ d.parse_fun d
+      ; parens @@ d.parse_conditional d
+      ; parens @@ d.parse_matching d
+      ; parens @@ d.parse_binary_operation d
+      ; parens @@ d.parse_let_in d
+      ; parens self
       ; parse_literal
       ; parse_identifier
       ]
@@ -567,7 +562,6 @@ let parse_data_constructor d =
 ;;
 
 let parse_unary_operation d =
-  Printf.printf "I'm in parse_unary_operation\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -602,7 +596,6 @@ let parse_unary_operation d =
 ;;
 
 let parse_list_constructing d =
-  Printf.printf "I'm in parse_list_constructing\n";
   fix
   @@ fun self ->
   remove_spaces
@@ -908,7 +901,7 @@ let%test _ =
                  ] ) )
 ;;
 
-(* let%test _ =
+let%test _ =
   parse_string
     ~consume:Prefix
     parse_declaration
@@ -921,9 +914,9 @@ let%test _ =
              ( EIdentifier "x"
              , ETuple [ ELiteral (LInt 1); EIdentifier "x" ]
              , EFun ([ "y" ], EList [ EIdentifier "x"; EIdentifier "y" ]) ) )
-;; *)
+;;
 
-(* let%test _ =
+let%test _ =
   parse_string ~consume:Prefix parse_declaration "let g x y z = (x, x, y, y, z, z)"
   = Result.ok
     @@ EDeclaration
@@ -1023,10 +1016,10 @@ let%test _ =
              , ELiteral (LBool true) )
            ; EIdentifier "_", ELiteral (LBool false)
            ] )
-;; *)
+;;
 
 (* Tests for arithmetic expressions  *)
-(* let%test _ =
+let%test _ =
   parse_string ~consume:Prefix parse_expression "1 + 2"
   = Result.ok @@ EBinaryOperation (Add, ELiteral (LInt 1), ELiteral (LInt 2))
 ;;
@@ -1179,10 +1172,10 @@ let%test _ =
              ( EFun ([ "x"; "y" ], EList [ EIdentifier "x"; EIdentifier "y" ])
              , EIdentifier "n" )
          , ELiteral (LInt 0) )
-;; *)
+;;
 
 (* Tests for data constructor parser *)
-(* let%test _ =
+let%test _ =
   parse_string ~consume:Prefix parse_expression "Ok 1"
   = Result.ok @@ EDataConstructor ("Ok", [ ELiteral (LInt 1) ])
 ;;
@@ -1283,4 +1276,4 @@ let%test _ =
              (ELiteral (LInt 1), EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
          ; EConstructList (EIdentifier "x", EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
          ]
-;; *)
+;;
