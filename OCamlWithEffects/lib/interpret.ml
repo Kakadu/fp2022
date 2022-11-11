@@ -203,6 +203,35 @@ end = struct
        | Minus, VInt x -> return @@ VInt (-x)
        | Not, VBool x -> return @@ VBool (not x)
        | _ -> fail "Runtime error: mismatching types.")
+    | EList list ->
+      (match list with
+       | [] -> return @@ VList []
+       | _ ->
+         let rec eval_list list =
+           match hd_exn list, tl_exn list with
+           | head, [] ->
+             let* head = eval head environment in
+             return @@ VList [ head ]
+           | head, tail ->
+             let* head = eval head environment in
+             let* tail = eval_list tail in
+             (match tail with
+              | VList tail ->
+                let next_element = hd_exn tail in
+                (match head, next_element with
+                 | VInt _, VInt _
+                 | VString _, VString _
+                 | VBool _, VBool _
+                 | VChar _, VChar _
+                 | VUnit, VUnit
+                 | VList _, VList _
+                 | VTuple _, VTuple _
+                 | VFun (_, _, _, _), VFun (_, _, _, _)
+                 | VADT (_, _), VADT (_, _) -> return @@ VList (head :: tail)
+                 | _ -> fail "Runtime error: mismatching types in list.")
+              | _ -> fail "Runtim error: could not interpret list.")
+         in
+         eval_list list)
     | _ -> fail ""
   ;;
 
@@ -313,3 +342,40 @@ let test_program =
 
 let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 15)
 let%test _ = Poly.( = ) (InterpretResult.run []) @@ Result.Ok VUnit
+
+let test_program =
+  [ EDeclaration
+      ("main", [], EList [ ELiteral (LInt 2); ELiteral (LInt 3); ELiteral (LInt (-5)) ])
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program)
+  @@ Result.Ok (VList [ VInt 2; VInt 3; VInt (-5) ])
+;;
+
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , EList
+          [ EList [ ELiteral (LChar 'c'); ELiteral (LChar 'f') ]
+          ; EList [ ELiteral (LChar 'h'); ELiteral (LChar 'g') ]
+          ] )
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program)
+  @@ Result.Ok (VList [ VList [ VChar 'c'; VChar 'f' ]; VList [ VChar 'h'; VChar 'g' ] ])
+;;
+
+let test_program =
+  [ EDeclaration ("main", [], EList [ ELiteral (LInt 2); ELiteral (LInt 3); EList [] ]) ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program)
+  @@ Result.Error "Runtime error: mismatching types in list."
+;;
+
