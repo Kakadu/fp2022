@@ -232,6 +232,24 @@ end = struct
               | _ -> fail "Runtim error: could not interpret list.")
          in
          eval_list list)
+    | EConstructList (operand, list) ->
+      let* operand = eval operand environment in
+      let* list = eval list environment in
+      (match operand, list with
+       | VFun (_, _, _, _), _ ->
+         fail "Runtime error: unable to place a function into a list."
+       | x, VList list -> return @@ VList (x :: list)
+       | _ -> fail "Runtime error: mismatching types.")
+    | EDataConstructor (constructor_name, contents_list) ->
+      let rec eval_arguments = function
+        | [] -> return @@ []
+        | list ->
+          let* head = eval (hd_exn list) environment in
+          let* tail = eval_arguments (tl_exn list) in
+          return @@ (head :: tail)
+      in
+      let* contents_list = eval_arguments contents_list in
+      return @@ VADT (constructor_name, contents_list)
     | _ -> fail ""
   ;;
 
@@ -379,3 +397,39 @@ let%test _ =
   @@ Result.Error "Runtime error: mismatching types in list."
 ;;
 
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , EConstructList
+          (ELiteral (LInt 2), EList [ ELiteral (LInt 2); ELiteral (LInt (-10)) ]) )
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program)
+  @@ Result.Ok (VList [ VInt 2; VInt 2; VInt (-10) ])
+;;
+
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , EConstructList
+          ( EDataConstructor ("Ok", [ ELiteral (LBool true) ])
+          , EList
+              [ EDataConstructor ("Ok", [ ELiteral (LBool false) ])
+              ; EDataConstructor ("Error", [ ELiteral (LString "failed") ])
+              ] ) )
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program)
+  @@ Result.Ok
+       (VList
+          [ VADT ("Ok", [ VBool true ])
+          ; VADT ("Ok", [ VBool false ])
+          ; VADT ("Error", [ VString "failed" ])
+          ])
+;;
