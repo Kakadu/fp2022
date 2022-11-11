@@ -36,7 +36,7 @@ end = struct
     and ( > ) = Poly.( > )
     and ( < ) = Poly.( < )
     and ( >= ) = Poly.( >= )
-    and ( <= ) = Poly.( >= ) in
+    and ( <= ) = Poly.( <= ) in
     match expression with
     | ELiteral literal ->
       (match literal with
@@ -218,6 +218,43 @@ module InterpretResult = Interpret (struct
   let ( let* ) m f = bind m ~f
 end)
 
+(* let rec factorial n acc = if n <= 1 then acc else factorial (n - 1) (acc * n) *)
+(* let main = factorial 5 1 *)
+let test_program =
+  [ ERecursiveDeclaration
+      ( "factorial"
+      , [ "n"; "acc" ]
+      , EIf
+          ( EBinaryOperation (LTE, EIdentifier "n", ELiteral (LInt 1))
+          , EIdentifier "acc"
+          , EApplication
+              ( EApplication
+                  ( EIdentifier "factorial"
+                  , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) )
+              , EBinaryOperation (Mul, EIdentifier "acc", EIdentifier "n") ) ) )
+  ; EDeclaration
+      ( "main"
+      , []
+      , EApplication
+          (EApplication (EIdentifier "factorial", ELiteral (LInt 5)), ELiteral (LInt 1))
+      )
+  ]
+;;
+
+let%test _ =
+  match InterpretResult.run test_program with
+  | Base.Result.Ok (VInt 120) -> true
+  | _ -> false
+;;
+
+let test_program =
+  [ EDeclaration ("n", [], ELiteral (LInt 5))
+  ; EDeclaration ("main", [], EBinaryOperation (LTE, EIdentifier "n", ELiteral (LInt 1)))
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VBool false)
+
 let test_program =
   [ EDeclaration
       ( "f"
@@ -250,35 +287,6 @@ let test_program =
 ;;
 
 let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 2)
-
-(* let rec factorial n acc = if n <= 1 then acc else factorial (n - 1) (acc * n) *)
-(* let main = factorial 5 1 *)
-let test_program =
-  [ ERecursiveDeclaration
-      ( "factorial"
-      , [ "n"; "acc" ]
-      , EIf
-          ( EBinaryOperation (LTE, EIdentifier "n", ELiteral (LInt 1))
-          , EIdentifier "acc"
-          , EApplication
-              ( EApplication
-                  ( EIdentifier "factorial"
-                  , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) )
-              , EBinaryOperation (Mul, EIdentifier "acc", EIdentifier "n") ) ) )
-  ; EDeclaration
-      ( "main"
-      , []
-      , EApplication
-          (EApplication (EIdentifier "factorial", ELiteral (LInt 5)), ELiteral (LInt 1))
-      )
-  ]
-;;
-
-let%test _ =
-  match InterpretResult.run test_program with
-  | Base.Result.Ok (VInt 1) -> true
-  | _ -> false
-;;
 
 let test_program =
   [ EDeclaration
