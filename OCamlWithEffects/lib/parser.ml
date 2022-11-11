@@ -9,13 +9,13 @@ type input = string
 type dispatch =
   { parse_list_constructing : dispatch -> expression Angstrom.t
   ; parse_tuple : dispatch -> expression Angstrom.t
+  ; parse_binary_operation : dispatch -> expression Angstrom.t
   ; parse_unary_operation : dispatch -> expression Angstrom.t
   ; parse_list : dispatch -> expression Angstrom.t
   ; parse_application : dispatch -> expression Angstrom.t
   ; parse_fun : dispatch -> expression Angstrom.t
   ; parse_conditional : dispatch -> expression Angstrom.t
   ; parse_matching : dispatch -> expression Angstrom.t
-  ; parse_binary_operation : dispatch -> expression Angstrom.t
   ; parse_let_in : dispatch -> expression Angstrom.t
   ; parse_data_constructor : dispatch -> expression Angstrom.t
   ; parse_expression : dispatch -> expression Angstrom.t
@@ -153,13 +153,13 @@ let parse_tuple d =
          choice
            [ d.parse_list_constructing d
            ; parens self
+           ; d.parse_binary_operation d
            ; d.parse_unary_operation d
            ; d.parse_list d
            ; d.parse_application d
            ; d.parse_fun d
            ; d.parse_conditional d
            ; d.parse_matching d
-           ; d.parse_binary_operation d
            ; d.parse_let_in d
            ; d.parse_data_constructor d
            ; parse_literal
@@ -184,13 +184,13 @@ let parse_list d =
     choice
       [ d.parse_list_constructing d
       ; d.parse_tuple d
+      ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; self
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; d.parse_binary_operation d
       ; d.parse_let_in d
       ; d.parse_data_constructor d
       ; parse_literal
@@ -210,13 +210,13 @@ let parse_fun d =
     choice
       [ d.parse_list_constructing d
       ; d.parse_tuple d
+      ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; self
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; d.parse_binary_operation d
       ; d.parse_let_in d
       ; d.parse_data_constructor d
       ; parse_literal
@@ -237,13 +237,13 @@ let declaration_helper constructing_function d =
     choice
       [ d.parse_list_constructing d
       ; d.parse_tuple d
+      ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; d.parse_binary_operation d
       ; d.parse_let_in d
       ; d.parse_data_constructor d
       ; parse_literal
@@ -271,33 +271,36 @@ let parse_declaration d =
 let parse_let_in d =
   fix
   @@ fun self ->
-  remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
-  >>= fun parsed_rec ->
+  remove_spaces
+  *>
   let parse_content =
     choice
       [ d.parse_list_constructing d
       ; d.parse_tuple d
+      ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; d.parse_binary_operation d
       ; self
       ; d.parse_data_constructor d
       ; parse_literal
       ; parse_identifier
       ]
   in
-  lift2
-    eletin
-    (let separator = remove_spaces *> string "and" *> remove_spaces in
-     match parsed_rec with
-     | [] -> sep_by1 separator @@ declaration_helper edeclaration d
-     | [ _ ] -> sep_by1 separator @@ declaration_helper erecursivedeclaration d
-     | _ -> fail "Parsing error: too many \"rec\".")
-    (remove_spaces *> string "in" *> parse_content)
+  parens self
+  <|> (string "let" *> remove_spaces *> (many @@ string "rec")
+      >>= fun parsed_rec ->
+      lift2
+        eletin
+        (let separator = remove_spaces *> string "and" *> remove_spaces in
+         match parsed_rec with
+         | [] -> sep_by1 separator @@ declaration_helper edeclaration d
+         | [ _ ] -> sep_by1 separator @@ declaration_helper erecursivedeclaration d
+         | _ -> fail "Parsing error: too many \"rec\".")
+        (remove_spaces *> string "in" *> parse_content))
 ;;
 
 let parse_conditional d =
@@ -309,13 +312,13 @@ let parse_conditional d =
     choice
       [ d.parse_list_constructing d
       ; d.parse_tuple d
+      ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
       ; self
       ; d.parse_matching d
-      ; d.parse_binary_operation d
       ; d.parse_let_in d
       ; d.parse_data_constructor d
       ; parse_literal
@@ -340,13 +343,13 @@ let parse_matching d =
     choice
       [ d.parse_list_constructing d
       ; d.parse_tuple d
+      ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
       ; self
-      ; d.parse_binary_operation d
       ; d.parse_let_in d
       ; d.parse_data_constructor d
       ; parse_literal
@@ -405,11 +408,11 @@ let parse_binary_operation d =
   let ( <||> ) = chainl1 in
   let parse_content =
     choice
-      [ d.parse_unary_operation d
+      [ parens self
+      ; d.parse_unary_operation d
       ; d.parse_application d
       ; d.parse_conditional d
       ; d.parse_matching d
-      ; parens self
       ; d.parse_let_in d
       ; d.parse_data_constructor d
       ; parse_literal
@@ -446,16 +449,16 @@ let parse_application d =
      and operand_parser =
        choice
          [ parens @@ d.parse_list_constructing d
-         ; d.parse_tuple d
+         ; parens @@ d.parse_tuple d
+         ; parens @@ d.parse_binary_operation d
          ; parens @@ d.parse_unary_operation d
          ; d.parse_list d
          ; parens self
-         ; d.parse_fun d
-         ; d.parse_conditional d
-         ; d.parse_matching d
-         ; d.parse_binary_operation d
-         ; d.parse_let_in d
-         ; d.parse_data_constructor d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
          ; parse_literal
          ; parse_identifier
          ]
@@ -474,13 +477,13 @@ let parse_data_constructor d =
     choice
       [ parens @@ d.parse_list_constructing d
       ; parens @@ d.parse_tuple d
+      ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_unary_operation d
       ; d.parse_list d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_fun d
       ; parens @@ d.parse_conditional d
       ; parens @@ d.parse_matching d
-      ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_let_in d
       ; parens self
       ; parse_literal
@@ -518,11 +521,11 @@ let parse_unary_operation d =
       ]
   and parse_content_not =
     choice
-      [ parens self
+      [ parens @@ d.parse_binary_operation d
+      ; parens self
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_conditional d
       ; parens @@ d.parse_matching d
-      ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_let_in d
       ; parse_literal
       ; parse_identifier
@@ -544,13 +547,13 @@ let parse_list_constructing d =
        choice
          [ parens self
          ; parens @@ d.parse_tuple d
+         ; parens @@ d.parse_binary_operation d
          ; d.parse_unary_operation d
          ; d.parse_list d
          ; d.parse_application d
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
          ; parens @@ d.parse_matching d
-         ; parens @@ d.parse_binary_operation d
          ; d.parse_let_in d
          ; d.parse_data_constructor d
          ; parse_literal
@@ -566,13 +569,13 @@ let parse_expression d =
   choice
     [ d.parse_list_constructing d
     ; d.parse_tuple d
+    ; d.parse_binary_operation d
     ; d.parse_unary_operation d
     ; d.parse_list d
     ; d.parse_application d
     ; d.parse_fun d
     ; d.parse_conditional d
     ; d.parse_matching d
-    ; d.parse_binary_operation d
     ; d.parse_let_in d
     ; d.parse_data_constructor d
     ; parse_literal
@@ -583,13 +586,13 @@ let parse_expression d =
 let default =
   { parse_list_constructing
   ; parse_tuple
+  ; parse_binary_operation
   ; parse_unary_operation
   ; parse_list
   ; parse_application
   ; parse_fun
   ; parse_conditional
   ; parse_matching
-  ; parse_binary_operation
   ; parse_let_in
   ; parse_data_constructor
   ; parse_expression
@@ -940,6 +943,131 @@ let%test _ =
            , []
            , EList
                [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ] )
+       ]
+;;
+
+(* 22 *)
+let%test _ =
+  parse " let main = f (g 5, h ()) (let x = 17 and y = 6 and z = 3 in x * y / z) "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EApplication
+               ( EApplication
+                   ( EIdentifier "f"
+                   , ETuple
+                       [ EApplication (EIdentifier "g", ELiteral (LInt 5))
+                       ; EApplication (EIdentifier "h", ELiteral LUnit)
+                       ] )
+               , ELetIn
+                   ( [ EDeclaration ("x", [], ELiteral (LInt 17))
+                     ; EDeclaration ("y", [], ELiteral (LInt 6))
+                     ; EDeclaration ("z", [], ELiteral (LInt 3))
+                     ]
+                   , EBinaryOperation
+                       ( Div
+                       , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "y")
+                       , EIdentifier "z" ) ) ) )
+       ]
+;;
+
+(* 23 *)
+let%test _ =
+  parse
+    " let main = func (if x > 0 && y < 0 then x * y else 0) (let f t = t * t * t in (f \
+     x) * (f x)) () "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EApplication
+               ( EApplication
+                   ( EApplication
+                       ( EIdentifier "func"
+                       , EIf
+                           ( EBinaryOperation
+                               ( AND
+                               , EBinaryOperation (GT, EIdentifier "x", ELiteral (LInt 0))
+                               , EBinaryOperation (LT, EIdentifier "y", ELiteral (LInt 0))
+                               )
+                           , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "y")
+                           , ELiteral (LInt 0) ) )
+                   , ELetIn
+                       ( [ EDeclaration
+                             ( "f"
+                             , [ "t" ]
+                             , EBinaryOperation
+                                 ( Mul
+                                 , EBinaryOperation (Mul, EIdentifier "t", EIdentifier "t")
+                                 , EIdentifier "t" ) )
+                         ]
+                       , EBinaryOperation
+                           ( Mul
+                           , EApplication (EIdentifier "f", EIdentifier "x")
+                           , EApplication (EIdentifier "f", EIdentifier "x") ) ) )
+               , ELiteral LUnit ) )
+       ]
+;;
+
+(* 24 *)
+let%test _ =
+  parse
+    " let main = if x * y / (z * z) > 15 || (f t) <= 0 || (fun x -> x * x) r >= 100 then \
+     x - y - z * r else -1 "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EIf
+               ( EBinaryOperation
+                   ( OR
+                   , EBinaryOperation
+                       ( OR
+                       , EBinaryOperation
+                           ( GT
+                           , EBinaryOperation
+                               ( Div
+                               , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "y")
+                               , EBinaryOperation (Mul, EIdentifier "z", EIdentifier "z")
+                               )
+                           , ELiteral (LInt 15) )
+                       , EBinaryOperation
+                           ( LTE
+                           , EApplication (EIdentifier "f", EIdentifier "t")
+                           , ELiteral (LInt 0) ) )
+                   , EBinaryOperation
+                       ( GTE
+                       , EApplication
+                           ( EFun
+                               ( [ "x" ]
+                               , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "x")
+                               )
+                           , EIdentifier "r" )
+                       , ELiteral (LInt 100) ) )
+               , EBinaryOperation
+                   ( Sub
+                   , EBinaryOperation (Sub, EIdentifier "x", EIdentifier "y")
+                   , EBinaryOperation (Mul, EIdentifier "z", EIdentifier "r") )
+               , EUnaryOperation (Minus, ELiteral (LInt 1)) ) )
+       ]
+;;
+
+(* 25 *)
+let%test _ =
+  parse " let main = if not(x = 5) && y = 5 then f x else f y "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EIf
+               ( EBinaryOperation
+                   ( AND
+                   , EUnaryOperation
+                       (Not, EBinaryOperation (Eq, EIdentifier "x", ELiteral (LInt 5)))
+                   , EBinaryOperation (Eq, EIdentifier "y", ELiteral (LInt 5)) )
+               , EApplication (EIdentifier "f", EIdentifier "x")
+               , EApplication (EIdentifier "f", EIdentifier "y") ) )
        ]
 ;;
 
