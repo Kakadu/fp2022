@@ -32,7 +32,7 @@ type binary_operator =
   | Sub (* - *)
   | Mul (* * *)
   | Div (* / *)
-  | Eq (* == *)
+  | Eq (* = *)
   | NEq (* != *)
   | GT (* > *)
   | GTE (* >= *)

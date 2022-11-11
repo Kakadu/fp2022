@@ -8,8 +8,8 @@ type input = string
 
 type dispatch =
   { parse_list_constructing : dispatch -> expression Angstrom.t
-  ; parse_unary_operation : dispatch -> expression Angstrom.t
   ; parse_tuple : dispatch -> expression Angstrom.t
+  ; parse_unary_operation : dispatch -> expression Angstrom.t
   ; parse_list : dispatch -> expression Angstrom.t
   ; parse_application : dispatch -> expression Angstrom.t
   ; parse_fun : dispatch -> expression Angstrom.t
@@ -152,8 +152,8 @@ let parse_tuple d =
   *> ((let parse_content =
          choice
            [ d.parse_list_constructing d
-           ; d.parse_unary_operation d
            ; parens self
+           ; d.parse_unary_operation d
            ; d.parse_list d
            ; d.parse_application d
            ; d.parse_fun d
@@ -183,8 +183,8 @@ let parse_list d =
   and parse_content =
     choice
       [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
       ; d.parse_tuple d
+      ; d.parse_unary_operation d
       ; self
       ; d.parse_application d
       ; d.parse_fun d
@@ -209,8 +209,8 @@ let parse_fun d =
   let parse_content =
     choice
       [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
       ; d.parse_tuple d
+      ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; self
@@ -236,8 +236,8 @@ let declaration_helper constructing_function d =
   let parse_content =
     choice
       [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
       ; d.parse_tuple d
+      ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
@@ -276,8 +276,8 @@ let parse_let_in d =
   let parse_content =
     choice
       [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
       ; d.parse_tuple d
+      ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
@@ -308,8 +308,8 @@ let parse_conditional d =
   let parse_content =
     choice
       [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
       ; d.parse_tuple d
+      ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
@@ -339,8 +339,8 @@ let parse_matching d =
   let parse_content =
     choice
       [ d.parse_list_constructing d
-      ; d.parse_unary_operation d
       ; d.parse_tuple d
+      ; d.parse_unary_operation d
       ; d.parse_list d
       ; d.parse_application d
       ; d.parse_fun d
@@ -387,7 +387,7 @@ let parse_binary_operation d =
          ; char '<' >>| blt
          ]
   and equality =
-    remove_spaces *> choice [ string "==" >>| beq; string "!=" <|> string "<>" >>| bneq ]
+    remove_spaces *> choice [ string "=" >>| beq; string "!=" <|> string "<>" >>| bneq ]
   and logical_and = remove_spaces *> (string "&&" >>| band)
   and logical_or = remove_spaces *> (string "||" >>| bor) in
   let chainl1 expression_parser operation_parser =
@@ -446,8 +446,8 @@ let parse_application d =
      and operand_parser =
        choice
          [ parens @@ d.parse_list_constructing d
-         ; parens @@ d.parse_unary_operation d
          ; d.parse_tuple d
+         ; parens @@ d.parse_unary_operation d
          ; d.parse_list d
          ; parens self
          ; d.parse_fun d
@@ -473,8 +473,8 @@ let parse_data_constructor d =
   let parse_content =
     choice
       [ parens @@ d.parse_list_constructing d
-      ; parens @@ d.parse_unary_operation d
       ; parens @@ d.parse_tuple d
+      ; parens @@ d.parse_unary_operation d
       ; d.parse_list d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_fun d
@@ -543,8 +543,8 @@ let parse_list_constructing d =
      and parse_content =
        choice
          [ parens self
-         ; d.parse_unary_operation d
          ; parens @@ d.parse_tuple d
+         ; d.parse_unary_operation d
          ; d.parse_list d
          ; d.parse_application d
          ; parens @@ d.parse_fun d
@@ -565,8 +565,8 @@ let parse_list_constructing d =
 let parse_expression d =
   choice
     [ d.parse_list_constructing d
-    ; d.parse_unary_operation d
     ; d.parse_tuple d
+    ; d.parse_unary_operation d
     ; d.parse_list d
     ; d.parse_application d
     ; d.parse_fun d
@@ -582,8 +582,8 @@ let parse_expression d =
 
 let default =
   { parse_list_constructing
-  ; parse_unary_operation
   ; parse_tuple
+  ; parse_unary_operation
   ; parse_list
   ; parse_application
   ; parse_fun
@@ -733,7 +733,7 @@ let%test _ =
 
 (* 8 *)
 let%test _ =
-  parse "let main = [ 'h' ; 'e' ; 'l' ; 'l' ; 'o' ] "
+  parse " let main = [ 'h' ; 'e' ; 'l' ; 'l' ; 'o' ] "
   = Result.ok
     @@ [ EDeclaration
            ( "main"
@@ -755,6 +755,11 @@ let%test _ =
 ;;
 
 (* 10 *)
+let%test _ =
+  parse " let main = [] " = Result.ok @@ [ EDeclaration ("main", [], EList []) ]
+;;
+
+(* 11 *)
 let%test _ =
   parse
     " let main = [let x = 5 and y = 7 in x + y; (fun t -> t - 1) 10; if (5 >= 1) then 1 \
@@ -782,170 +787,160 @@ let%test _ =
        ]
 ;;
 
+(* 12 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression " [ 1; 2; 3] "
-  = Result.ok @@ EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ]
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "  [ 1; [true; false]; (())]  "
+  parse
+    " let main = (if x > 0 then 1 else (if x = 0 then 0 else -1)) :: [0 ; (if y > 0 then \
+     1 else (if y = 0 then 0 else -1)) ; 0] "
   = Result.ok
-    @@ EList
-         [ ELiteral (LInt 1)
-         ; EList [ ELiteral (LBool true); ELiteral (LBool false) ]
-         ; ELiteral LUnit
-         ]
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EConstructList
+               ( EIf
+                   ( EBinaryOperation (GT, EIdentifier "x", ELiteral (LInt 0))
+                   , ELiteral (LInt 1)
+                   , EIf
+                       ( EBinaryOperation (Eq, EIdentifier "x", ELiteral (LInt 0))
+                       , ELiteral (LInt 0)
+                       , EUnaryOperation (Minus, ELiteral (LInt 1)) ) )
+               , EList
+                   [ ELiteral (LInt 0)
+                   ; EIf
+                       ( EBinaryOperation (GT, EIdentifier "y", ELiteral (LInt 0))
+                       , ELiteral (LInt 1)
+                       , EIf
+                           ( EBinaryOperation (Eq, EIdentifier "y", ELiteral (LInt 0))
+                           , ELiteral (LInt 0)
+                           , EUnaryOperation (Minus, ELiteral (LInt 1)) ) )
+                   ; ELiteral (LInt 0)
+                   ] ) )
+       ]
 ;;
 
+(* 13 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "[ 1; [true; false]; ('s', 'e'); ]"
+  parse " let main = fun x y z -> x + y * z "
   = Result.ok
-    @@ EList
-         [ ELiteral (LInt 1)
-         ; EList [ ELiteral (LBool true); ELiteral (LBool false) ]
-         ; ETuple [ ELiteral (LChar 's'); ELiteral (LChar 'e') ]
-         ]
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EFun
+               ( [ "x"; "y"; "z" ]
+               , EBinaryOperation
+                   ( Add
+                   , EIdentifier "x"
+                   , EBinaryOperation (Mul, EIdentifier "y", EIdentifier "z") ) ) )
+       ]
 ;;
 
+(* 14 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "[ (); (()); (1); (x, y)]"
+  parse " let main = fun _ -> 42 "
+  = Result.ok @@ [ EDeclaration ("main", [], EFun ([ "_" ], ELiteral (LInt 42))) ]
+;;
+
+(* 15 *)
+let%test _ =
+  parse " let main = fun _ -> fun _ -> \"Hello\" "
   = Result.ok
-    @@ EList
-         [ ELiteral LUnit
-         ; ELiteral LUnit
-         ; ELiteral (LInt 1)
-         ; ETuple [ EIdentifier "x"; EIdentifier "y" ]
-         ]
+    @@ [ EDeclaration
+           ("main", [], EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello"))))
+       ]
 ;;
 
+(* 16 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "[ (a, b); (5, c, (d, e))]"
+  parse " let main = fun x y -> if x < 0 then [x;y] else [0;y] "
   = Result.ok
-    @@ EList
-         [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
-         ; ETuple
-             [ ELiteral (LInt 5)
-             ; EIdentifier "c"
-             ; ETuple [ EIdentifier "d"; EIdentifier "e" ]
-             ]
-         ]
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EFun
+               ( [ "x"; "y" ]
+               , EIf
+                   ( EBinaryOperation (LT, EIdentifier "x", ELiteral (LInt 0))
+                   , EList [ EIdentifier "x"; EIdentifier "y" ]
+                   , EList [ ELiteral (LInt 0); EIdentifier "y" ] ) ) )
+       ]
 ;;
 
+(* 17 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "[ (a, b); ((d, e), 5, c); ]"
+  parse " let main = (-2, -3) :: [-5, -10; -6, -12; 7, -8] "
   = Result.ok
-    @@ EList
-         [ ETuple [ EIdentifier "a"; EIdentifier "b" ]
-         ; ETuple
-             [ ETuple [ EIdentifier "d"; EIdentifier "e" ]
-             ; ELiteral (LInt 5)
-             ; EIdentifier "c"
-             ]
-         ]
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EConstructList
+               ( ETuple
+                   [ EUnaryOperation (Minus, ELiteral (LInt 2))
+                   ; EUnaryOperation (Minus, ELiteral (LInt 3))
+                   ]
+               , EList
+                   [ ETuple
+                       [ EUnaryOperation (Minus, ELiteral (LInt 5))
+                       ; EUnaryOperation (Minus, ELiteral (LInt 10))
+                       ]
+                   ; ETuple
+                       [ EUnaryOperation (Minus, ELiteral (LInt 6))
+                       ; EUnaryOperation (Minus, ELiteral (LInt 12))
+                       ]
+                   ; ETuple
+                       [ ELiteral (LInt 7); EUnaryOperation (Minus, ELiteral (LInt 8)) ]
+                   ] ) )
+       ]
 ;;
 
+(* 18 *)
 let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    "[ (); (()); (((), ())); [(); 1]; ('a', 'b')]"
+  parse " let main = \"Danya\", \"Ilya\" "
   = Result.ok
-    @@ EList
-         [ ELiteral LUnit
-         ; ELiteral LUnit
-         ; ETuple [ ELiteral LUnit; ELiteral LUnit ]
-         ; EList [ ELiteral LUnit; ELiteral (LInt 1) ]
-         ; ETuple [ ELiteral (LChar 'a'); ELiteral (LChar 'b') ]
-         ]
+    @@ [ EDeclaration
+           ("main", [], ETuple [ ELiteral (LString "Danya"); ELiteral (LString "Ilya") ])
+       ]
 ;;
 
+(* 19 *)
 let%test _ =
-  match parse_string ~consume:Prefix parse_expression "[a, b), c]" with
-  | Result.Ok _ -> false
-  | _ -> true
-;;
-
-let%test _ =
-  match parse_string ~consume:Prefix parse_expression "[a, (1, 2)), ()]" with
-  | Result.Ok _ -> false
-  | _ -> true
-;;
-
-(* Tests for lambda function parsing *)
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "fun x -> (888)"
-  = Result.ok @@ EFun ([ "x" ], ELiteral (LInt 888))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "fun _ -> (fun _ -> (\"Hello\"))"
-  = Result.ok @@ EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello")))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "fun _ -> fun _ -> \"Hello\""
-  = Result.ok @@ EFun ([ "_" ], EFun ([ "_" ], ELiteral (LString "Hello")))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "((fun _ -> 5   ))"
-  = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "fun x y _ -> [x; y]"
-  = Result.ok @@ EFun ([ "x"; "y"; "_" ], EList [ EIdentifier "x"; EIdentifier "y" ])
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "fun _ -> 5"
-  = Result.ok @@ EFun ([ "_" ], ELiteral (LInt 5))
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    "   fun  par1  par2  ->  [\"line 1\"; par1; \"line 2\"; par2; \"line 3\"]   "
+  parse " let main = ( 123\t, \"aaa\"\t, 'b'\n, true\t, ()\t ) "
   = Result.ok
-    @@ EFun
-         ( [ "par1"; "par2" ]
-         , EList
-             [ ELiteral (LString "line 1")
-             ; EIdentifier "par1"
-             ; ELiteral (LString "line 2")
-             ; EIdentifier "par2"
-             ; ELiteral (LString "line 3")
-             ] )
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , ETuple
+               [ ELiteral (LInt 123)
+               ; ELiteral (LString "aaa")
+               ; ELiteral (LChar 'b')
+               ; ELiteral (LBool true)
+               ; ELiteral LUnit
+               ] )
+       ]
 ;;
 
-(* Tests for tuple parsing *)
+(* 20 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "  ( 1 , '2' , \"3\" )  "
+  parse " let main = (fun _ -> 1, fun _ -> 2) "
   = Result.ok
-    @@ ETuple [ ELiteral (LInt 1); ELiteral (LChar '2'); ELiteral (LString "3") ]
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EFun
+               ([ "_" ], ETuple [ ELiteral (LInt 1); EFun ([ "_" ], ELiteral (LInt 2)) ])
+           )
+       ]
 ;;
 
+(* 21 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression " x,y , z "
-  = Result.ok @@ ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " (x,y) , z "
-  = Result.ok @@ ETuple [ ETuple [ EIdentifier "x"; EIdentifier "y" ]; EIdentifier "z" ]
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "(fun _ -> 1, fun _ -> 2)"
+  parse " let main = [fun _ -> 1; fun _ -> 2] "
   = Result.ok
-    @@ EFun ([ "_" ], ETuple [ ELiteral (LInt 1); EFun ([ "_" ], ELiteral (LInt 2)) ])
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "[fun _ -> 1; fun _ -> 2]"
-  = Result.ok
-    @@ EList [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ]
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EList
+               [ EFun ([ "_" ], ELiteral (LInt 1)); EFun ([ "_" ], ELiteral (LInt 2)) ] )
+       ]
 ;;
 
 (* Tests for function declaration *)
@@ -1111,7 +1106,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_string ~consume:Prefix parse_expression "1 + 2 * 3 == 7"
+  parse_string ~consume:Prefix parse_expression "1 + 2 * 3 = 7"
   = Result.ok
     @@ EBinaryOperation
          ( Eq
@@ -1126,7 +1121,7 @@ let%test _ =
   parse_string
     ~consume:Prefix
     parse_expression
-    "1 <= 3 && 2 <= 4 && true && 3 > 1 || 1 == 7"
+    "1 <= 3 && 2 <= 4 && true && 3 > 1 || 1 = 7"
   = Result.ok
     @@ EBinaryOperation
          ( OR
