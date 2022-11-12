@@ -300,6 +300,16 @@ let getRhs = function
 
 let nonterminals = getNonterminals g
 
+let rec start_rule_components = function
+  | (lhs, rhs) :: tl ->
+    if String.equal start_rule lhs
+    then (lhs, rhs) :: start_rule_components tl
+    else start_rule_components tl
+  | [] -> []
+;;
+
+let start_nonterminals = List.filter (fun s -> String.equal s start_rule) nonterminals
+
 let rec is_symbol_nonterm symbol (g : grammar) nonterminals =
   match nonterminals with
   | h :: tl -> if String.equal h symbol then true else is_symbol_nonterm symbol g tl
@@ -335,12 +345,13 @@ let rec tryApplyRule rule input =
           if tryApplyRule h' input
           then
             get_last_n_elements_from_list
-              (List.length input - List.length (getRhs h'))
+              (List.length input - List.length (getRhs h')) (*Здесь есть проблема *)
               input
           else getNewInputIfNonterminalRuleIsFits tl'
         | [] -> input
       in
       if List.length (getNewInputIfNonterminalRuleIsFits (getAllNonterminalsOfRule h))
+         (* И/или здесь *)
          = List.length input
       then false
       else
@@ -379,7 +390,7 @@ let rec parse (g : grammar) (input : string list) =
     | h :: tl -> if tryApplyRule h input then applyRule h input else rulesApplier input tl
     | [] -> failwith "No such rule for your input"
   in
-  rulesApplier input allRules
+  rulesApplier input (start_rule_components allRules)
 ;;
 
 let rec parseTree (input : string list) =
