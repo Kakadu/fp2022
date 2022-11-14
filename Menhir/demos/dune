@@ -1,20 +1,14 @@
 (executable
- (name demoAO)
- (modules demoAO)
- (public_name demoAO)
- (libraries lambda_lib))
-
-(executable
- (name demoNO)
- (modules demoNO)
- (public_name demoNO)
- (libraries lambda_lib))
-
-(executable
  (name demoParse)
  (modules demoParse)
  (public_name demoParse)
- (libraries lambda_lib stdio))
+ (libraries menhir_lib))
+
+(executable
+ (name demoInterpret)
+ (modules demoInterpret)
+ (public_name demoInterpret)
+ (libraries menhir_lib))
 
 (cram
- (deps ./demoNO.exe ./demoAO.exe ./demoParse.exe ../REPL.exe))
+ (deps ./demoParse.exe ./demoInterpret.exe ./demoParse.exe ../REPL.exe))

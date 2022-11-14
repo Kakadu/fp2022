@@ -1,56 +1,40 @@
-open Base
-open Lambda_lib
+open Menhir_lib
 
-let run_repl _ =
-  Caml.Format.eprintf "OCaml-style toplevel (ocamlc, utop) is not implemented"
+let read_command () =
+  try read_line () with
+  | End_of_file -> ""
 ;;
 
-let run_single eval =
-  let open Lambda_lib in
-  let text = Stdio.In_channel.(input_all stdin) |> String.rstrip in
-  let ast = Parser.parse text in
-  match ast with
-  | Error e -> Caml.Format.printf "Error: %a\n%!" Parser.pp_error e
-  | Result.Ok ast ->
-    Caml.Format.printf "Parsed result: %a\n%!" Printast.pp_named ast;
-    (match eval ast with
-     | rez -> Caml.Format.printf "Evaluated result: %a\n%!" Printast.pp_named rez)
+let rec repl_tokens_list parser tree_parser = 
+  let () = 
+    print_string "> ";
+    let input = Interpret.split_string_and_delete_spaces (read_command()) in
+       let res, ret = parser input in if res then print_endline ("ACCEPT\n" ^ (tree_parser input)) else if ret = 0 then print_endline "REJECT" else print_endline "OVERSHOOT"
+
+in repl_tokens_list parser tree_parser
+
+let rec repl_command ret =
+  print_string "$ ";
+  let () =
+  let command = read_command () in
+  match Interpret.get_parser_and_tree_parser command with
+  | Ok (parser, tree_parser) ->  
+    repl_tokens_list parser tree_parser
+  | Error e -> print_endline e
+in repl_command ret
 ;;
 
-type strategy =
-  | CBN
-  | CBV
-  | NO
-  | AO
-
-type opts =
-  { mutable batch : bool
-  ; mutable stra : strategy
-  }
 
 let () =
-  let opts = { batch = false; stra = CBN } in
-  let open Caml.Arg in
-  parse
-    [ ( "-"
-      , Unit (fun () -> opts.batch <- true)
-      , "Read from stdin single program, instead of running full REPL" )
-    ; "-cbv", Unit (fun () -> opts.stra <- CBV), "Call-by-value strategy"
-    ; "-cbn", Unit (fun () -> opts.stra <- CBN), "Call-by-name strategy"
-    ; "-no", Unit (fun () -> opts.stra <- NO), "Normal Order strategy"
-    ; "-ao", Unit (fun () -> opts.stra <- NO), "Applicative Order strategy"
-    ]
-    (fun _ ->
-      Caml.Format.eprintf "Positioned arguments are not supported\n";
-      Caml.exit 1)
-    "Read-Eval-Print-Loop for Utyped Lambda Calculus";
-  let eval =
-    Lambda.apply_strat
-      (match opts.stra with
-       | NO -> Lambda.nor_strat
-       | CBV -> Lambda.cbv_strat
-       | AO -> Lambda.ao_strat
-       | CBN -> Lambda.cbn_strat)
-  in
-  (if opts.batch then run_single else run_repl) eval
+  print_endline "\t Menhir Interpreter REPL";
+    print_endline
+    "> To upload your grammar type 'menhir --interpret <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;
+     \t> Then you can write sentences and parser will try to interprete it;";
+    print_endline
+    "> If you want to get a parser, which one can parse this grammar, type 'menhir --parser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;
+     \t> Note that this parser will return true or false depending on whether it can parse your sentence or not;
+     \t> If you want to get a parser which will return parseTree then type menhir --treeParser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>;";
+    print_endline
+    "> To exit you can type 'exit'.";
+    repl_command 0;
 ;;

@@ -1,37 +1,48 @@
-open Angstrom
-open Ast
+open Menhir_lib
 
-let parse p s = parse_string ~consume:All p s
-
-let is_keyword = function
-  | "\\%token" | "\\%main" | "\\%%start" -> true
-  | _ -> false
+let read_command () =
+  try read_line () with
+  | End_of_file -> ""
 ;;
 
-let is_whitespace = function
-  | ' ' | '\t' -> true
-  | _ -> false
+let rec repl_tokens_list parser tree_parser =
+  let () =
+    print_string "> ";
+    let input = Interpret.split_string_and_delete_spaces (read_command ()) in
+    let res, ret = parser input in
+    if res
+    then print_endline ("ACCEPT\n" ^ tree_parser input)
+    else if ret = 0
+    then print_endline "REJECT"
+    else print_endline "OVERSHOOT"
+  in
+  repl_tokens_list parser tree_parser
 ;;
 
-let is_end_of_line = function
-  | '\n' | '\r' -> true
-  | _ -> false
+let rec repl_command ret =
+  print_string "$ ";
+  let () =
+    let command = read_command () in
+    match Interpret.get_parser_and_tree_parser command with
+    | Ok (parser, tree_parser) -> repl_tokens_list parser tree_parser
+    | Error e -> print_endline e
+  in
+  repl_command ret
 ;;
 
-let is_digit = function
-  | '0' .. '9' -> true
-  | _ -> false
+let () =
+  print_endline "\t Menhir Interpreter REPL";
+  print_endline
+    "> To upload your grammar type 'menhir --interpret \
+     <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
+    \     \t> Then you can write sentences and parser will try to interprete it;";
+  print_endline
+    "> If you want to get a parser, which one can parse this grammar, type 'menhir \
+     --parser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
+    \     \t> Note that this parser will return true or false depending on whether it \
+     can parse your sentence or not;\n\
+    \     \t> If you want to get a parser which will return parseTree then type menhir \
+     --treeParser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>;";
+  print_endline "> To exit you can type 'exit'.";
+  repl_command 0
 ;;
-
-let is_valid_id_char = function
-  | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true
-  | _ -> false
-;;
-
-let space = take_while is_whitespace
-let space1 = take_while1 is_whitespace
-let token s = space *> string s
-
-let number =
-  let integer = take_while1 is_digit in
-  space *> integer >>= fun whole -> return @@ CINT (int_of_string whole);;

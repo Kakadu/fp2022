@@ -1,21 +1,13 @@
 (library
- (name lambda_lib)
- (public_name Lambda.Lib)
+ (name menhir_lib)
+ (public_name Menhir.Lib)
  (modules
   Ast
-  ;Lambda
-  ;Interpret
+  Interpret
   Parser
-  ;Printast
-  ;Pprintast
-  ;utils
-  ;Tests
-  Lexer
-  ;Errors
-  ;Mark
-  ;Positions
+  ;Lexer
   )
- (libraries core angstrom re)
+ (libraries core re angstrom str)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
  (inline_tests))
