@@ -7,7 +7,7 @@
   Parser
   ;Lexer
   )
- (libraries base re angstrom str)
+ (libraries base re str unix stdio)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
  (inline_tests))
