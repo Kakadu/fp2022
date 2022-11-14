@@ -11,4 +11,4 @@
  (libraries menhir_lib))
 
 (cram
- (deps ./demoParse.exe ./demoInterpret.exe ./demoParse.exe ../REPL.exe))
+ (deps ./demoInterpret.exe ./demoParse.exe ../REPL.exe))
