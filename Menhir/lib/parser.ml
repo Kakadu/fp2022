@@ -1,4 +1,4 @@
-open Core
+open Base
 open Ast
 
 exception GetPathError of string
