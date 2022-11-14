@@ -35,13 +35,13 @@ let () =
   print_endline
     "> To upload your grammar type 'menhir --interpret \
      <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
-    \     \t> Then you can write sentences and parser will try to interprete it;";
+     \\t> Then you can write sentences and parser will try to interprete it;";
   print_endline
     "> If you want to get a parser, which one can parse this grammar, type 'menhir \
      --parser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
-    \     \t> Note that this parser will return true or false depending on whether it \
-     can parse your sentence or not;\n\
-    \     \t> If you want to get a parser which will return parseTree then type menhir \
+     \\t> Note that this parser will return true or false depending on whether it can \
+     parse your sentence or not;\n\
+     \\t> If you want to get a parser which will return parseTree then type menhir \
      --treeParser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>;";
   print_endline "> To exit you can type 'exit'.";
   repl_command 0
