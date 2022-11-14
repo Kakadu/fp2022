@@ -5,3 +5,4 @@ TODO:
  <h5> *** Exit command in REPL ***
  <h5> *** Lexical analysis with Angstrom because right now it's terribly *** 
  <h5> *** Upload LaTeX documentation ***
+ <h5> *** Write a lot of tests ***
