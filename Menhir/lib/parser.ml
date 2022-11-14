@@ -47,7 +47,7 @@ let file_text_where_only_rules text =
     выражения, то возвращаем -1. *)
 let is_string_contains regexp str =
   try Str.search_forward regexp str 0 with
-  | Not_found -> -1
+  | _ -> -1
 ;;
 
 (* Берем токены из строки и удаляем считанные. *)
