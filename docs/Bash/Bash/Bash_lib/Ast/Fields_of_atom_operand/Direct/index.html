@@ -19,7 +19,13 @@
       <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
       <span><span><a href="../../index.html#type-arg">arg</a> list</span> <span class="arrow">&#45;&gt;</span></span>
       <span class="type-var">'c</span> )</span> <span class="arrow">&#45;&gt;</span></span>
-  <span class="type-var">'d</span></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-fold" class="anchored"><a href="#val-fold" class="anchor"></a><code><span><span class="keyword">val</span> fold : 
+  <span>redirs:
+    <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, <span><a href="../../index.html#type-redir">redir</a> list</span> )</span>
+        <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><a href="../../index.html#type-redir">redir</a> list</span> <span class="arrow">&#45;&gt;</span></span>
+      <span class="type-var">'d</span> )</span> <span class="arrow">&#45;&gt;</span></span>
+  <span class="type-var">'e</span></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-fold" class="anchored"><a href="#val-fold" class="anchor"></a><code><span><span class="keyword">val</span> fold : 
   <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
   <span>init:<span class="type-var">'a</span> <span class="arrow">&#45;&gt;</span></span>
   <span>invert:
@@ -43,7 +49,14 @@
       <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
       <span><span><a href="../../index.html#type-arg">arg</a> list</span> <span class="arrow">&#45;&gt;</span></span>
       <span class="type-var">'g</span> )</span> <span class="arrow">&#45;&gt;</span></span>
-  <span class="type-var">'h</span></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-for_all" class="anchored"><a href="#val-for_all" class="anchor"></a><code><span><span class="keyword">val</span> for_all : 
+  <span>redirs:
+    <span>( <span><span class="type-var">'h</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, <span><a href="../../index.html#type-redir">redir</a> list</span> )</span>
+        <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><a href="../../index.html#type-redir">redir</a> list</span> <span class="arrow">&#45;&gt;</span></span>
+      <span class="type-var">'i</span> )</span> <span class="arrow">&#45;&gt;</span></span>
+  <span class="type-var">'j</span></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-for_all" class="anchored"><a href="#val-for_all" class="anchor"></a><code><span><span class="keyword">val</span> for_all : 
   <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
   <span>invert:
     <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, bool )</span>
@@ -62,6 +75,12 @@
         <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
       <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
       <span><span><a href="../../index.html#type-arg">arg</a> list</span> <span class="arrow">&#45;&gt;</span></span>
+      bool )</span> <span class="arrow">&#45;&gt;</span></span>
+  <span>redirs:
+    <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, <span><a href="../../index.html#type-redir">redir</a> list</span> )</span>
+        <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><a href="../../index.html#type-redir">redir</a> list</span> <span class="arrow">&#45;&gt;</span></span>
       bool )</span> <span class="arrow">&#45;&gt;</span></span>
   bool</span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-exists" class="anchored"><a href="#val-exists" class="anchor"></a><code><span><span class="keyword">val</span> exists : 
   <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
@@ -83,6 +102,12 @@
       <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
       <span><span><a href="../../index.html#type-arg">arg</a> list</span> <span class="arrow">&#45;&gt;</span></span>
       bool )</span> <span class="arrow">&#45;&gt;</span></span>
+  <span>redirs:
+    <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, <span><a href="../../index.html#type-redir">redir</a> list</span> )</span>
+        <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><a href="../../index.html#type-redir">redir</a> list</span> <span class="arrow">&#45;&gt;</span></span>
+      bool )</span> <span class="arrow">&#45;&gt;</span></span>
   bool</span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-to_list" class="anchored"><a href="#val-to_list" class="anchor"></a><code><span><span class="keyword">val</span> to_list : 
   <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
   <span>invert:
@@ -103,7 +128,13 @@
       <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
       <span><span><a href="../../index.html#type-arg">arg</a> list</span> <span class="arrow">&#45;&gt;</span></span>
       <span class="type-var">'c</span> )</span> <span class="arrow">&#45;&gt;</span></span>
-  <span><span class="type-var">'d</span> list</span></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-map" class="anchored"><a href="#val-map" class="anchor"></a><code><span><span class="keyword">val</span> map : 
+  <span>redirs:
+    <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, <span><a href="../../index.html#type-redir">redir</a> list</span> )</span>
+        <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><a href="../../index.html#type-redir">redir</a> list</span> <span class="arrow">&#45;&gt;</span></span>
+      <span class="type-var">'d</span> )</span> <span class="arrow">&#45;&gt;</span></span>
+  <span><span class="type-var">'e</span> list</span></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-map" class="anchored"><a href="#val-map" class="anchor"></a><code><span><span class="keyword">val</span> map : 
   <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
   <span>invert:
     <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, bool )</span>
@@ -123,4 +154,10 @@
       <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
       <span><span><a href="../../index.html#type-arg">arg</a> list</span> <span class="arrow">&#45;&gt;</span></span>
       <span><a href="../../index.html#type-arg">arg</a> list</span> )</span> <span class="arrow">&#45;&gt;</span></span>
+  <span>redirs:
+    <span>( <span><span><span>( <span>[&lt; `Read <span>| `Set_and_create</span> ]</span>, <a href="../../index.html#type-atom_operand">atom_operand</a>, <span><a href="../../index.html#type-redir">redir</a> list</span> )</span>
+        <span class="xref-unresolved">Fieldslib</span>.Field.t_with_perm</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-atom_operand">atom_operand</a> <span class="arrow">&#45;&gt;</span></span>
+      <span><span><a href="../../index.html#type-redir">redir</a> list</span> <span class="arrow">&#45;&gt;</span></span>
+      <span><a href="../../index.html#type-redir">redir</a> list</span> )</span> <span class="arrow">&#45;&gt;</span></span>
   <a href="../../index.html#type-atom_operand">atom_operand</a></span></code></div></div><div class="odoc-spec"><div class="spec value" id="val-set_all_mutable_fields" class="anchored"><a href="#val-set_all_mutable_fields" class="anchor"></a><code><span><span class="keyword">val</span> set_all_mutable_fields : <span><span class="type-var">'a</span> <span class="arrow">&#45;&gt;</span></span> unit</span></code></div></div></div></body></html>
