@@ -11,7 +11,7 @@ let trim x = whitespaces *> x <* whitespaces
 let parens p = trim (char '(' *> p <* char ')')
 
 let conde = function
-  | [] -> raise (Invalid_argument "No conds in conde")
+  | [] -> fail "No conds in conde"
   | x :: xs -> List.fold_left ( <|> ) x xs
 ;;
 
@@ -129,7 +129,7 @@ let code_line_parser =
     trim @@ word
     >>= fun x ->
     let w = String.uppercase_ascii x in
-    if is_mnemonic w then return (Mnemonic w) else failwith @@ "Invalid command " ^ x
+    if is_mnemonic w then return (Mnemonic w) else fail @@ "Invalid command " ^ x
   in
   let sep = trim @@ char ',' in
   let command (Mnemonic cmd) = cmd in
@@ -145,7 +145,7 @@ let code_line_parser =
       | 0 -> return (Command (Args0 cmd))
       | 1 -> return (Command (Args1 (cmd, List.hd exprs)))
       | 2 -> return (Command (Args2 (cmd, List.hd exprs, List.nth exprs 1)))
-      | _ -> failwith "Invalid count of arguments"
+      | _ -> fail "Invalid count of arguments"
   in
   label <|> inst
 ;;
@@ -155,14 +155,14 @@ let data_line_parser =
     trim word
     >>= fun x ->
     let w = String.uppercase_ascii x in
-    if is_data_dec w then return (DataType w) else failwith "Invalud datatype"
+    if is_data_dec w then return (DataType w) else fail "Invalud datatype"
   in
   let var =
     trim word
     >>= fun x ->
     let w = String.uppercase_ascii x in
     if is_reg w || is_data_dec w
-    then failwith "Var's name must not be equal the name of reg or datatype"
+    then fail "Var's name must not be equal the name of reg or datatype"
     else return (fun dt y -> Variable (x, dt, y))
   in
   let sep = trim @@ char ',' in
@@ -176,7 +176,7 @@ let sec_parser =
   >>= function
   | "code" | "text" -> many code_line_parser >>= fun values -> return (Code values)
   | "data" -> many data_line_parser >>= fun values -> return (Data values)
-  | _ -> failwith "Invalid section"
+  | _ -> fail "Invalid section"
 ;;
 
 let parser = many sec_parser
