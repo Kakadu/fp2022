@@ -1,0 +1,14 @@
+(executable
+ (name demoParse)
+ (modules demoParse)
+ (public_name demoParse)
+ (libraries asm stdio))
+
+(executable
+ (name demoInter)
+ (modules demoInter)
+ (public_name demoInter)
+ (libraries asm stdio))
+
+(cram
+ (deps ./demoParse.exe ./demoInter.exe))
