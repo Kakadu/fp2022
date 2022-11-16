@@ -26,6 +26,9 @@ module OperandsHandler : sig
   val int_to_byte_reg : int -> byte reg
   val int_to_word_reg : int -> word reg
   val int_to_dword_reg : int -> dword reg
+  val byte_reg_name_list : string list
+  val word_reg_name_list : string list
+  val dword_reg_name_list : string list
 
   (* Get register id *)
   val reg_id_to_int : 'a reg -> int
@@ -60,35 +63,20 @@ end = struct
   let int_to_byte_reg = Fun.id
   let int_to_word_reg = Fun.id
   let int_to_dword_reg = Fun.id
+  let byte_reg_name_list = [ "ah"; "al"; "bh"; "bl"; "ch"; "cl"; "dh"; "dl" ]
+  let word_reg_name_list = [ "ax"; "bx"; "cx"; "dx" ]
+  let dword_reg_name_list = [ "eax"; "ebx"; "ecx"; "edx" ]
+  let all_reg_name_list = byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list
   let reg_id_to_int = Fun.id
   let const_val = Fun.id
 
   let reg_name_to_int reg_name =
-    let reg_list =
-      [ "ah"
-      ; "al"
-      ; "ax"
-      ; "eax"
-      ; "bh"
-      ; "bl"
-      ; "bx"
-      ; "ebx"
-      ; "ch"
-      ; "cl"
-      ; "cx"
-      ; "ecx"
-      ; "dh"
-      ; "dl"
-      ; "dx"
-      ; "edx"
-      ]
-    in
     (* Find index of element [reg_name] *)
     let rec helper (idx : int) = function
       | [] -> failwith ("No register called \"" ^ reg_name ^ "\"")
       | h :: tl -> if String.compare h reg_name = 0 then idx else helper (idx + 1) tl
     in
-    helper 0 reg_list
+    helper 0 all_reg_name_list
   ;;
 
   let reg_name_to_byte_reg reg_name = reg_name |> reg_name_to_int |> int_to_byte_reg
@@ -125,3 +113,21 @@ type instruction =
 [@@deriving show { with_path = false }]
 
 type all_instructions = instruction list [@@deriving show { with_path = false }]
+
+module CmdHandler = struct
+  let cmd_one_arg_list = [ "inc"; "mul" ]
+  let cmd_two_args_list = [ "mov"; "add"; "sub" ]
+
+  let cmd_one_arg_str_to_alg = function
+    | "inc" -> fun x -> Inc x
+    | "mul" -> fun x -> Mul x
+    | str -> failwith ("Unknown command " ^ str)
+  ;;
+
+  let cmd_two_args_str_to_alg = function
+    | "mov" -> fun x -> Mov x
+    | "add" -> fun x -> Add x
+    | "sub" -> fun x -> Sub x
+    | str -> failwith ("Unknown command " ^ str)
+  ;;
+end
