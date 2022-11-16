@@ -17,18 +17,22 @@ module OperandsHandler : sig
   type 'a reg [@@deriving show { with_path = false }]
   type 'a const [@@deriving show { with_path = false }]
 
-  val to_int8 : int -> byte const
-  val to_int16 : int -> word const
-  val to_int32 : int -> dword const
-  val to_byte_reg : int -> byte reg
-  val to_word_reg : int -> word reg
-  val to_dword_reg : int -> dword reg
+  val int_to_byte_const : int -> byte const
+  val int_to_word_const : int -> word const
+  val int_to_dword_const : int -> dword const
+  val int_to_byte_reg : int -> byte reg
+  val int_to_word_reg : int -> word reg
+  val int_to_dword_reg : int -> dword reg
 
   (* get register id *)
-  val reg_id : 'a reg -> int
+  val reg_id_to_int : 'a reg -> int
 
   (* get value of a constant *)
   val const_val : 'a const -> int
+  val reg_name_to_int : string -> int
+  val reg_name_to_byte_reg : string -> byte reg
+  val reg_name_to_word_reg : string -> word reg
+  val reg_name_to_dword_reg : string -> dword reg
 end = struct
   type byte
   type word
@@ -41,20 +45,52 @@ end = struct
   type 'a reg = int [@@deriving show { with_path = false }]
   type 'a const = int [@@deriving show { with_path = false }]
 
-  let to_int8 x =
+  let int_to_byte_const x =
     if x < -(2 ** 7) || x > (2 ** 7) - 1 then failwith "Int8 expected" else x
   ;;
 
-  let to_int16 x =
+  let int_to_word_const x =
     if x < -(2 ** 15) || x > (2 ** 15) - 1 then failwith "Int16 expected" else x
   ;;
 
-  let to_int32 = Fun.id
-  let to_byte_reg = Fun.id
-  let to_word_reg = Fun.id
-  let to_dword_reg = Fun.id
-  let reg_id = Fun.id
+  let int_to_dword_const = Fun.id
+  let int_to_byte_reg = Fun.id
+  let int_to_word_reg = Fun.id
+  let int_to_dword_reg = Fun.id
+  let reg_id_to_int = Fun.id
   let const_val = Fun.id
+
+  let reg_name_to_int reg_name =
+    let reg_list =
+      [ "ah"
+      ; "al"
+      ; "ax"
+      ; "eax"
+      ; "bh"
+      ; "bl"
+      ; "bx"
+      ; "ebx"
+      ; "ch"
+      ; "cl"
+      ; "cx"
+      ; "ecx"
+      ; "dh"
+      ; "dl"
+      ; "dx"
+      ; "edx"
+      ]
+    in
+    (* Find index of element [reg_name] *)
+    let rec helper (idx : int) = function
+      | [] -> failwith ("No register called \"" ^ reg_name ^ "\"")
+      | h :: tl -> if String.compare h reg_name = 0 then idx else helper (idx + 1) tl
+    in
+    helper 0 reg_list
+  ;;
+
+  let reg_name_to_byte_reg reg_name = reg_name |> reg_name_to_int |> int_to_byte_reg
+  let reg_name_to_word_reg reg_name = reg_name |> reg_name_to_int |> int_to_word_reg
+  let reg_name_to_dword_reg reg_name = reg_name |> reg_name_to_int |> int_to_dword_reg
 end
 
 open OperandsHandler
