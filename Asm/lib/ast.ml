@@ -5,18 +5,21 @@
 open Base
 
 module OperandsHandler : sig
-  (* phantom types *)
+  (* Phantom types *)
   type byte
   type word
   type dword
 
+  (* Needed for pretty printing *)
   val pp_byte : Format.formatter -> byte -> unit
   val pp_word : Format.formatter -> word -> unit
   val pp_dword : Format.formatter -> dword -> unit
 
+  (* Operand types *)
   type 'a reg [@@deriving show { with_path = false }]
   type 'a const [@@deriving show { with_path = false }]
 
+  (* Converters *)
   val int_to_byte_const : int -> byte const
   val int_to_word_const : int -> word const
   val int_to_dword_const : int -> dword const
@@ -24,10 +27,10 @@ module OperandsHandler : sig
   val int_to_word_reg : int -> word reg
   val int_to_dword_reg : int -> dword reg
 
-  (* get register id *)
+  (* Get register id *)
   val reg_id_to_int : 'a reg -> int
 
-  (* get value of a constant *)
+  (* Get value of a constant *)
   val const_val : 'a const -> int
   val reg_name_to_int : string -> int
   val reg_name_to_byte_reg : string -> byte reg
