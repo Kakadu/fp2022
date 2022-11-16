@@ -3,7 +3,7 @@ type expr =
   | Sub of expr * expr
   | Mul of expr * expr
   | Div of expr * expr
-  | Const of int
+  | Const of string
   | Var of string
   | Reg of string
 [@@deriving show { with_path = false }]

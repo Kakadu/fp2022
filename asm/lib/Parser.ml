@@ -25,6 +25,11 @@ let is_ch = function
   | _ -> false
 ;;
 
+let is_hex_digit = function
+  | '0' .. '9' | 'a' .. 'f' | 'A' .. 'Z' -> true
+  | _ -> false
+;;
+
 let is_8bitreg = function
   | "AH" | "AL" | "BH" | "BL" | "CH" | "CL" | "DH" | "DL" -> true
   | _ -> false
@@ -45,8 +50,8 @@ let is_64bitreg = function
   | _ -> false
 ;;
 
-let is_hex_digit = function
-  | '0' .. '9' | 'a' .. 'f' | 'A' .. 'Z' -> true
+let is_128bitreg = function
+  | "XMM0" | "XMM1" | "XMM2" | "XMM3" | "XMM4" | "XMM5" | "XMM6" | "XMM7" -> true
   | _ -> false
 ;;
 
@@ -54,7 +59,7 @@ let is_reg s =
   List.fold_left
     ( || )
     false
-    [ is_8bitreg s; is_16bitreg s; is_32bitreg s; is_64bitreg s ]
+    [ is_8bitreg s; is_16bitreg s; is_32bitreg s; is_64bitreg s; is_128bitreg s ]
 ;;
 
 let is_arg0 = function
@@ -63,13 +68,12 @@ let is_arg0 = function
 ;;
 
 let is_arg1 = function
-  | "PUSH" | "POP" | "INC" | "DEC" | "IDIV" | "NOT" | "NEG" | "CALL" -> true
+  | "PUSH" | "POP" | "INC" | "DEC" | "NOT" | "NEG" | "CALL" -> true
   | _ -> false
 ;;
 
 let is_arg2 = function
-  | "MOV" | "LEA" | "ADD" | "SUB" | "IMUL" | "AND" | "XOR" | "OR" | "SHL" | "SHR" | "CMP"
-    -> true
+  | "MOV" | "ADD" | "SUB" | "IMUL" | "AND" | "XOR" | "OR" | "SHL" | "SHR" | "CMP" -> true
   | _ -> false
 ;;
 
@@ -100,8 +104,7 @@ let expr_parser =
     sign
     >>= fun s ->
     hex_prefix
-    >>= fun p ->
-    nums >>= fun n -> return (Const (int_of_string @@ String.concat "" [ s; p; n ]))
+    >>= fun p -> nums >>= fun n -> return (Const (String.concat "" [ s; p; n ]))
   in
   let reg =
     word
