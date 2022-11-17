@@ -2,5 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-val parse : string -> (Ast.ast list, string) result
-val eval : string -> Ast.ast list
+open Ast
+
+val parse : string -> (ast, string) result
+val eval : string -> ast

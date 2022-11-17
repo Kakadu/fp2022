@@ -38,6 +38,9 @@ type data_type = DataType of string [@@deriving show { with_path = false }]
 type var = Variable of string * data_type * string list
 [@@deriving show { with_path = false }]
 
-(** main ast that contains code section with list of commands and data section with list of data declarations *)
-type ast = Code of code_section list | Data of var list
+(** code and data sections with *)
+type dir = Code of code_section list | Data of var list
 [@@deriving show { with_path = false }]
+
+type ast = dir list [@@deriving show { with_path = false }]
+(** main ast *)

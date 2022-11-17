@@ -42,11 +42,6 @@ let fib =
    ;; *)
 
 let () =
-  let rec pr_p = function
-    | [] -> ()
-    | h :: tl ->
-        print_string @@ show_ast h;
-        print_string "\n";
-        pr_p tl
-  in
-  match parse fib with Ok ast -> pr_p ast | Error msg -> print_endline msg
+  match parse fib with
+  | Ok ast -> print_endline @@ show_ast ast
+  | Error msg -> print_endline msg

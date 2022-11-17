@@ -273,21 +273,21 @@ let%test _ =
   test_p data_line_parser show_var "dd dd 1"
   = ": Var's name must not be equal the name of reg or datatype"
 
-let%test _ = test_p sec_parser show_ast "section .test" = ": Invalid section"
-let%test _ = test_p sec_parser show_ast "section .code" = "(Code [])"
-let%test _ = test_p sec_parser show_ast "section .text" = "(Code [])"
-let%test _ = test_p sec_parser show_ast "section .data" = "(Data [])"
+let%test _ = test_p sec_parser show_dir "section .test" = ": Invalid section"
+let%test _ = test_p sec_parser show_dir "section .code" = "(Code [])"
+let%test _ = test_p sec_parser show_dir "section .text" = "(Code [])"
+let%test _ = test_p sec_parser show_dir "section .data" = "(Data [])"
 
 let%test _ =
-  test_p sec_parser show_ast "section .code ret"
+  test_p sec_parser show_dir "section .code ret"
   = "(Code [(Command (Args0 (Mnemonic \"RET\")))])"
 
 let%test _ =
-  test_p sec_parser show_ast "section .code   ret   "
+  test_p sec_parser show_dir "section .code   ret   "
   = "(Code [(Command (Args0 (Mnemonic \"RET\")))])"
 
 let%test _ =
-  test_p sec_parser show_ast "section .code ret ret" = ": end_of_input"
+  test_p sec_parser show_dir "section .code ret ret" = ": end_of_input"
 
 let%test _ =
   match
@@ -303,7 +303,7 @@ let%test _ =
   | _ -> false
 
 let%test _ =
-  test_p sec_parser show_ast "section .data a dd 1"
+  test_p sec_parser show_dir "section .data a dd 1"
   = "(Data [(Variable (\"a\", (DataType \"DD\"), [\"1\"]))])"
 
 let%test _ =
