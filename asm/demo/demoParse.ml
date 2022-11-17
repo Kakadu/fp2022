@@ -2,44 +2,47 @@ open Asm.Parser
 open Asm.Ast
 
 let fib =
-  "section .code\n\
-  \    fibbonach:\n\
-  \      mov rbx, 0x2A\n\
-  \      mov rax, 0x0\n\
-  \      mov rcx, 1\n\
-  \      cmp rbx, 1\n\
-  \      je fibbonachEnd\n\
-  \      cmp rbx, 2\n\
-  \      je fibbonachTwo\n\
-  \      sub rbx, 1\n\
-  \    fibbonachStart:\n\
-  \      sub rbx, 1\n\
-  \      xor rax, rcx\n\
-  \      xor rcx, rax\n\
-  \      xor rax, rcx\n\
-  \      add rax, rcx \n\
-  \      cmp rbx, 0\n\
-  \      je fibbonachEnd\n\
-  \      jmp fibbonachStart\n\
-  \    fibbonachTwo:\n\
-  \      mov rax, 1\n\
-  \    fibbonachEnd:\n\
-  \      ret"
+  {|
+   section .code
+     fibbonach:
+       mov rbx, 0x2A
+       mov rax, 0x0
+       mov rcx, 1
+       cmp rbx, 1
+       je fibbonachEnd
+       cmp rbx, 2
+       je fibbonachTwo
+       sub rbx, 1
+     fibbonachStart:
+       sub rbx, 1
+       xor rax, rcx
+       xor rcx, rax
+       xor rax, rcx
+       add rax, rcx
+       cmp rbx, 0
+       je fibbonachEnd
+       jmp fibbonachStart
+     fibbonachTwo:
+       mov rax, 1
+     fibbonachEnd:
+       ret
+   |}
 
 (* let fac =
-     "section .text\n\
-     \   factorial:\n\
-     \      mov rax, 0xa\n\
-     \      mov rbx, rax\n\
-     \   factorialStart:\n\
-     \      dec rbx\n\
-     \      cmp rbx, 0\n\
-     \      je factorialEnd\n\
-     \      imul rax, rbx\n\
-     \      jmp factorialStart\n\
-     \   factorialEnd:\n\
-     \        ret"
-   ;; *)
+   {|
+     section .text
+       factorial:
+         mov rax, 0xa
+         mov rbx, rax
+       factorialStart:
+         dec rbx
+         cmp rbx, 0
+         je factorialEnd
+         imul rax, rbx
+         jmp factorialStart
+       factorialEnd:
+         ret
+   |} *)
 
 let () =
   match parse fib with
