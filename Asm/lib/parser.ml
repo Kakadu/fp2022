@@ -20,15 +20,32 @@ let spaces_p = skip_many space_p <?> "spaces_p"
 (* Get rid of some number of one or more spaces *)
 let spaces1_p = skip_many1 space_p <?> "spaces1_p"
 let eol_p = char '\n' <?> "eol_p"
-
-(* We always assume that there's at least one space to the right when using this
-   parser *)
-let trim_p p = spaces_p *> p <* spaces1_p <?> "trim_p"
+let trim_p p = spaces_p *> p <* spaces_p
 let comma_p = trim_p (char ',') <?> "comma_p"
+let skip_empty_lines_p = skip_many (space_p <|> eol_p) <?> "skip_empty_lines_p"
 
 let is_digit = function
   | '0' .. '9' -> true
   | _ -> false
+;;
+
+let is_letter = function
+  | 'a' .. 'z' | 'A' .. 'Z' -> true
+  | _ -> false
+;;
+
+let is_label_char = function
+  | '_' | '$' | '#' | '@' | '~' | '.' | '?' -> true
+  | c -> is_digit c || is_letter c
+;;
+
+(* Parse label declaration (e.g. "l1:") *)
+let label_decl_p =
+  (* The label must start with a letter *)
+  lift2 (fun c s -> Char.escaped c ^ s) (satisfy is_letter) (take_while is_label_char)
+  <* char ':'
+  >>| (fun s -> Label s)
+  <?> "label_decl_p"
 ;;
 
 (* Parse an integer and return it as integer *)
@@ -122,7 +139,7 @@ let dregconst_p =
 
 (* Generate a parser of one-line command *)
 let gen_command_p operand_p converter cmd_str =
-  trim_p (string cmd_str) *> operand_p <* spaces_p >>| converter
+  string cmd_str *> spaces1_p *> operand_p >>| converter
 ;;
 
 (* Generate a parser of a byte command *)
@@ -192,8 +209,14 @@ let dcommand_p =
   <?> "dcommand_p"
 ;;
 
-(* Parse any command *)
-let command_p = choice [ dcommand_p; wcommand_p; bcommand_p ]
+(* Parse any instruction == line *)
+let instr_p = choice [ dcommand_p; wcommand_p; bcommand_p; label_decl_p ] |> trim_p
+
+(* Parse the whole NASM program *)
+let program_p =
+  skip_empty_lines_p *> sep_by1 (eol_p *> skip_empty_lines_p) instr_p
+  <* skip_empty_lines_p
+;;
 
 (* Taken from vs9h *)
 let test_ok, test_fail =
@@ -223,7 +246,6 @@ let ok_int = test_ok (fun _ -> print_int)
 let fail_int = test_fail (fun _ -> print_int)
 
 let%test _ = ok_string (trim_p (string "test")) "    test " "test"
-let%test _ = fail_string (trim_p (string "test")) "    test"
 let%test _ = ok_string breg_name_p "ah" "ah"
 let%test _ = fail_string breg_name_p "ax"
 
@@ -256,4 +278,51 @@ let%test _ =
 
 let%test _ = fail_instruction bcommand_p "inc 314513245"
 (* let%test _ = fail_instruction bcommand_p "sub al, -1234" *)
-let%test _ = fail_instruction command_p "add al, edx"
+let%test _ = fail_instruction instr_p "add al, edx"
+let%test _ = ok_instruction instr_p "abc?def$:" (Label "abc?def$")
+let%test _ = fail_instruction instr_p "@abc:"
+
+let ok_all_instructions = test_ok pp_all_instructions
+let fail_all_instructions = test_fail pp_all_instructions
+
+let%test _ =
+  ok_all_instructions
+    program_p
+    "mov ax, bx"
+    [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx"))) ]
+;;
+
+let%test _ =
+  ok_all_instructions
+    program_p
+    "mov ax, bx\n     add eax, ecx"
+    [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
+    ]
+;;
+
+let%test _ =
+  ok_all_instructions
+    program_p
+    "mov ax, bx\n     add eax, ecx\n inc ax  "
+    [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
+    ; WCommand (Inc (Reg (reg_name_to_word_reg "ax")))
+    ]
+;;
+
+let%test _ =
+  ok_all_instructions
+    program_p
+    "l1:\n mov ax, bx\n add eax, ecx\n inc bl\n l@abel2:   \n sub dh, 5\n\n\n\n   \n"
+    [ Label "l1"
+    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
+    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
+    ; Label "l@abel2"
+    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
+    ]
+;;
+
+let%test _ = fail_all_instructions program_p "mov ax, bx   inc ax"
+let%test _ = fail_all_instructions program_p "label_without_colon"
