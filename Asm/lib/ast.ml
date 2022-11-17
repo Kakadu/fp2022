@@ -96,6 +96,7 @@ type 'a operands_double =
 type 'a operand_single =
   | Reg of 'a reg
   | Const of 'a const
+  | Label of string
 [@@deriving show { with_path = false }]
 
 type 'a command =
@@ -104,15 +105,26 @@ type 'a command =
   | Sub of 'a operands_double
   | Inc of 'a operand_single
   | Mul of 'a operand_single
+  | Jmp of string operand_single
+  | Je of string operand_single
+  | Jne of string operand_single
+  | Call of string operand_single
   | Ret
 [@@deriving show { with_path = false }]
 
 type instruction =
   (* Label declaration *)
   | LCommand of string
+  (* Command with byte-size operands *)
   | BCommand of byte command
+  (* Command with word-size operands *)
   | WCommand of word command
+  (* Command with dword-size operands *)
   | DCommand of dword command
+  (* Command with a label/string operand.
+     Our type system prevents us from having
+     SCommand (Inc (...)) or SCommand (Je (Reg (...))) *)
+  | SCommand of string command
 [@@deriving show { with_path = false }]
 
 (* For now the AST may contain invalid instructions like Inc (Const 5).
@@ -123,6 +135,7 @@ type all_instructions = instruction list [@@deriving show { with_path = false }]
 module CmdHandler = struct
   let cmd_one_arg_list = [ "inc"; "mul" ]
   let cmd_two_args_list = [ "mov"; "add"; "sub" ]
+  let scmd_list = [ "jmp"; "je"; "jne"; "call" ]
 
   let cmd_one_arg_str_to_command = function
     | "inc" -> fun x -> Inc x
@@ -134,6 +147,16 @@ module CmdHandler = struct
     | "mov" -> fun x -> Mov x
     | "add" -> fun x -> Add x
     | "sub" -> fun x -> Sub x
+    | str -> failwith ("Unknown command " ^ str)
+  ;;
+
+  (* This is a special case for commands that take a string rather than Reg or
+     Const. Such commands always have only one operand *)
+  let scmd_str_to_command = function
+    | "jmp" -> fun x -> Jmp x
+    | "je" -> fun x -> Je x
+    | "jne" -> fun x -> Jne x
+    | "call" -> fun x -> Call x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 end

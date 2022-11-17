@@ -39,14 +39,17 @@ let is_label_char = function
   | c -> is_digit c || is_letter c
 ;;
 
-(* Parse label declaration (e.g. "l1:") *)
-let label_decl_p =
+(* Parse label, return it's name as a string *)
+let label_str_p =
   (* The label must start with a letter *)
   lift2 (fun c s -> Char.escaped c ^ s) (satisfy is_letter) (take_while is_label_char)
-  <* char ':'
-  >>| (fun s -> LCommand s)
-  <?> "label_decl_p"
+  <?> "label_str_p"
 ;;
+
+let label_p = label_str_p >>| (fun s -> Label s) <?> "label_p"
+
+(* Parse label declaration (e.g. "l1:") *)
+let label_decl_p = label_str_p <* char ':' >>| (fun s -> LCommand s) <?> "label_decl_p"
 
 (* Parse an integer and return it as integer *)
 let int_p =
@@ -149,6 +152,12 @@ let gen_command_p operand_p converter cmd_str =
 ;;
 
 (****************************************************************************************)
+(* Generate a parser of a string command *)
+let gen_scommand_p cmd_str =
+  gen_command_p label_p (fun x -> SCommand (scmd_str_to_command cmd_str x)) cmd_str
+;;
+
+(****************************************************************************************)
 (* Generate a parser of a byte command *)
 let gen_bcommand_p operand_p cmd_str_to_command cmd_str =
   gen_command_p operand_p (fun x -> BCommand (cmd_str_to_command cmd_str x)) cmd_str
@@ -197,7 +206,7 @@ let gen_dcommand_two_args_p =
 ;;
 
 (****************************************************************************************)
-(* The following three parsers are intended to parse a one-line command *)
+(* The following parsers are intended to parse a one-line command *)
 let bcommand_p =
   choice
     (List.map gen_bcommand_one_arg_p cmd_one_arg_list
@@ -219,9 +228,13 @@ let dcommand_p =
   <?> "dcommand_p"
 ;;
 
+let scommand_p = choice (List.map gen_scommand_p scmd_list) <?> "scommand_p"
+
 (****************************************************************************************)
 (* Parse any instruction == line *)
-let instr_p = choice [ dcommand_p; wcommand_p; bcommand_p; label_decl_p ] |> trim_p
+let instr_p =
+  choice [ bcommand_p; wcommand_p; dcommand_p; scommand_p; label_decl_p ] |> trim_p
+;;
 
 (* Parse the whole NASM program *)
 let program_p =
@@ -294,19 +307,17 @@ let%test _ = fail_instruction instr_p "add al, edx"
 let%test _ = ok_instruction instr_p "abc?def$:" (LCommand "abc?def$")
 let%test _ = fail_instruction instr_p "@abc:"
 
-let ok_all_instructions = test_ok pp_all_instructions
-let fail_all_instructions = test_fail pp_all_instructions
+let ok_all_instructions = test_ok pp_all_instructions program_p
+let fail_all_instructions = test_fail pp_all_instructions program_p
 
 let%test _ =
   ok_all_instructions
-    program_p
     "mov ax, bx"
     [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx"))) ]
 ;;
 
 let%test _ =
   ok_all_instructions
-    program_p
     "mov ax, bx\n     add eax, ecx"
     [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
@@ -315,7 +326,6 @@ let%test _ =
 
 let%test _ =
   ok_all_instructions
-    program_p
     "mov ax, bx\n     add eax, ecx\n inc ax  "
     [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
@@ -325,7 +335,6 @@ let%test _ =
 
 let%test _ =
   ok_all_instructions
-    program_p
     "l1:\n mov ax, bx\n add eax, ecx\n inc bl\n l@abel2:   \n sub dh, 5\n\n\n\n   \n"
     [ LCommand "l1"
     ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
@@ -336,5 +345,28 @@ let%test _ =
     ]
 ;;
 
-let%test _ = fail_all_instructions program_p "mov ax, bx   inc ax"
-let%test _ = fail_all_instructions program_p "label_without_colon"
+let%test _ = fail_all_instructions "mov ax, bx   inc ax"
+let%test _ = fail_all_instructions "label_without_colon"
+
+let%test _ =
+  ok_all_instructions
+    "l1:\n\
+    \ mov ax, bx\n\
+    \ je LAbEl$  \n\
+    \ add eax, ecx\n\
+    \ inc bl\n\
+    \ l@abel2:   \n\
+    \ sub dh, 5\n\
+     jmp l1  \n"
+    [ LCommand "l1"
+    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; SCommand (Je (Label "LAbEl$"))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
+    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
+    ; LCommand "l@abel2"
+    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
+    ; SCommand (Jmp (Label "l1"))
+    ]
+;;
+
+let%test _ = fail_all_instructions "call eax, edx"
