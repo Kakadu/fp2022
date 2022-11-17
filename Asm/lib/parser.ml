@@ -78,11 +78,13 @@ let gen_const_p int_is_t_const int_to_t_const =
 (* then return (Const (int_to_t_const x)) *)
 (* else fail "Integer is too big" *)
 
+(****************************************************************************************)
 (* Parse an integer and return it as a Const (...) *)
 let bconst_p = gen_const_p int_is_byte_const int_to_byte_const <?> "bconst_p"
 let wconst_p = gen_const_p int_is_word_const int_to_word_const <?> "wconst_p"
 let dconst_p = gen_const_p int_is_dword_const int_to_dword_const <?> "dconst_p"
 
+(****************************************************************************************)
 (* Generate parser for register names that returns a string *)
 let gen_reg_name_p reg_name_list = choice (List.map string reg_name_list)
 
@@ -91,6 +93,7 @@ let breg_name_p = gen_reg_name_p byte_reg_name_list <?> "breg_name_p"
 let wreg_name_p = gen_reg_name_p word_reg_name_list <?> "wreg_name_p"
 let dreg_name_p = gen_reg_name_p dword_reg_name_list <?> "dreg_name_p"
 
+(****************************************************************************************)
 (* Generate parser for register names that returns Reg (...) *)
 let gen_reg_p reg_name_p reg_name_to_t_reg =
   reg_name_p >>| fun reg_name -> Reg (reg_name_to_t_reg reg_name)
@@ -101,6 +104,7 @@ let breg_p = gen_reg_p breg_name_p reg_name_to_byte_reg <?> "breg_p"
 let wreg_p = gen_reg_p wreg_name_p reg_name_to_word_reg <?> "wreg_p"
 let dreg_p = gen_reg_p dreg_name_p reg_name_to_dword_reg <?> "dreg_p"
 
+(****************************************************************************************)
 (* Generate parser for two registers that returns RegReg (...) *)
 let gen_regreg_p reg_name_p reg_name_to_t_reg =
   lift2
@@ -115,6 +119,7 @@ let bregreg_p = gen_regreg_p breg_name_p reg_name_to_byte_reg <?> "breg_const_p"
 let wregreg_p = gen_regreg_p wreg_name_p reg_name_to_word_reg <?> "wregreg_p"
 let dregreg_p = gen_regreg_p dreg_name_p reg_name_to_dword_reg <?> "dregreg_p"
 
+(****************************************************************************************)
 (* Generate parser for register and constant that returns RegConst (...) *)
 let gen_regconst_p reg_name_p reg_name_to_t_reg int_to_t_const =
   lift2
@@ -137,11 +142,13 @@ let dregconst_p =
   gen_regconst_p dreg_name_p reg_name_to_dword_reg int_to_dword_const <?> "dregconst_p"
 ;;
 
+(****************************************************************************************)
 (* Generate a parser of one-line command *)
 let gen_command_p operand_p converter cmd_str =
   string cmd_str *> spaces1_p *> operand_p >>| converter
 ;;
 
+(****************************************************************************************)
 (* Generate a parser of a byte command *)
 let gen_bcommand_p operand_p cmd_str_to_command cmd_str =
   gen_command_p operand_p (fun x -> BCommand (cmd_str_to_command cmd_str x)) cmd_str
@@ -157,6 +164,7 @@ let gen_bcommand_two_args_p =
   gen_bcommand_p (bregreg_p <|> bregconst_p) cmd_two_args_str_to_command
 ;;
 
+(****************************************************************************************)
 (* Generate a parser of a word command *)
 let gen_wcommand_p operand_p cmd_str_to_command cmd_str =
   gen_command_p operand_p (fun x -> WCommand (cmd_str_to_command cmd_str x)) cmd_str
@@ -172,6 +180,7 @@ let gen_wcommand_two_args_p =
   gen_wcommand_p (wregreg_p <|> wregconst_p) cmd_two_args_str_to_command
 ;;
 
+(****************************************************************************************)
 (* Generate a parser of a dword command *)
 let gen_dcommand_p operand_p cmd_str_to_command cmd_str =
   gen_command_p operand_p (fun x -> DCommand (cmd_str_to_command cmd_str x)) cmd_str
@@ -187,6 +196,7 @@ let gen_dcommand_two_args_p =
   gen_dcommand_p (dregreg_p <|> dregconst_p) cmd_two_args_str_to_command
 ;;
 
+(****************************************************************************************)
 (* The following three parsers are intended to parse a one-line command *)
 let bcommand_p =
   choice
@@ -209,6 +219,7 @@ let dcommand_p =
   <?> "dcommand_p"
 ;;
 
+(****************************************************************************************)
 (* Parse any instruction == line *)
 let instr_p = choice [ dcommand_p; wcommand_p; bcommand_p; label_decl_p ] |> trim_p
 
@@ -218,6 +229,7 @@ let program_p =
   <* skip_empty_lines_p
 ;;
 
+(****************************************************************************************)
 (* Taken from vs9h *)
 let test_ok, test_fail =
   let ok ppf parser input expected =
