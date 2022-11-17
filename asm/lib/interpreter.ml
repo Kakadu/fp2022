@@ -12,6 +12,12 @@ module type MONAD = sig
   val ( >> ) : 'a t -> 'b t -> 'b t
 end
 
+module type MONADERROR = sig
+  include MONAD
+
+  val error : string -> 'a t
+end
+
 module Result = struct
   type 'a t = ('a, string) Result.t
 
@@ -19,12 +25,6 @@ module Result = struct
   let ( >> ) x f = x >>= fun _ -> f
   let return = Result.ok
   let error = Result.error
-end
-
-module type MONADERROR = sig
-  include MONAD
-
-  val error : string -> 'a t
 end
 
 module Interpret (M : MONADERROR) = struct
@@ -39,10 +39,11 @@ module Interpret (M : MONADERROR) = struct
       Format.fprintf ppf "@]]@]"
   end
 
+  (*global constans*)
   type var =
     | Reg64 of int (*not so large registers*)
     | Reg128 of string (*large registers*)
-    | Const of string (*global constans*)
+    | Const of string
   [@@deriving show { with_path = false }]
 
   type envr = var MapVar.t [@@deriving show { with_path = false }]
