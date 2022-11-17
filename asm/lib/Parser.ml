@@ -110,8 +110,7 @@ let code_line_parser =
   let command (Mnemonic cmd) = cmd in
   let inst =
     mnem >>= fun cmd ->
-    trim @@ sep_by sep expr_parser >>= fun exprs ->
-    match exprs with
+    trim @@ sep_by sep expr_parser >>= function
     | [] when is_arg0 @@ command cmd -> return (Command (Args0 cmd))
     | [ arg ] when is_arg1 @@ command cmd -> return (Command (Args1 (cmd, arg)))
     | [ arg1; arg2 ] when is_arg2 @@ command cmd ->
