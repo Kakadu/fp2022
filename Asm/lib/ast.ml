@@ -19,6 +19,11 @@ module OperandsHandler : sig
   type 'a reg [@@deriving show { with_path = false }]
   type 'a const [@@deriving show { with_path = false }]
 
+  (* Check integer size *)
+  val int_is_byte_const : int -> bool
+  val int_is_word_const : int -> bool
+  val int_is_dword_const : int -> bool
+
   (* Converters *)
   val int_to_byte_const : int -> byte const
   val int_to_word_const : int -> word const
@@ -51,14 +56,11 @@ end = struct
   type 'a reg = int [@@deriving show { with_path = false }]
   type 'a const = int [@@deriving show { with_path = false }]
 
-  let int_to_byte_const x =
-    if x < -(2 ** 7) || x > (2 ** 7) - 1 then failwith "Int8 expected" else x
-  ;;
-
-  let int_to_word_const x =
-    if x < -(2 ** 15) || x > (2 ** 15) - 1 then failwith "Int16 expected" else x
-  ;;
-
+  let int_is_byte_const x = x >= -(2 ** 7) && x <= (2 ** 7) - 1
+  let int_is_word_const x = x >= -(2 ** 15) && x <= (2 ** 15) - 1
+  let int_is_dword_const x = x >= -(2 ** 31) && x <= (2 ** 31) - 1
+  let int_to_byte_const = Fun.id
+  let int_to_word_const = Fun.id
   let int_to_dword_const = Fun.id
   let int_to_byte_reg = Fun.id
   let int_to_word_reg = Fun.id
@@ -112,19 +114,22 @@ type instruction =
   | DCommand of dword command
 [@@deriving show { with_path = false }]
 
+(* For now the AST may contain invalid instructions like Inc (Const 5).
+   It should be fixed, probably by scanning the AST after parsing and
+   producing an error if an invalid instruction is found *)
 type all_instructions = instruction list [@@deriving show { with_path = false }]
 
 module CmdHandler = struct
   let cmd_one_arg_list = [ "inc"; "mul" ]
   let cmd_two_args_list = [ "mov"; "add"; "sub" ]
 
-  let cmd_one_arg_str_to_alg = function
+  let cmd_one_arg_str_to_command = function
     | "inc" -> fun x -> Inc x
     | "mul" -> fun x -> Mul x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
-  let cmd_two_args_str_to_alg = function
+  let cmd_two_args_str_to_command = function
     | "mov" -> fun x -> Mov x
     | "add" -> fun x -> Add x
     | "sub" -> fun x -> Sub x
