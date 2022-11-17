@@ -9,11 +9,6 @@ let is_ws = function ' ' | '\n' | '\t' | '\r' -> true | _ -> false
 let whitespaces = skip_while is_ws
 let trim x = whitespaces *> x <* whitespaces
 let parens p = trim (char '(' *> p <* char ')')
-
-let conde = function
-  | [] -> fail "No conds in conde"
-  | x :: xs -> List.fold_left ( <|> ) x xs
-
 let is_num = function '0' .. '9' -> true | _ -> false
 let is_ch = function 'A' .. 'Z' | 'a' .. 'z' -> true | _ -> false
 
@@ -64,10 +59,6 @@ let is_jmp = function
 
 let is_data_dec = function "DB" | "DW" | "DD" | "DQ" -> true | _ -> false
 let is_mnemonic s = is_arg0 s || is_arg1 s || is_arg2 s || is_jmp s
-let digit_c = satisfy is_num
-
-(*parse digit and return int "5" -> 5 *)
-let digit = digit_c >>= fun c -> return (Char.code c - Char.code '0')
 
 (*parse integer like 42727*)
 let nums = take_while1 is_num
