@@ -44,7 +44,9 @@ let is_reg s =
 let is_arg0 = function "RET" | "SYSCALL" -> true | _ -> false
 
 let is_arg1 = function
-  | "PUSH" | "POP" | "INC" | "DEC" | "NOT" | "NEG" | "CALL" -> true
+  | "PUSH" | "POP" | "INC" | "DEC" | "NOT" | "NEG" | "CALL" | "JMP" | "JE"
+  | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" ->
+      true
   | _ -> false
 
 let is_arg2 = function
@@ -53,12 +55,8 @@ let is_arg2 = function
       true
   | _ -> false
 
-let is_jmp = function
-  | "JMP" | "JE" | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" -> true
-  | _ -> false
-
 let is_data_dec = function "DB" | "DW" | "DD" | "DQ" -> true | _ -> false
-let is_mnemonic s = is_arg0 s || is_arg1 s || is_arg2 s || is_jmp s
+let is_mnemonic s = is_arg0 s || is_arg1 s || is_arg2 s
 
 (** parse integer like 42727 *)
 let nums = take_while1 is_num
@@ -84,10 +82,12 @@ let expr_parser =
   in
   let reg =
     word >>= fun x ->
-    let w = String.uppercase_ascii x in
-    if is_reg w then return (Reg w) else return (Var x)
+    match String.uppercase_ascii x with
+    | w when is_reg w -> return (Reg w)
+    | _ -> return (Lab (Label x))
   in
-  let arg = reg <|> num in
+  let var = char '%' *> word >>= fun x -> return (Var x) in
+  let arg = reg <|> num <|> var in
   let chainl1 e op =
     let rec go acc = lift2 (fun f x -> f acc x) op e >>= go <|> return acc in
     e >>= fun init -> go init
@@ -110,17 +110,14 @@ let code_line_parser =
   let command (Mnemonic cmd) = cmd in
   let inst =
     mnem >>= fun cmd ->
-    if is_jmp @@ command cmd then
-      trim word >>= fun l -> return (Command (Jmp (cmd, Label l)))
-    else
-      trim @@ sep_by sep expr_parser >>= fun exprs ->
-      match List.length exprs with
-      | 0 when is_arg0 @@ command cmd -> return (Command (Args0 cmd))
-      | 1 when is_arg1 @@ command cmd ->
-          return (Command (Args1 (cmd, List.hd exprs)))
-      | 2 when is_arg2 @@ command cmd ->
-          return (Command (Args2 (cmd, List.hd exprs, List.nth exprs 1)))
-      | _ -> fail "Invalid count of arguments"
+    trim @@ sep_by sep expr_parser >>= fun exprs ->
+    match List.length exprs with
+    | 0 when is_arg0 @@ command cmd -> return (Command (Args0 cmd))
+    | 1 when is_arg1 @@ command cmd ->
+        return (Command (Args1 (cmd, List.hd exprs)))
+    | 2 when is_arg2 @@ command cmd ->
+        return (Command (Args2 (cmd, List.hd exprs, List.nth exprs 1)))
+    | _ -> fail "Invalid count of arguments"
   in
   label <|> inst
 
@@ -168,8 +165,11 @@ let%test _ = test_p expr_parser show_expr "0xa" = "(Const \"0xa\")"
 let%test _ = test_p expr_parser show_expr "    0xa   " = "(Const \"0xa\")"
 let%test _ = test_p expr_parser show_expr "rax" = "(Reg \"RAX\")"
 let%test _ = test_p expr_parser show_expr "rAx" = "(Reg \"RAX\")"
-let%test _ = test_p expr_parser show_expr "var" = "(Var \"var\")"
-let%test _ = test_p expr_parser show_expr "vAr" = "(Var \"vAr\")"
+let%test _ = test_p expr_parser show_expr "rAx" = "(Reg \"RAX\")"
+let%test _ = test_p expr_parser show_expr "%var" = "(Var \"var\")"
+let%test _ = test_p expr_parser show_expr "%vAr" = "(Var \"vAr\")"
+let%test _ = test_p expr_parser show_expr "labl" = "(Lab (Label \"labl\"))"
+let%test _ = test_p expr_parser show_expr "lAbl" = "(Lab (Label \"lAbl\"))"
 
 let%test _ =
   test_p expr_parser show_expr "0 + 0x0"
@@ -180,7 +180,7 @@ let%test _ =
   = "(Add ((Const \"0\"), (Reg \"RAX\")))"
 
 let%test _ =
-  test_p expr_parser show_expr "0 + var"
+  test_p expr_parser show_expr "0 + %var"
   = "(Add ((Const \"0\"), (Var \"var\")))"
 
 let%test _ =

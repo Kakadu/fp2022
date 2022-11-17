@@ -77,6 +77,10 @@ module Interpret (M : MONADERROR) = struct
         true
     | _ -> false
 
+  let is_jmp = function
+    | "JMP" | "JE" | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" -> true
+    | _ -> false
+
   (** insert elements from list to map *)
   let prep env =
     let set k v env = MapVar.add k v env in
@@ -173,7 +177,7 @@ module Interpret (M : MONADERROR) = struct
   (** code section interpreter that return map, ast - general code that shouldn't change *)
   let rec code_sec_inter env ast =
     let jump env ast tl = function
-      | Jmp (Mnemonic cmd, label) -> (
+      | Args1 (Mnemonic cmd, Lab label) -> (
           find_code_after_l label ast >>= fun code ->
           match cmd with
           | "JMP" -> code_sec_inter env ast code
@@ -187,9 +191,9 @@ module Interpret (M : MONADERROR) = struct
     function
     | Command cmd :: tl -> (
         match cmd with
+        | Args1 (Mnemonic c, _) when is_jmp c -> jump env ast tl cmd
         | Args0 _ | Args1 _ | Args2 _ ->
-            inter_cmd env cmd >>= fun env -> code_sec_inter env ast tl
-        | Jmp _ -> jump env ast tl cmd)
+            inter_cmd env cmd >>= fun env -> code_sec_inter env ast tl)
     | Id _ :: tl -> code_sec_inter env ast tl
     | [] -> return env
 

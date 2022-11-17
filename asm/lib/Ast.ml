@@ -2,6 +2,9 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
+(** label to use in code section such myLabel: and to use as argument of jmp commands *)
+type label = Label of string [@@deriving show { with_path = false }]
+
 (** arithmetic expression or register to use as argument *)
 type expr =
   | Add of expr * expr
@@ -11,10 +14,8 @@ type expr =
   | Const of string  (** interger constant *)
   | Var of string  (** global constant *)
   | Reg of string  (** comman rigister *)
+  | Lab of label  (** labels for jmps *)
 [@@deriving show { with_path = false }]
-
-(** label to use in code section such myLabel: and to use as argument of jmp commands *)
-type label = Label of string [@@deriving show { with_path = false }]
 
 (** just name of command *)
 type mnemonic = Mnemonic of string [@@deriving show { with_path = false }]
@@ -24,7 +25,6 @@ type command =
   | Args0 of mnemonic
   | Args1 of mnemonic * expr
   | Args2 of mnemonic * expr * expr
-  | Jmp of mnemonic * label
 [@@deriving show { with_path = false }]
 
 (** one line of code incode section that contains command and her arguments or label to jump *)
