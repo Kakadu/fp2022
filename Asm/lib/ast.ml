@@ -108,7 +108,8 @@ type 'a command =
 [@@deriving show { with_path = false }]
 
 type instruction =
-  | Label of string
+  (* Label declaration *)
+  | LCommand of string
   | BCommand of byte command
   | WCommand of word command
   | DCommand of dword command

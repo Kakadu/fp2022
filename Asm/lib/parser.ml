@@ -44,7 +44,7 @@ let label_decl_p =
   (* The label must start with a letter *)
   lift2 (fun c s -> Char.escaped c ^ s) (satisfy is_letter) (take_while is_label_char)
   <* char ':'
-  >>| (fun s -> Label s)
+  >>| (fun s -> LCommand s)
   <?> "label_decl_p"
 ;;
 
@@ -291,7 +291,7 @@ let%test _ =
 let%test _ = fail_instruction bcommand_p "inc 314513245"
 (* let%test _ = fail_instruction bcommand_p "sub al, -1234" *)
 let%test _ = fail_instruction instr_p "add al, edx"
-let%test _ = ok_instruction instr_p "abc?def$:" (Label "abc?def$")
+let%test _ = ok_instruction instr_p "abc?def$:" (LCommand "abc?def$")
 let%test _ = fail_instruction instr_p "@abc:"
 
 let ok_all_instructions = test_ok pp_all_instructions
@@ -327,11 +327,11 @@ let%test _ =
   ok_all_instructions
     program_p
     "l1:\n mov ax, bx\n add eax, ecx\n inc bl\n l@abel2:   \n sub dh, 5\n\n\n\n   \n"
-    [ Label "l1"
+    [ LCommand "l1"
     ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
     ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
-    ; Label "l@abel2"
+    ; LCommand "l@abel2"
     ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
     ]
 ;;
