@@ -111,12 +111,11 @@ let code_line_parser =
   let inst =
     mnem >>= fun cmd ->
     trim @@ sep_by sep expr_parser >>= fun exprs ->
-    match List.length exprs with
-    | 0 when is_arg0 @@ command cmd -> return (Command (Args0 cmd))
-    | 1 when is_arg1 @@ command cmd ->
-        return (Command (Args1 (cmd, List.hd exprs)))
-    | 2 when is_arg2 @@ command cmd ->
-        return (Command (Args2 (cmd, List.hd exprs, List.nth exprs 1)))
+    match exprs with
+    | [] when is_arg0 @@ command cmd -> return (Command (Args0 cmd))
+    | [ arg ] when is_arg1 @@ command cmd -> return (Command (Args1 (cmd, arg)))
+    | [ arg1; arg2 ] when is_arg2 @@ command cmd ->
+        return (Command (Args2 (cmd, arg1, arg2)))
     | _ -> fail "Invalid count of arguments"
   in
   label <|> inst
