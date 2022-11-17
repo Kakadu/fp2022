@@ -60,14 +60,15 @@ let is_jmp = function
 let is_data_dec = function "DB" | "DW" | "DD" | "DQ" -> true | _ -> false
 let is_mnemonic s = is_arg0 s || is_arg1 s || is_arg2 s || is_jmp s
 
-(*parse integer like 42727*)
+(** parse integer like 42727 *)
 let nums = take_while1 is_num
+
 let hex_nums = take_while1 is_hex_digit
 
-(*parse word of letters*)
+(** parse word of letters *)
 let word = take_while1 is_ch
 
-(*parse expression that may content +, -, *, /, registers and int constants in hex and decimal forms then return Ast.expr where operations have prio*)
+(** parse expression that may content +, -, *, /, registers and int constants in hex and decimal forms then return Ast.expr where operations have prio *)
 let expr_parser =
   let add = char '+' *> return (fun x y -> Add (x, y)) in
   let sub = char '-' *> return (fun x y -> Sub (x, y)) in
@@ -96,7 +97,7 @@ let expr_parser =
       let term = trim @@ chainl1 factor (mul <|> div) in
       trim @@ chainl1 term (add <|> sub))
 
-(*parse one line of code: mnemonic and her argumets or label then return Ast.code_section*)
+(** parse one line of code: mnemonic and her argumets or label then return Ast.code_section *)
 let code_line_parser =
   let label = trim @@ word <* char ':' >>= fun x -> return (Id (Label x)) in
   let mnem =
@@ -123,7 +124,7 @@ let code_line_parser =
   in
   label <|> inst
 
-(*parse one line of data section: type of const and const then return Ast.var t*)
+(** parse one line of data section: type of const and const then return Ast.var t *)
 let data_line_parser =
   let data_t =
     trim word >>= fun x ->
@@ -142,7 +143,7 @@ let data_line_parser =
   data_t >>= fun dt ->
   trim @@ sep_by sep (word <|> nums) >>= fun l -> return (v dt l)
 
-(*parse one of two possible sections and then parse section then return Ast.ast*)
+(** parse one of two possible sections and then parse section then return Ast.ast *)
 let sec_parser =
   trim @@ (string "section" *> whitespaces *> char '.' *> word) >>= function
   | "code" | "text" ->
@@ -150,11 +151,12 @@ let sec_parser =
   | "data" -> many data_line_parser >>= fun values -> return (Data values)
   | _ -> fail "Invalid section"
 
-(*main paresr*)
+(** main paresr *)
 let parser = many sec_parser
+
 let parse = parse_string ~consume:All parser
 
-(*main main parser*)
+(** main main parser *)
 let eval str = match parse str with Ok v -> v | Error msg -> failwith msg
 
 (*******************************************tests*******************************************)

@@ -39,16 +39,16 @@ module Interpret (M : MONADERROR) = struct
       Format.fprintf ppf "@]]@]"
   end
 
-  (*global constans*)
+  (** global constans *)
   type var =
-    | Reg64 of int (*not so large registers*)
-    | Reg128 of string (*large registers*)
-    | Const of string
+    | Reg64 of int  (** not so large registers *)
+    | Reg128 of string  (** large registers *)
+    | Const of string  (** global consts *)
   [@@deriving show { with_path = false }]
 
   type envr = var MapVar.t [@@deriving show { with_path = false }]
 
-  (*start values of registers*)
+  (** start values of registers *)
   let r_list =
     [
       (* "EFLAGS", Reg64 0 *)
@@ -77,7 +77,7 @@ module Interpret (M : MONADERROR) = struct
         true
     | _ -> false
 
-  (*insert elements from list to map*)
+  (** insert elements from list to map *)
   let prep env =
     let set k v env = MapVar.add k v env in
     let rec helper env = function
@@ -86,7 +86,7 @@ module Interpret (M : MONADERROR) = struct
     in
     helper env
 
-  (*calculate a expression, f function that takes values of registers or constans from map or calcuclate integer constants from expression*)
+  (** calculate a expression, f function that takes values of registers or constans from map or calcuclate integer constants from expression *)
   let rec ev f = function
     | Add (l, r) ->
         ev f l >>= fun l ->
@@ -103,20 +103,20 @@ module Interpret (M : MONADERROR) = struct
         else ev f l >>= fun l -> return (l / r)
     | const -> f const
 
-  (*return value of register named 'name'*)
+  (** return value of register named 'name' *)
   let find_reg64_cont env name =
     return (MapVar.find name env) >>= function
     | Reg64 x -> return x
     | _ -> error "not a R64"
 
-  (*change value of register by function f*)
+  (** change value of register by function f *)
   let change_reg64 env f = function
     | name when is_64bitreg name ->
         find_reg64_cont env name >>= fun reg ->
         return @@ MapVar.add name (Reg64 (f reg)) env
     | name -> error (name ^ " isnt a reg64")
 
-  (*interpret command and return map*)
+  (** interpret command and return map *)
   let inter_one_args_cmd env arg1 =
     let helper fu = change_reg64 env fu arg1 in
     function
@@ -127,15 +127,14 @@ module Interpret (M : MONADERROR) = struct
     (* | "PUSH" | "POP" | "CALL"  *)
     | x -> error (x ^ " is not implemented yet")
 
-  (*interpret command and return map*)
+  (** interpret command and return map *)
   let inter_zero_args_cmd env = function
     | "RET" -> return env
     | "SYSCALL" | _ -> error "Not implemented yet"
 
-  (*interpret command and return map*)
+  (** interpret command and return map *)
   let inter_two_args_cmd env arg1 arg2 cmd =
     let f = function
-      (*f for ev function*)
       | Ast.Const c -> return @@ int_of_string c
       | Ast.Reg reg_name -> find_reg64_cont env reg_name
       | _ -> error "Vars not implemented"
@@ -155,25 +154,25 @@ module Interpret (M : MONADERROR) = struct
     | "OR" -> helper (fun x -> Int.logor x arg2)
     | "SHL" | "SHR" | _ -> error "Not implemented yet"
 
-  (*general interpreter of commands not including jmp commands*)
+  (** general interpreter of commands not including jmp commands *)
   let inter_cmd env = function
     | Args0 (Mnemonic cmd) -> inter_zero_args_cmd env cmd
     | Args1 (Mnemonic cmd, Ast.Reg x) -> inter_one_args_cmd env x cmd
     | Args2 (Mnemonic cmd, Ast.Reg x, y) -> inter_two_args_cmd env x y cmd
     | _ -> error "Isnt argsn"
 
-  (*returns list of code_section that placed after label l*)
+  (** returns list of code_section that placed after label l *)
   let rec find_code_after_l (Label l) = function
     | [] -> error ("No such label: " ^ l)
     | Id (Label label) :: tl when label = l -> return tl
     | _ :: tl -> find_code_after_l (Label l) tl
 
-  (*not implemeted data secction interpreter*)
+  (** not implemeted data secction interpreter *)
   let data_sec_inter env = function _ -> return env
 
-  (*code section interpreter that return map, ast - general code that shouldn't change*)
+  (** code section interpreter that return map, ast - general code that shouldn't change *)
   let rec code_sec_inter env ast =
-    (*jmp commands interpreter, ast - code where searching label, tl - part of code that have to returned if condition to jmp is false*)
+    (** jmp commands interpreter, ast - code where searching label, tl - part of code that have to returned if condition to jmp is false *)
     let jump env ast tl = function
       | Jmp (Mnemonic cmd, label) -> (
           find_code_after_l label ast >>= fun code ->
@@ -186,7 +185,7 @@ module Interpret (M : MONADERROR) = struct
           | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" | _ -> error "")
       | _ -> error "Isnt jmp"
     in
-    (*general part of interpreter*)
+    (** general part of interpreter *)
     function
     | Command cmd :: tl -> (
         match cmd with
@@ -196,7 +195,7 @@ module Interpret (M : MONADERROR) = struct
     | Id _ :: tl -> code_sec_inter env ast tl
     | [] -> return env
 
-  (*general general interpreter*)
+  (** general general interpreter *)
   let rec interpret env = function
     | [] -> return env
     | h :: tl -> (
