@@ -1,6 +1,6 @@
 (library
  (name asm)
- (modules utilites parser ast interpreter)
+ (modules parser ast interpreter)
  (libraries angstrom)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
