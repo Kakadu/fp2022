@@ -24,9 +24,7 @@ type command =
 [@@deriving show { with_path = false }]
 
 (*one line of code in code section that contains command and her arguments or label to jump*)
-type code_section =
-  | Command of command
-  | Id of label
+type code_section = Command of command | Id of label
 [@@deriving show { with_path = false }]
 
 (*data type to use in data section*)
@@ -37,7 +35,5 @@ type var = Variable of string * data_type * string list
 [@@deriving show { with_path = false }]
 
 (*main ast that contains code section with list of commands and data section with list of data declarations*)
-type ast =
-  | Code of code_section list
-  | Data of var list
+type ast = Code of code_section list | Data of var list
 [@@deriving show { with_path = false }]

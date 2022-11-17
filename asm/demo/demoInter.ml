@@ -25,22 +25,21 @@ let fib =
   \      mov rax, 1\n\
   \    fibbonachEnd:\n\
   \      ret"
-;;
 
 (* let fac =
-  "section .text\n\
-  \   factorial:\n\
-  \      mov rax, 0xa\n\
-  \      mov rbx, rax\n\
-  \   factorialStart:\n\
-  \      dec rbx\n\
-  \      cmp rbx, 0\n\
-  \      je factorialEnd\n\
-  \      imul rax, rbx\n\
-  \      jmp factorialStart\n\
-  \   factorialEnd:\n\
-  \        ret"
-;; *)
+     "section .text\n\
+     \   factorial:\n\
+     \      mov rax, 0xa\n\
+     \      mov rbx, rax\n\
+     \   factorialStart:\n\
+     \      dec rbx\n\
+     \      cmp rbx, 0\n\
+     \      je factorialEnd\n\
+     \      imul rax, rbx\n\
+     \      jmp factorialStart\n\
+     \   factorialEnd:\n\
+     \        ret"
+   ;; *)
 
 let () =
   let open Interpret (Result) in
@@ -49,4 +48,3 @@ let () =
   match env with
   | Ok env -> print_string @@ show_envr env
   | Error msg -> failwith msg
-;;

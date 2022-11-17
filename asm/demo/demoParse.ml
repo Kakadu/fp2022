@@ -25,32 +25,28 @@ let fib =
   \      mov rax, 1\n\
   \    fibbonachEnd:\n\
   \      ret"
-;;
 
 (* let fac =
-  "section .text\n\
-  \   factorial:\n\
-  \      mov rax, 0xa\n\
-  \      mov rbx, rax\n\
-  \   factorialStart:\n\
-  \      dec rbx\n\
-  \      cmp rbx, 0\n\
-  \      je factorialEnd\n\
-  \      imul rax, rbx\n\
-  \      jmp factorialStart\n\
-  \   factorialEnd:\n\
-  \        ret"
-;; *)
+     "section .text\n\
+     \   factorial:\n\
+     \      mov rax, 0xa\n\
+     \      mov rbx, rax\n\
+     \   factorialStart:\n\
+     \      dec rbx\n\
+     \      cmp rbx, 0\n\
+     \      je factorialEnd\n\
+     \      imul rax, rbx\n\
+     \      jmp factorialStart\n\
+     \   factorialEnd:\n\
+     \        ret"
+   ;; *)
 
 let () =
   let rec pr_p = function
     | [] -> ()
     | h :: tl ->
-      print_string @@ show_ast h;
-      print_string "\n";
-      pr_p tl
+        print_string @@ show_ast h;
+        print_string "\n";
+        pr_p tl
   in
-  match parse fib with
-  | Ok ast -> pr_p ast
-  | Error msg -> print_endline msg
-;;
+  match parse fib with Ok ast -> pr_p ast | Error msg -> print_endline msg
