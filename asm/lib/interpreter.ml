@@ -172,7 +172,6 @@ module Interpret (M : MONADERROR) = struct
 
   (** code section interpreter that return map, ast - general code that shouldn't change *)
   let rec code_sec_inter env ast =
-    (** jmp commands interpreter, ast - code where searching label, tl - part of code that have to returned if condition to jmp is false *)
     let jump env ast tl = function
       | Jmp (Mnemonic cmd, label) -> (
           find_code_after_l label ast >>= fun code ->
@@ -185,7 +184,6 @@ module Interpret (M : MONADERROR) = struct
           | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" | _ -> error "")
       | _ -> error "Isnt jmp"
     in
-    (** general part of interpreter *)
     function
     | Command cmd :: tl -> (
         match cmd with
