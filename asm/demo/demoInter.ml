@@ -46,7 +46,7 @@ let fib =
 
 let () =
   let open Interpret (Result) in
-  let env = prep MapVar.empty r_list in
+  let env = prep r_list in
   let env = interpret env (eval fib) in
   match env with
   | Ok env -> print_string @@ show_envr env

@@ -76,13 +76,7 @@ module Interpret (M : MONADERROR) = struct
     | _ -> false
 
   (** insert elements from list to map *)
-  let prep env =
-    let set k v env = MapVar.add k v env in
-    let rec helper env = function
-      | [] -> env
-      | (k, v) :: tl -> helper (set k v env) tl
-    in
-    helper env
+  let prep = function [] -> MapVar.empty | l -> MapVar.of_seq (List.to_seq l)
 
   (** calculate a expression, f function that takes values of registers or constans from map or calcuclate integer constants from expression *)
   let rec ev f = function
