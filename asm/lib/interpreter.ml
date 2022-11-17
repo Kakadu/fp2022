@@ -71,12 +71,6 @@ module Interpret (M : MONADERROR) = struct
       ("XMM7", Reg128 "0");
     ]
 
-  let is_64bitreg = function
-    | "RAX" | "RBX" | "RCX" | "RDX" | "RSP" | "RBP" | "RSI" | "RDI" | "CMPFLAG"
-      ->
-        true
-    | _ -> false
-
   let is_jmp = function
     | "JMP" | "JE" | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" -> true
     | _ -> false
@@ -114,11 +108,9 @@ module Interpret (M : MONADERROR) = struct
     | _ -> error "not a R64"
 
   (** change value of register by function f *)
-  let change_reg64 env f = function
-    | name when is_64bitreg name ->
-        find_reg64_cont env name >>= fun reg ->
-        return @@ MapVar.add name (Reg64 (f reg)) env
-    | name -> error (name ^ " isnt a reg64")
+  let change_reg64 env f name =
+    find_reg64_cont env name >>= fun reg ->
+    return @@ MapVar.add name (Reg64 (f reg)) env
 
   (** interpret command and return map *)
   let inter_one_args_cmd env arg1 =
