@@ -156,196 +156,154 @@ let parse = parse_string ~consume:All parser
 let eval str = match parse str with Ok v -> v | Error msg -> failwith msg
 
 (*******************************************tests*******************************************)
-let test_p p pp str =
-  match parse_string ~consume:All p str with Ok v -> pp v | Error msg -> msg
+let test_p p str expr =
+  match parse_string ~consume:All p str with
+  | Ok v -> v = expr
+  | Error _ -> false
 
-let%test _ = test_p expr_parser show_expr "0" = "(Const \"0\")"
-let%test _ = test_p expr_parser show_expr "0xa" = "(Const \"0xa\")"
-let%test _ = test_p expr_parser show_expr "    0xa   " = "(Const \"0xa\")"
-let%test _ = test_p expr_parser show_expr "rax" = "(Reg \"RAX\")"
-let%test _ = test_p expr_parser show_expr "rAx" = "(Reg \"RAX\")"
-let%test _ = test_p expr_parser show_expr "rAx" = "(Reg \"RAX\")"
-let%test _ = test_p expr_parser show_expr "%var" = "(Var \"var\")"
-let%test _ = test_p expr_parser show_expr "%vAr" = "(Var \"vAr\")"
-let%test _ = test_p expr_parser show_expr "labl" = "(Lab (Label \"labl\"))"
-let%test _ = test_p expr_parser show_expr "lAbl" = "(Lab (Label \"lAbl\"))"
-
-let%test _ =
-  test_p expr_parser show_expr "0 + 0x0"
-  = "(Add ((Const \"0\"), (Const \"0x0\")))"
-
-let%test _ =
-  test_p expr_parser show_expr "0 + rax"
-  = "(Add ((Const \"0\"), (Reg \"RAX\")))"
+let%test _ = test_p expr_parser "0" (Const "0")
+let%test _ = test_p expr_parser "0xa" (Const "0xa")
+let%test _ = test_p expr_parser "    0xa   " (Const "0xa")
+let%test _ = test_p expr_parser "rax" (Reg "RAX")
+let%test _ = test_p expr_parser "rAx" (Reg "RAX")
+let%test _ = test_p expr_parser "rAx" (Reg "RAX")
+let%test _ = test_p expr_parser "%var" (Var "var")
+let%test _ = test_p expr_parser "%vAr" (Var "vAr")
+let%test _ = test_p expr_parser "labl" (Lab (Label "labl"))
+let%test _ = test_p expr_parser "lAbl" (Lab (Label "lAbl"))
+let%test _ = test_p expr_parser "0 + 0x0" (Add (Const "0", Const "0x0"))
+let%test _ = test_p expr_parser "0 + rax" (Add (Const "0", Reg "RAX"))
+let%test _ = test_p expr_parser "0 + %var" (Add (Const "0", Var "var"))
+let%test _ = test_p expr_parser "0+0x0" (Add (Const "0", Const "0x0"))
 
 let%test _ =
-  test_p expr_parser show_expr "0 + %var"
-  = "(Add ((Const \"0\"), (Var \"var\")))"
+  test_p expr_parser "0      +     0x0" (Add (Const "0", Const "0x0"))
+
+let%test _ = test_p expr_parser "0 + (0x0)" (Add (Const "0", Const "0x0"))
 
 let%test _ =
-  test_p expr_parser show_expr "0+0x0"
-  = "(Add ((Const \"0\"), (Const \"0x0\")))"
+  test_p expr_parser "0 + (    0x0   )   " (Add (Const "0", Const "0x0"))
+
+let%test _ = test_p expr_parser "(0 + (0x0))" (Add (Const "0", Const "0x0"))
 
 let%test _ =
-  test_p expr_parser show_expr "0      +     0x0"
-  = "(Add ((Const \"0\"), (Const \"0x0\")))"
+  test_p expr_parser "0 + 1 * 2" (Add (Const "0", Mul (Const "1", Const "2")))
 
 let%test _ =
-  test_p expr_parser show_expr "0 + (0x0)"
-  = "(Add ((Const \"0\"), (Const \"0x0\")))"
+  test_p expr_parser "0 * 1 + 2" (Add (Mul (Const "0", Const "1"), Const "2"))
 
 let%test _ =
-  test_p expr_parser show_expr "0 + (    0x0   )   "
-  = "(Add ((Const \"0\"), (Const \"0x0\")))"
+  test_p expr_parser "0 * (1 + 2)" (Mul (Const "0", Add (Const "1", Const "2")))
+
+let%test _ = test_p code_line_parser "ret" (Command (Args0 (Mnemonic "RET")))
+let%test _ = test_p code_line_parser "rEt" (Command (Args0 (Mnemonic "RET")))
 
 let%test _ =
-  test_p expr_parser show_expr "(0 + (0x0))"
-  = "(Add ((Const \"0\"), (Const \"0x0\")))"
+  test_p code_line_parser "       \nret    \n\n"
+    (Command (Args0 (Mnemonic "RET")))
 
 let%test _ =
-  test_p expr_parser show_expr "0 + 1 * 2"
-  = "(Add ((Const \"0\"), (Mul ((Const \"1\"), (Const \"2\")))))"
+  test_p code_line_parser "inc rax"
+    (Command (Args1 (Mnemonic "INC", Reg "RAX")))
 
 let%test _ =
-  test_p expr_parser show_expr "0 * 1 + 2"
-  = "(Add ((Mul ((Const \"0\"), (Const \"1\"))), (Const \"2\")))"
+  test_p code_line_parser "   inc              rax            "
+    (Command (Args1 (Mnemonic "INC", Reg "RAX")))
 
 let%test _ =
-  test_p expr_parser show_expr "0 * (1 + 2)"
-  = "(Mul ((Const \"0\"), (Add ((Const \"1\"), (Const \"2\")))))"
+  test_p code_line_parser "inc rax + 1"
+    (Command (Args1 (Mnemonic "INC", Add (Reg "RAX", Const "1"))))
 
 let%test _ =
-  test_p code_line_parser show_code_section "ret"
-  = "(Command (Args0 (Mnemonic \"RET\")))"
+  not
+  @@ test_p code_line_parser "inc rax, rax"
+       (Command (Args2 (Mnemonic "INC", Reg "RAX", Reg "RAX")))
 
 let%test _ =
-  test_p code_line_parser show_code_section "rEt"
-  = "(Command (Args0 (Mnemonic \"RET\")))"
+  not
+  @@ test_p code_line_parser "inc rax, rax, rax"
+       (Command (Args2 (Mnemonic "INC", Reg "RAX", Reg "RAX")))
 
 let%test _ =
-  test_p code_line_parser show_code_section "       \nret    \n\n"
-  = "(Command (Args0 (Mnemonic \"RET\")))"
+  test_p data_line_parser "a dd 1" (Variable ("a", DataType "DD", [ "1" ]))
 
 let%test _ =
-  test_p code_line_parser show_code_section "inc rax"
-  = "(Command (Args1 ((Mnemonic \"INC\"), (Reg \"RAX\"))))"
+  test_p data_line_parser "a dd 1, 2"
+    (Variable ("a", DataType "DD", [ "1"; "2" ]))
 
 let%test _ =
-  test_p code_line_parser show_code_section
-    "   inc              rax            "
-  = "(Command (Args1 ((Mnemonic \"INC\"), (Reg \"RAX\"))))"
+  test_p data_line_parser "a   dd    1   ,     2"
+    (Variable ("a", DataType "DD", [ "1"; "2" ]))
 
 let%test _ =
-  test_p code_line_parser show_code_section "inc rax + 1"
-  = "(Command (Args1 ((Mnemonic \"INC\"), (Add ((Reg \"RAX\"), (Const \
-     \"1\"))))))"
+  test_p data_line_parser "a dD 1" (Variable ("a", DataType "DD", [ "1" ]))
 
 let%test _ =
-  test_p code_line_parser show_code_section "inc rax, rax"
-  = ": Invalid count of arguments"
+  test_p data_line_parser "A dd 1" (Variable ("A", DataType "DD", [ "1" ]))
 
 let%test _ =
-  test_p code_line_parser show_code_section "inc rax, rax, rax"
-  = ": Invalid count of arguments"
+  not
+  @@ test_p data_line_parser "dd dd 1" (Variable ("A", DataType "DD", [ "1" ]))
+
+let%test _ = not @@ test_p sec_parser "section .test" (Code [])
+let%test _ = test_p sec_parser "section .code" (Code [])
+let%test _ = test_p sec_parser "section .text" (Code [])
+let%test _ = test_p sec_parser "section .data" (Data [])
 
 let%test _ =
-  test_p data_line_parser show_var "a dd 1"
-  = "(Variable (\"a\", (DataType \"DD\"), [\"1\"]))"
+  test_p sec_parser "section .code ret"
+    (Code [ Command (Args0 (Mnemonic "RET")) ])
 
 let%test _ =
-  test_p data_line_parser show_var "a dd 1, 2"
-  = "(Variable (\"a\", (DataType \"DD\"), [\"1\"; \"2\"]))"
+  test_p sec_parser "section .code   ret   "
+    (Code [ Command (Args0 (Mnemonic "RET")) ])
 
 let%test _ =
-  test_p data_line_parser show_var "a   dd    1   ,     2"
-  = "(Variable (\"a\", (DataType \"DD\"), [\"1\"; \"2\"]))"
+  not
+  @@ test_p sec_parser "section .code ret ret"
+       (Code
+          [ Command (Args0 (Mnemonic "RET")); Command (Args0 (Mnemonic "RET")) ])
 
 let%test _ =
-  test_p data_line_parser show_var "a dD 1"
-  = "(Variable (\"a\", (DataType \"DD\"), [\"1\"]))"
+  test_p sec_parser "section .code inc rax inc rax"
+    (Code
+       [
+         Command (Args1 (Mnemonic "INC", Reg "RAX"));
+         Command (Args1 (Mnemonic "INC", Reg "RAX"));
+       ])
 
 let%test _ =
-  test_p data_line_parser show_var "A dd 1"
-  = "(Variable (\"A\", (DataType \"DD\"), [\"1\"]))"
+  test_p sec_parser "section .data a dd 1"
+    (Data [ Variable ("a", DataType "DD", [ "1" ]) ])
 
 let%test _ =
-  test_p data_line_parser show_var "dd dd 1"
-  = ": Var's name must not be equal the name of reg or datatype"
-
-let%test _ = test_p sec_parser show_dir "section .test" = ": Invalid section"
-let%test _ = test_p sec_parser show_dir "section .code" = "(Code [])"
-let%test _ = test_p sec_parser show_dir "section .text" = "(Code [])"
-let%test _ = test_p sec_parser show_dir "section .data" = "(Data [])"
-
-let%test _ =
-  test_p sec_parser show_dir "section .code ret"
-  = "(Code [(Command (Args0 (Mnemonic \"RET\")))])"
+  test_p sec_parser "section .data a dd 1 b dd 2"
+    (Data
+       [
+         Variable ("a", DataType "DD", [ "1" ]);
+         Variable ("b", DataType "DD", [ "2" ]);
+       ])
 
 let%test _ =
-  test_p sec_parser show_dir "section .code   ret   "
-  = "(Code [(Command (Args0 (Mnemonic \"RET\")))])"
+  test_p parser "section .data a dd 1 section .text ret"
+    [
+      Data [ Variable ("a", DataType "DD", [ "1" ]) ];
+      Code [ Command (Args0 (Mnemonic "RET")) ];
+    ]
 
 let%test _ =
-  test_p sec_parser show_dir "section .code ret ret" = ": end_of_input"
+  test_p parser "section .data a dd 1 section .data section .text ret"
+    [
+      Data [ Variable ("a", DataType "DD", [ "1" ]) ];
+      Data [];
+      Code [ Command (Args0 (Mnemonic "RET")) ];
+    ]
 
 let%test _ =
-  match
-    parse_string ~consume:All sec_parser "section .code inc rax inc rax"
-  with
-  | Ok v ->
-      v
-      = Code
-          [
-            Command (Args1 (Mnemonic "INC", Reg "RAX"));
-            Command (Args1 (Mnemonic "INC", Reg "RAX"));
-          ]
-  | _ -> false
-
-let%test _ =
-  test_p sec_parser show_dir "section .data a dd 1"
-  = "(Data [(Variable (\"a\", (DataType \"DD\"), [\"1\"]))])"
-
-let%test _ =
-  match parse_string ~consume:All sec_parser "section .data a dd 1 b dd 2" with
-  | Ok v ->
-      v
-      = Data
-          [
-            Variable ("a", DataType "DD", [ "1" ]);
-            Variable ("b", DataType "DD", [ "2" ]);
-          ]
-  | _ -> false
-
-let%test _ =
-  match
-    parse_string ~consume:All parser "section .data a dd 1 section .text ret"
-  with
-  | Ok v ->
-      v
-      = [
-          Data [ Variable ("a", DataType "DD", [ "1" ]) ];
-          Code [ Command (Args0 (Mnemonic "RET")) ];
-        ]
-  | _ -> false
-
-let%test _ =
-  match
-    parse_string ~consume:All parser
-      "section .data a dd 1 section .data section .text ret"
-  with
-  | Ok v ->
-      v
-      = [
-          Data [ Variable ("a", DataType "DD", [ "1" ]) ];
-          Data [];
-          Code [ Command (Args0 (Mnemonic "RET")) ];
-        ]
-  | _ -> false
-
-let%test _ =
-  match
-    parse_string ~consume:All parser
-      "section .data a dd 1 section .text ret section .text ret"
-  with
-  | Error msg -> msg = ": end_of_input"
-  | _ -> false
+  not
+  @@ test_p parser "section .data a dd 1 section .text ret section .text ret"
+       [
+         Data [ Variable ("a", DataType "DD", [ "1" ]) ];
+         Code [ Command (Args0 (Mnemonic "RET")) ];
+         Code [ Command (Args0 (Mnemonic "RET")) ];
+       ]
