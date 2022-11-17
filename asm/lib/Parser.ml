@@ -151,8 +151,11 @@ let parser = many sec_parser
 
 let parse = parse_string ~consume:All parser
 
+(** results of parse *)
+type 'a parse_rez = Parsed of 'a | Failed of string
+
 (** main main parser *)
-let eval str = match parse str with Ok v -> v | Error msg -> failwith msg
+let eval str = match parse str with Ok v -> Parsed v | Error msg -> Failed msg
 
 (*******************************************tests*******************************************)
 let test_p p str expr =

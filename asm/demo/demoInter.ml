@@ -47,7 +47,9 @@ let fib =
 let () =
   let open Interpret (Result) in
   let env = prep r_list in
-  let env = interpret env (eval fib) in
-  match env with
-  | Ok env -> print_string @@ show_envr env
-  | Error msg -> failwith msg
+  match eval fib with
+  | Parsed ast -> (
+      match interpret env ast with
+      | Ok env -> print_string @@ show_envr env
+      | Error msg -> print_string msg)
+  | Failed msg -> print_string msg
