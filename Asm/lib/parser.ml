@@ -54,9 +54,6 @@ let label_str_p =
 
 let label_p = label_str_p >>| (fun s -> Label s) <?> "label_p"
 
-(* Parse label declaration (e.g. "l1:") *)
-let label_decl_p = label_str_p <* char ':' >>| (fun s -> LCommand s) <?> "label_decl_p"
-
 (* Parse an integer and return it as integer *)
 let int_p =
   let sign_p = string "+" <|> string "-" in
@@ -213,6 +210,10 @@ let gen_dcommand_two_args_p =
 
 (****************************************************************************************)
 (* The following parsers are intended to parse a one-line command *)
+
+(* Parse label declaration (e.g. "l1:") *)
+let lcommand_p = label_str_p <* char ':' >>| (fun s -> LCommand s) <?> "lcommand_p"
+
 let bcommand_p =
   choice
     (List.map gen_bcommand_one_arg_p cmd_one_arg_list
@@ -238,7 +239,7 @@ let scommand_p = choice (List.map gen_scommand_p scmd_list) <?> "scommand_p"
 
 (****************************************************************************************)
 (* Parse any instruction == line *)
-let instr_p = choice [ bcommand_p; wcommand_p; dcommand_p; scommand_p; label_decl_p ]
+let instr_p = choice [ bcommand_p; wcommand_p; dcommand_p; scommand_p; lcommand_p ]
 
 (* Parse the whole NASM program *)
 let program_p =
