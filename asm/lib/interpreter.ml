@@ -112,8 +112,8 @@ module Interpret (M : MONADERROR) = struct
     function
     | "INC" -> helper (fun x -> x + 1)
     | "DEC" -> helper (fun x -> x - 1)
-    | "NOT" -> helper Int.neg
-    | "NEG" -> helper (fun x -> -1 * x)
+    | "NOT" -> helper (fun x -> ~-x)
+    | "NEG" -> helper (fun x -> -x)
     (* | "PUSH" | "POP" | "CALL"  *)
     | x -> error (x ^ " is not implemented yet")
 
