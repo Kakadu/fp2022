@@ -12,17 +12,23 @@ let is_space = function
   | _ -> false
 ;;
 
-let space_p = satisfy is_space <?> "space_p"
+let space_p = satisfy is_space *> return () <?> "space_p"
 
 (* Get rid of some number of zero or more spaces *)
 let spaces_p = skip_many space_p <?> "spaces_p"
 
 (* Get rid of some number of one or more spaces *)
 let spaces1_p = skip_many1 space_p <?> "spaces1_p"
-let eol_p = char '\n' <?> "eol_p"
 let trim_p p = spaces_p *> p <* spaces_p
 let comma_p = trim_p (char ',') <?> "comma_p"
-let skip_empty_lines_p = skip_many (space_p <|> eol_p) <?> "skip_empty_lines_p"
+
+(* Parse a comment *)
+let comment_p = char ';' *> skip_while (fun c -> not (Char.equal c '\n')) <?> "comment_p"
+
+(* Parser that skips empty lines, spaces, and commets *)
+let skip_empty_p =
+  skip_many (space_p <|> end_of_line <|> comment_p) <?> "skip_empty_lines_p"
+;;
 
 let is_digit = function
   | '0' .. '9' -> true
@@ -232,14 +238,13 @@ let scommand_p = choice (List.map gen_scommand_p scmd_list) <?> "scommand_p"
 
 (****************************************************************************************)
 (* Parse any instruction == line *)
-let instr_p =
-  choice [ bcommand_p; wcommand_p; dcommand_p; scommand_p; label_decl_p ] |> trim_p
-;;
+let instr_p = choice [ bcommand_p; wcommand_p; dcommand_p; scommand_p; label_decl_p ]
 
 (* Parse the whole NASM program *)
 let program_p =
-  skip_empty_lines_p *> sep_by1 (eol_p *> skip_empty_lines_p) instr_p
-  <* skip_empty_lines_p
+  skip_empty_p
+  *> sep_by1 (end_of_line *> skip_empty_p) (trim_p instr_p <* option () comment_p)
+  <* skip_empty_p
 ;;
 
 (****************************************************************************************)
@@ -370,3 +375,27 @@ let%test _ =
 ;;
 
 let%test _ = fail_all_instructions "call eax, edx"
+
+let%test _ =
+  ok_all_instructions
+    ";comment\n\n\
+     ;  comment   \n\
+     l1:\n\
+    \ mov ax, bx\n\
+    \ je LAbEl$ ; something \n\
+    \ add eax, ecx\n\
+    \ inc bl\n\
+    \ l@abel2:   \n\
+    \ sub dh, 5\n\
+     jmp l1  \n\
+    \    ;    and comment at the end"
+    [ LCommand "l1"
+    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; SCommand (Je (Label "LAbEl$"))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
+    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
+    ; LCommand "l@abel2"
+    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
+    ; SCommand (Jmp (Label "l1"))
+    ]
+;;
