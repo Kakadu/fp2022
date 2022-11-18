@@ -103,17 +103,17 @@ module _ = struct
     |> Format.printf "%a\n%!" Pprintast.pp
   ;; *)
 
-  (* let () =
+(* let () =
        test ao_small_step_strat @@ app zed fact |> fun lam ->
        Format.printf "%a\n%!" pp_lam lam
      in *)
 
-  (* let () =
+(* let () =
        test ao_small_step_strat @@ (app isZero zero)  |> fun lam ->
        Format.printf "%a\n%!" pp_lam lam
      in
   *)
-  (* let () =
+(* let () =
        test ao_strat @@ (app isZero zero)  |> fun lam ->
        Format.printf "%a\n%!" pp_lam lam
      in *)
