@@ -493,7 +493,10 @@ let parse_data_constructor d =
       >>= function
       | constructor_name, expression_list ->
         if List.exists (( = ) constructor_name) data_constructors
-        then return @@ edata_constructor constructor_name expression_list
+        then
+          if List.length expression_list > 1
+          then fail "Parsing error: data constructor received too many arguments."
+          else return @@ edata_constructor constructor_name expression_list
         else fail "Parsing error: invalid constructor.")
 ;;
 
