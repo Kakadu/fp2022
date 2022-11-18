@@ -1,7 +1,7 @@
 (library
  (name OCamlWithEffectsLib)
  (public_name OCamlWithEffects.Lib)
- (modules Ast)
+ (modules Ast Parser)
  (modules_without_implementation ast)
  (libraries base angstrom)
  (preprocess

@@ -1,39 +1,20 @@
+type id = string [@@deriving eq, show { with_path = false }]
+type data_constructor_name = string [@@deriving eq, show { with_path = false }]
+
 type literal =
   | LInt of int
   | LString of string
   | LChar of char
   | LBool of bool
-  | LUnit of unit
-[@@deriving show { with_path = false }]
-
-type function_name = string [@@deriving eq, show { with_path = false }]
-type variable_name = string [@@deriving eq, show { with_path = false }]
-type data_constructor_name = string [@@deriving eq, show { with_path = false }]
-
-(* type numerical_binary_operator =
-     | Add (* + *)
-     | Sub (* - *)
-     | Mul (* * *)
-     | Div (* / *)
-
-   and relational_binary_operator =
-     | Eq (* == *)
-     | NEq (* != *)
-     | GT (* > *)
-     | GTE (* >= *)
-     | LT (* < *)
-     | LTE (* <= *)
-
-   and logical_binary_operator =
-     | AND (* && *)
-     | OR || *)
+  | LUnit
+[@@deriving eq, show { with_path = false }]
 
 type binary_operator =
   | Add (* + *)
   | Sub (* - *)
   | Mul (* * *)
   | Div (* / *)
-  | Eq (* == *)
+  | Eq (* = *)
   | NEq (* != *)
   | GT (* > *)
   | GTE (* >= *)
@@ -44,8 +25,8 @@ type binary_operator =
 [@@deriving show { with_path = false }]
 
 type unary_operator =
-  | UMinus
-  | UNot
+  | Minus (* -1 *)
+  | Not (* not true *)
 [@@deriving show { with_path = false }]
 
 type expression =
@@ -53,19 +34,15 @@ type expression =
   | EBinaryOperation of binary_operator * expression * expression (* 1 + 3 *)
   | EUnaryOperation of unary_operator * expression (* -(1 + 3) *)
   | EApplication of expression * expression (* f x *)
-  | EFunction of function_name (* f *)
-  | EVariable of variable_name (* x *)
-  | EFun of variable_name list * expression (* fun x y -> x + y *)
+  | EIdentifier of id (* x *)
+  | EFun of id list * expression (* fun x y -> x + y *)
   | EList of expression list (* [ 1; 2; 3 ] *)
+  | EConstructList of expression * expression (* 1 :: [2; 3] *)
   | ETuple of expression list (* (1, "Vasya Pupkin", '\n') *)
-  | EDeclaration of
-      function_name * variable_name list * expression (* let add x y = x + y *)
-  | EDeclarationRecursive of
-      function_name
-      * variable_name list
-      * expression (* let rec factorial n = n * factorial (n - 1) *)
+  | EDeclaration of id * id list * expression (* let add x y = x + y *)
+  | ERecursiveDeclaration of
+      id * id list * expression (* let rec factorial n = n * factorial (n - 1) *)
   | ELetIn of expression list * expression (* let x = 1 and y = 2 in x + y *)
   | EIf of expression * expression * expression (* if true then 1 else 0 *)
   | EMatchWith of expression * (expression * expression) list (* match x with _ -> x *)
-  | EWildcard (* fun x _ -> x *)
   | EDataConstructor of data_constructor_name * expression list (* Some 5 *)
