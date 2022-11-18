@@ -1,3 +1,6 @@
+type id = string [@@deriving eq, show { with_path = false }]
+type data_constructor_name = string [@@deriving eq, show { with_path = false }]
+
 type literal =
   | LInt of int
   | LString of string
@@ -5,27 +8,6 @@ type literal =
   | LBool of bool
   | LUnit
 [@@deriving eq, show { with_path = false }]
-
-type id = string [@@deriving eq, show { with_path = false }]
-type data_constructor_name = string [@@deriving eq, show { with_path = false }]
-
-(* type numerical_binary_operator =
-     | Add (* + *)
-     | Sub (* - *)
-     | Mul (* * *)
-     | Div (* / *)
-
-   and relational_binary_operator =
-     | Eq (* == *)
-     | NEq (* != *)
-     | GT (* > *)
-     | GTE (* >= *)
-     | LT (* < *)
-     | LTE (* <= *)
-
-   and logical_binary_operator =
-     | AND (* && *)
-     | OR || *)
 
 type binary_operator =
   | Add (* + *)
@@ -43,8 +25,8 @@ type binary_operator =
 [@@deriving show { with_path = false }]
 
 type unary_operator =
-  | Minus
-  | Not
+  | Minus (* -1 *)
+  | Not (* not true *)
 [@@deriving show { with_path = false }]
 
 type expression =
@@ -52,7 +34,7 @@ type expression =
   | EBinaryOperation of binary_operator * expression * expression (* 1 + 3 *)
   | EUnaryOperation of unary_operator * expression (* -(1 + 3) *)
   | EApplication of expression * expression (* f x *)
-  | EIdentifier of id
+  | EIdentifier of id (* x *)
   | EFun of id list * expression (* fun x y -> x + y *)
   | EList of expression list (* [ 1; 2; 3 ] *)
   | EConstructList of expression * expression (* 1 :: [2; 3] *)

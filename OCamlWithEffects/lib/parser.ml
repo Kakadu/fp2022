@@ -137,11 +137,6 @@ let parse_identifier =
     then fail "Parsing error: keyword used."
     else return @@ eidentifier entity
   in
-  (* many parse_literal
-  >>= function
-  (* TODO: true123 *)
-  | [] -> parse_identifier
-  | _ -> fail "Parsing error: not an identifier." *)
   parse_identifier
 ;;
 
@@ -625,7 +620,7 @@ let parse : input -> (expression list, error_message) result =
 let%test _ =
   parse
     "let rec factorial n acc = if n <= 1 then acc else factorial (n - 1) (acc * n)\n\
-     let main = factorial 5 1"
+     let main = factorial 5 1 "
   = Result.ok
     @@ [ ERecursiveDeclaration
            ( "factorial"
@@ -1071,409 +1066,225 @@ let%test _ =
        ]
 ;;
 
-(* Tests for function declaration *)
+(* 26 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_declaration "let f x = ((x, [1; x]), true)"
+  parse " let main = match res with \n  | Some x -> x\n  | None -> 0 "
   = Result.ok
-    @@ EDeclaration
-         ( "f"
-         , [ "x" ]
-         , ETuple
-             [ ETuple [ EIdentifier "x"; EList [ ELiteral (LInt 1); EIdentifier "x" ] ]
-             ; ELiteral (LBool true)
-             ] )
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_declaration
-    "let f x = fun arg1 arg2 -> (arg1, fun x -> [arg1; x])"
-  = Result.ok
-    @@ EDeclaration
-         ( "f"
-         , [ "x" ]
-         , EFun
-             ( [ "arg1"; "arg2" ]
-             , ETuple
-                 [ EIdentifier "arg1"
-                 ; EFun ([ "x" ], EList [ EIdentifier "arg1"; EIdentifier "x" ])
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( EIdentifier "res"
+               , [ EDataConstructor ("Some", [ EIdentifier "x" ]), EIdentifier "x"
+                 ; EDataConstructor ("None", []), ELiteral (LInt 0)
                  ] ) )
+       ]
 ;;
 
+(* 27 *)
 let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_declaration
-    "let f x = (if x then (1, x) else (fun y -> [x; y]))"
+  parse " let main = match f x y with \n  | Ok _ -> 1\n  | _ -> 0 "
   = Result.ok
-    @@ EDeclaration
-         ( "f"
-         , [ "x" ]
-         , EIf
-             ( EIdentifier "x"
-             , ETuple [ ELiteral (LInt 1); EIdentifier "x" ]
-             , EFun ([ "y" ], EList [ EIdentifier "x"; EIdentifier "y" ]) ) )
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( EApplication
+                   (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
+               , [ EDataConstructor ("Ok", [ EIdentifier "_" ]), ELiteral (LInt 1)
+                 ; EIdentifier "_", ELiteral (LInt 0)
+                 ] ) )
+       ]
 ;;
 
+(* 28 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_declaration "let g x y z = (x, x, y, y, z, z)"
+  parse " let head = fun list -> match list with \n  | h :: _ -> Some h\n  | _ -> None "
   = Result.ok
-    @@ EDeclaration
-         ( "g"
-         , [ "x"; "y"; "z" ]
-         , ETuple
-             [ EIdentifier "x"
-             ; EIdentifier "x"
-             ; EIdentifier "y"
-             ; EIdentifier "y"
-             ; EIdentifier "z"
-             ; EIdentifier "z"
-             ] )
+    @@ [ EDeclaration
+           ( "head"
+           , []
+           , EFun
+               ( [ "list" ]
+               , EMatchWith
+                   ( EIdentifier "list"
+                   , [ ( EConstructList (EIdentifier "h", EIdentifier "_")
+                       , EDataConstructor ("Some", [ EIdentifier "h" ]) )
+                     ; EIdentifier "_", EDataConstructor ("None", [])
+                     ] ) ) )
+       ]
 ;;
 
+(* 29 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_declaration "let comma = ','"
-  = Result.ok @@ EDeclaration ("comma", [], ELiteral (LChar ','))
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_declaration
-    "let rec helper acc n =\n match n with\n | 0 -> acc\n | _ -> helper (acc + n) (n - 1)"
+  parse " let tail = fun list -> match list with \n  | _ :: t -> Some t\n | _ -> None "
   = Result.ok
-    @@ ERecursiveDeclaration
-         ( "helper"
-         , [ "acc"; "n" ]
-         , EMatchWith
-             ( EIdentifier "n"
-             , [ ELiteral (LInt 0), EIdentifier "acc"
-               ; ( EIdentifier "_"
-                 , EApplication
-                     ( EApplication
-                         ( EIdentifier "helper"
-                         , EBinaryOperation (Add, EIdentifier "acc", EIdentifier "n") )
-                     , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) ) )
-               ] ) )
+    @@ [ EDeclaration
+           ( "tail"
+           , []
+           , EFun
+               ( [ "list" ]
+               , EMatchWith
+                   ( EIdentifier "list"
+                   , [ ( EConstructList (EIdentifier "_", EIdentifier "t")
+                       , EDataConstructor ("Some", [ EIdentifier "t" ]) )
+                     ; EIdentifier "_", EDataConstructor ("None", [])
+                     ] ) ) )
+       ]
 ;;
 
-(* Tests for conditionals parser *)
+(* 30 *)
 let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    "  if (true) then (1, 2) else (fun _ -> [1; 2; 3])"
+  parse " let rec length list = match list with \n  | _ :: t -> 1 + length t\n | _ -> 0 "
   = Result.ok
-    @@ EIf
-         ( ELiteral (LBool true)
-         , ETuple [ ELiteral (LInt 1); ELiteral (LInt 2) ]
-         , EFun
-             ([ "_" ], EList [ ELiteral (LInt 1); ELiteral (LInt 2); ELiteral (LInt 3) ])
-         )
+    @@ [ ERecursiveDeclaration
+           ( "length"
+           , [ "list" ]
+           , EMatchWith
+               ( EIdentifier "list"
+               , [ ( EConstructList (EIdentifier "_", EIdentifier "t")
+                   , EBinaryOperation
+                       ( Add
+                       , ELiteral (LInt 1)
+                       , EApplication (EIdentifier "length", EIdentifier "t") ) )
+                 ; EIdentifier "_", ELiteral (LInt 0)
+                 ] ) )
+       ]
 ;;
 
-(* Tests for pattern matching *)
+(* 31 *)
 let%test _ =
-  parse_string ~consume:Prefix parse_expression " match x with _ -> false"
-  = Result.ok @@ EMatchWith (EIdentifier "x", [ EIdentifier "_", ELiteral (LBool false) ])
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    " match [x; y] with\n  | [1; 5] -> 12\n  | [5; 1] -> 12\n  | _ -> 0"
+  parse
+    " let phi n = let rec helper last1 last2 n = if n > 0 then helper last2 (last1 + \
+     last2) (n - 1) else last2 in\n\
+    \  helper 1 1 (n - 2) "
   = Result.ok
-    @@ EMatchWith
-         ( EList [ EIdentifier "x"; EIdentifier "y" ]
-         , [ EList [ ELiteral (LInt 1); ELiteral (LInt 5) ], ELiteral (LInt 12)
-           ; EList [ ELiteral (LInt 5); ELiteral (LInt 1) ], ELiteral (LInt 12)
-           ; EIdentifier "_", ELiteral (LInt 0)
-           ] )
+    @@ [ EDeclaration
+           ( "phi"
+           , [ "n" ]
+           , ELetIn
+               ( [ ERecursiveDeclaration
+                     ( "helper"
+                     , [ "last1"; "last2"; "n" ]
+                     , EIf
+                         ( EBinaryOperation (GT, EIdentifier "n", ELiteral (LInt 0))
+                         , EApplication
+                             ( EApplication
+                                 ( EApplication (EIdentifier "helper", EIdentifier "last2")
+                                 , EBinaryOperation
+                                     (Add, EIdentifier "last1", EIdentifier "last2") )
+                             , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1))
+                             )
+                         , EIdentifier "last2" ) )
+                 ]
+               , EApplication
+                   ( EApplication
+                       ( EApplication (EIdentifier "helper", ELiteral (LInt 1))
+                       , ELiteral (LInt 1) )
+                   , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 2)) ) ) )
+       ]
 ;;
 
+(* 32 *)
 let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    " match x, y, z with\n\
+  parse " let main = let sq x = x * x in sq x + sq y + sq z "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , ELetIn
+               ( [ EDeclaration
+                     ( "sq"
+                     , [ "x" ]
+                     , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "x") )
+                 ]
+               , EBinaryOperation
+                   ( Add
+                   , EBinaryOperation
+                       ( Add
+                       , EApplication (EIdentifier "sq", EIdentifier "x")
+                       , EApplication (EIdentifier "sq", EIdentifier "y") )
+                   , EApplication (EIdentifier "sq", EIdentifier "z") ) ) )
+       ]
+;;
+
+(* 33 *)
+let%test _ =
+  parse " let mult x y z = x * y * z \n  let main = mult 5 6 7 "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "mult"
+           , [ "x"; "y"; "z" ]
+           , EBinaryOperation
+               ( Mul
+               , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "y")
+               , EIdentifier "z" ) )
+       ; EDeclaration
+           ( "main"
+           , []
+           , EApplication
+               ( EApplication
+                   ( EApplication (EIdentifier "mult", ELiteral (LInt 5))
+                   , ELiteral (LInt 6) )
+               , ELiteral (LInt 7) ) )
+       ]
+;;
+
+(* 34 *)
+let%test _ =
+  parse
+    " let main = match x, y, z with\n | Error x, Error y, Error z -> 0\n | _, _, _ -> 1 "
+  = Result.ok
+    @@ [ EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
+               , [ ( ETuple
+                       [ EDataConstructor ("Error", [ EIdentifier "x" ])
+                       ; EDataConstructor ("Error", [ EIdentifier "y" ])
+                       ; EDataConstructor ("Error", [ EIdentifier "z" ])
+                       ]
+                   , ELiteral (LInt 0) )
+                 ; ( ETuple [ EIdentifier "_"; EIdentifier "_"; EIdentifier "_" ]
+                   , ELiteral (LInt 1) )
+                 ] ) )
+       ]
+;;
+
+(* 35 *)
+let%test _ =
+  parse
+    " let f x y z = match x, y, z with\n\
     \  | true, true, false -> true\n\
     \  | true, false, true -> true\n\
     \  | false, true, true -> true\n\
     \  | _ -> false"
   = Result.ok
-    @@ EMatchWith
-         ( ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
-         , [ ( ETuple
-                 [ ELiteral (LBool true); ELiteral (LBool true); ELiteral (LBool false) ]
-             , ELiteral (LBool true) )
-           ; ( ETuple
-                 [ ELiteral (LBool true); ELiteral (LBool false); ELiteral (LBool true) ]
-             , ELiteral (LBool true) )
-           ; ( ETuple
-                 [ ELiteral (LBool false); ELiteral (LBool true); ELiteral (LBool true) ]
-             , ELiteral (LBool true) )
-           ; EIdentifier "_", ELiteral (LBool false)
-           ] )
-;;
-
-(* Tests for arithmetic expressions  *)
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "1 + 2"
-  = Result.ok @@ EBinaryOperation (Add, ELiteral (LInt 1), ELiteral (LInt 2))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "1 + 2 * 3"
-  = Result.ok
-    @@ EBinaryOperation
-         ( Add
-         , ELiteral (LInt 1)
-         , EBinaryOperation (Mul, ELiteral (LInt 2), ELiteral (LInt 3)) )
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "1 + 2 * 3 = 7"
-  = Result.ok
-    @@ EBinaryOperation
-         ( Eq
-         , EBinaryOperation
-             ( Add
-             , ELiteral (LInt 1)
-             , EBinaryOperation (Mul, ELiteral (LInt 2), ELiteral (LInt 3)) )
-         , ELiteral (LInt 7) )
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    "1 <= 3 && 2 <= 4 && true && 3 > 1 || 1 = 7"
-  = Result.ok
-    @@ EBinaryOperation
-         ( OR
-         , EBinaryOperation
-             ( AND
-             , EBinaryOperation
-                 ( AND
-                 , EBinaryOperation
-                     ( AND
-                     , EBinaryOperation (LTE, ELiteral (LInt 1), ELiteral (LInt 3))
-                     , EBinaryOperation (LTE, ELiteral (LInt 2), ELiteral (LInt 4)) )
-                 , ELiteral (LBool true) )
-             , EBinaryOperation (GT, ELiteral (LInt 3), ELiteral (LInt 1)) )
-         , EBinaryOperation (Eq, ELiteral (LInt 1), ELiteral (LInt 7)) )
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "1 + (2 + 3)"
-  = Result.ok
-    @@ EBinaryOperation
-         ( Add
-         , ELiteral (LInt 1)
-         , EBinaryOperation (Add, ELiteral (LInt 2), ELiteral (LInt 3)) )
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_declaration "let f x y = x + y"
-  = Result.ok
-    @@ EDeclaration
-         ("f", [ "x"; "y" ], EBinaryOperation (Add, EIdentifier "x", EIdentifier "y"))
-;;
-
-(* Tests for let in *)
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_declaration
-    " let triple_by_triple x = let triple = (x, x, x) in [ triple; triple; triple] "
-  = Result.ok
-    @@ EDeclaration
-         ( "triple_by_triple"
-         , [ "x" ]
-         , ELetIn
-             ( [ EDeclaration
-                   ( "triple"
-                   , []
-                   , ETuple [ EIdentifier "x"; EIdentifier "x"; EIdentifier "x" ] )
-               ]
-             , EList [ EIdentifier "triple"; EIdentifier "triple"; EIdentifier "triple" ]
-             ) )
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    "if x && y / z then (x + y) / z else (x + y) * z"
-  = Result.ok
-    @@ EIf
-         ( EBinaryOperation
-             ( AND
-             , EIdentifier "x"
-             , EBinaryOperation (Div, EIdentifier "y", EIdentifier "z") )
-         , EBinaryOperation
-             ( Div
-             , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y")
-             , EIdentifier "z" )
-         , EBinaryOperation
-             ( Mul
-             , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y")
-             , EIdentifier "z" ) )
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_declaration
-    " let triple_by_triple x = let triple = (x, x, x) and double = (x, x) in [ triple; \
-     double; triple] "
-  = Result.ok
-    @@ EDeclaration
-         ( "triple_by_triple"
-         , [ "x" ]
-         , ELetIn
-             ( [ EDeclaration
-                   ( "triple"
-                   , []
-                   , ETuple [ EIdentifier "x"; EIdentifier "x"; EIdentifier "x" ] )
-               ; EDeclaration ("double", [], ETuple [ EIdentifier "x"; EIdentifier "x" ])
-               ]
-             , EList [ EIdentifier "triple"; EIdentifier "double"; EIdentifier "triple" ]
-             ) )
-;;
-
-(* Tests for application *)
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " f x "
-  = Result.ok @@ EApplication (EIdentifier "f", EIdentifier "x")
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " f x y "
-  = Result.ok
-    @@ EApplication (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " f [1; 2] n "
-  = Result.ok
-    @@ EApplication
-         ( EApplication (EIdentifier "f", EList [ ELiteral (LInt 1); ELiteral (LInt 2) ])
-         , EIdentifier "n" )
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "(fun x y -> [x; y]) n 0"
-  = Result.ok
-    @@ EApplication
-         ( EApplication
-             ( EFun ([ "x"; "y" ], EList [ EIdentifier "x"; EIdentifier "y" ])
-             , EIdentifier "n" )
-         , ELiteral (LInt 0) )
-;;
-
-(* Tests for data constructor parser *)
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "Ok 1"
-  = Result.ok @@ EDataConstructor ("Ok", [ ELiteral (LInt 1) ])
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    " match f x y with\n  | 100 -> x\n  | 200 -> y\n  | _ -> 0"
-  = Result.ok
-    @@ EMatchWith
-         ( EApplication (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
-         , [ ELiteral (LInt 100), EIdentifier "x"
-           ; ELiteral (LInt 200), EIdentifier "y"
-           ; EIdentifier "_", ELiteral (LInt 0)
-           ] )
-;;
-
-let%test _ =
-  parse_string
-    ~consume:Prefix
-    parse_expression
-    "match f with Ok x -> x + 1 | _ -> let sq = fun y -> y * y in sq x"
-  = Result.ok
-    @@ EMatchWith
-         ( EIdentifier "f"
-         , [ ( EDataConstructor ("Ok", [ EIdentifier "x" ])
-             , EBinaryOperation (Add, EIdentifier "x", ELiteral (LInt 1)) )
-           ; ( EIdentifier "_"
-             , ELetIn
-                 ( [ EDeclaration
-                       ( "sq"
-                       , []
-                       , EFun
-                           ( [ "y" ]
-                           , EBinaryOperation (Mul, EIdentifier "y", EIdentifier "y") ) )
-                   ]
-                 , EApplication (EIdentifier "sq", EIdentifier "x") ) )
-           ] )
-;;
-
-(* Tests for unary operations parsing *)
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "-2"
-  = Result.ok @@ EUnaryOperation (Minus, ELiteral (LInt 2))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "-(x + y)"
-  = Result.ok
-    @@ EUnaryOperation (Minus, EBinaryOperation (Add, EIdentifier "x", EIdentifier "y"))
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression "- ((fun x y -> (x + y)) 1 2)"
-  = Result.ok
-    @@ EUnaryOperation
-         ( Minus
-         , EApplication
-             ( EApplication
-                 ( EFun
-                     ( [ "x"; "y" ]
-                     , EBinaryOperation (Add, EIdentifier "x", EIdentifier "y") )
-                 , ELiteral (LInt 1) )
-             , ELiteral (LInt 2) ) )
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " ( 1 + 2 + 3 ) "
-  = Result.ok
-    @@ EBinaryOperation
-         ( Add
-         , EBinaryOperation (Add, ELiteral (LInt 1), ELiteral (LInt 2))
-         , ELiteral (LInt 3) )
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " if not x then -1 else 0 "
-  = Result.ok
-    @@ EIf
-         ( EUnaryOperation (Not, EIdentifier "x")
-         , EUnaryOperation (Minus, ELiteral (LInt 1))
-         , ELiteral (LInt 0) )
-;;
-
-(*Tests for list construction *)
-let%test _ =
-  parse_string ~consume:Prefix parse_list_constructing " 1 :: [ 2; 3 ] "
-  = Result.ok
-    @@ EConstructList (ELiteral (LInt 1), EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
-;;
-
-let%test _ =
-  parse_string ~consume:Prefix parse_expression " (1 :: [ 2; 3 ], x :: [ 2; 3 ]) "
-  = Result.ok
-    @@ ETuple
-         [ EConstructList
-             (ELiteral (LInt 1), EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
-         ; EConstructList (EIdentifier "x", EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
-         ]
+    @@ [ EDeclaration
+           ( "f"
+           , [ "x"; "y"; "z" ]
+           , EMatchWith
+               ( ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
+               , [ ( ETuple
+                       [ ELiteral (LBool true)
+                       ; ELiteral (LBool true)
+                       ; ELiteral (LBool false)
+                       ]
+                   , ELiteral (LBool true) )
+                 ; ( ETuple
+                       [ ELiteral (LBool true)
+                       ; ELiteral (LBool false)
+                       ; ELiteral (LBool true)
+                       ]
+                   , ELiteral (LBool true) )
+                 ; ( ETuple
+                       [ ELiteral (LBool false)
+                       ; ELiteral (LBool true)
+                       ; ELiteral (LBool true)
+                       ]
+                   , ELiteral (LBool true) )
+                 ; EIdentifier "_", ELiteral (LBool false)
+                 ] ) )
+       ]
 ;;
