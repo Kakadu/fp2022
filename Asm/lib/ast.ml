@@ -105,6 +105,8 @@ type 'a command =
   | Sub of 'a operands_double
   | Inc of 'a operand_single
   | Mul of 'a operand_single
+  | Push of 'a operand_single
+  | Pop of 'a operand_single
   | Jmp of string operand_single
   | Je of string operand_single
   | Jne of string operand_single
@@ -133,13 +135,15 @@ type instruction =
 type all_instructions = instruction list [@@deriving show { with_path = false }]
 
 module CmdHandler = struct
-  let cmd_one_arg_list = [ "inc"; "mul" ]
+  let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]
   let cmd_two_args_list = [ "mov"; "add"; "sub" ]
   let scmd_list = [ "jmp"; "je"; "jne"; "call" ]
 
   let cmd_one_arg_str_to_command = function
     | "inc" -> fun x -> Inc x
     | "mul" -> fun x -> Mul x
+    | "push" -> fun x -> Push x
+    | "pop" -> fun x -> Pop x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 

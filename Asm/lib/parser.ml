@@ -407,3 +407,32 @@ let%test _ =
     ; SCommand (Jmp (Label "l1"))
     ]
 ;;
+
+let%test _ =
+  ok_all_instructions
+    {|l1:
+        mov ax, bx
+        push eax
+        je LAbEl$
+        add eax, ecx
+        push 5
+        inc bl
+      l@abel2:
+        sub dh, 5
+        pop dx ; Actually we don't want to allow using
+               ; push/pop with registers other than 32-bit
+        jmp l1
+    |}
+    [ LCommand "l1"
+    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
+    ; SCommand (Je (Label "LAbEl$"))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
+    ; DCommand (Push (Const (int_to_dword_const 5)))
+    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
+    ; LCommand "l@abel2"
+    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
+    ; WCommand (Pop (Reg (reg_name_to_word_reg "dx")))
+    ; SCommand (Jmp (Label "l1"))
+    ]
+;;
