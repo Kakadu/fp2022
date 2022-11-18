@@ -1,0 +1,8 @@
+(library
+ (name OcamlObj_lib)
+ (public_name OcamlObj.lib)
+ (modules Ast Parser parsertest)
+ (libraries base angstrom)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq))
+ (inline_tests))

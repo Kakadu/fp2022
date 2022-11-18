@@ -1,0 +1,14 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
+(library
+ (name python_lib)
+ (public_name Python.Lib)
+ (modules Ast Parser Interpreter)
+ (libraries angstrom stdio)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show)))

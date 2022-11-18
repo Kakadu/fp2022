@@ -1,0 +1,41 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
+(executable
+ (name demoFactorial)
+ (modules demoFactorial)
+ (libraries Python.Lib)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name demoSimpleOOP)
+ (modules demoSimpleOOP)
+ (libraries Python.Lib)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name demoWhile)
+ (modules demoWhile)
+ (libraries Python.Lib)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name demo)
+ (modules demo)
+ (libraries Python.Lib)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
+
+(cram
+ (deps
+  ./demoFactorial.exe
+  ./demoSimpleOOP.exe
+  ./demoWhile.exe
+  ./demo.exe
+  ./pythonSamples/fact.py))

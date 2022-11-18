@@ -1,0 +1,25 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
+(library
+ (name pascal_lib)
+ (public_name Pascal.Lib)
+ (modules
+  KeyMap
+  ImArray
+  Exceptions
+  Monadic
+  Ast
+  Worlds
+  Parser
+  VTypeBasics
+  Eval
+  VarLoader
+  Interpreter)
+ (libraries base opal ppx_show.runtime)
+ (preprocess
+  (pps ppx_expect ppx_show))
+ (inline_tests))

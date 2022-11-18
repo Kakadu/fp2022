@@ -1,0 +1,33 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-only)
+
+(authors "ToxaKaz")
+
+(maintainers "ToxaKaz")
+
+(bug_reports "st076546@student.spbu.ru")
+
+(homepage "https://github.com/toxakaz/fp2022")
+
+(package
+ (name Pascal) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "An interpreter for Pascal")
+ (description "Parser and Interpreter for Pascal")
+ (version 0.1)
+ (depends
+  dune
+  opal
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_show
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))

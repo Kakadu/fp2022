@@ -1,0 +1,34 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Anton Chizhov")
+
+(maintainers "Anton Chizhov")
+
+(bug_reports "https://github.com/vs9h/fp2022")
+
+(homepage "https://github.com/vs9h/fp2022")
+
+(package
+ (name Bash)
+ (synopsis "An interpreter for Bash")
+ (description "Calling third-party executables at runtime, pipes")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ppx_variants_conv
+  ppx_fields_conv
+  batteries))

@@ -1,0 +1,14 @@
+(executable
+ (name demoParse)
+ (modules demoParse)
+ (public_name demoParse)
+ (libraries bash_lib stdio))
+
+(executable
+ (name demoInterpret)
+ (modules demoInterpret)
+ (public_name demoInterpret)
+ (libraries bash_lib stdio))
+
+(cram
+ (deps ./demoParse.exe ./demoInterpret.exe))

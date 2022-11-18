@@ -14,8 +14,7 @@ let varname =
 let lam_gen =
   QCheck.Gen.(
     sized
-    @@ fix (fun self n ->
-         match n with
+    @@ fix (fun self -> function
          | 0 -> map var varname
          | n ->
            frequency
