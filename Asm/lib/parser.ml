@@ -238,8 +238,11 @@ let dcommand_p =
 let scommand_p = choice (List.map gen_scommand_p scmd_list) <?> "scommand_p"
 
 (****************************************************************************************)
-(* Parse any instruction == line *)
-let instr_p = choice [ bcommand_p; wcommand_p; dcommand_p; scommand_p; lcommand_p ]
+(* Parse any instruction == line.
+   We want dcommand_p to be the first so that all one-arg commands that take
+   constants are parsed the same, i.e. "mul 5" should be parsed as DCommand.
+   Otherwise, "mul 5" will be parsed as BCommand and "mul 500" will be parsed as WCommand *)
+let instr_p = choice [ dcommand_p; wcommand_p; bcommand_p; scommand_p; lcommand_p ]
 
 (* Parse the whole NASM program *)
 let program_p =
