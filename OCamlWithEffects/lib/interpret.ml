@@ -229,7 +229,7 @@ end = struct
                  | VFun (_, _, _, _), VFun (_, _, _, _)
                  | VADT (_, _), VADT (_, _) -> return @@ VList (head :: tail)
                  | _ -> fail "Runtime error: mismatching types in list.")
-              | _ -> fail "Runtim error: could not interpret list.")
+              | _ -> fail "Runtime error: could not interpret list.")
          in
          eval_list list)
     | EConstructList (operand, list) ->
@@ -260,6 +260,19 @@ end = struct
       in
       let* list = eval_arguments list in
       return @@ VTuple list
+    | ELetIn (bindings_list, expression) ->
+      let rec eval_bindings environment = function
+        | h :: t ->
+          let* result = eval h environment in
+          (match h with
+           | EDeclaration (name, _, _) ->
+             eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
+           | ERecursiveDeclaration (name, _, _) ->
+             eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
+           | _ -> fail "Runtime error: declaration was expected.")
+        | _ -> eval expression environment
+      in
+      eval_bindings environment bindings_list
     | _ -> fail ""
   ;;
 
@@ -459,3 +472,44 @@ let%test _ =
   Poly.( = ) (InterpretResult.run test_program)
   @@ Result.Ok (VTuple [ VChar 'f'; VInt 0 ])
 ;;
+
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , ELetIn
+          ( [ EDeclaration ("x", [], ELiteral (LInt 1)) ]
+          , EBinaryOperation (Add, EIdentifier "x", ELiteral (LInt (-2))) ) )
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt (-1))
+
+let test_program =
+  [ EDeclaration
+      ( "phi"
+      , [ "n" ]
+      , ELetIn
+          ( [ ERecursiveDeclaration
+                ( "helper"
+                , [ "last1"; "last2"; "n" ]
+                , EIf
+                    ( EBinaryOperation (GT, EIdentifier "n", ELiteral (LInt 0))
+                    , EApplication
+                        ( EApplication
+                            ( EApplication (EIdentifier "helper", EIdentifier "last2")
+                            , EBinaryOperation
+                                (Add, EIdentifier "last1", EIdentifier "last2") )
+                        , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) )
+                    , EIdentifier "last2" ) )
+            ]
+          , EApplication
+              ( EApplication
+                  ( EApplication (EIdentifier "helper", ELiteral (LInt 1))
+                  , ELiteral (LInt 1) )
+              , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 2)) ) ) )
+  ; EDeclaration ("main", [], EApplication (EIdentifier "phi", ELiteral (LInt 10)))
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 55)
