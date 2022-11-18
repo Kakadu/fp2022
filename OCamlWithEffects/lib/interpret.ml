@@ -7,6 +7,7 @@ module type MONAD_FAIL = sig
 
   val fail : 'e -> ('a, 'e) t
   val ( let* ) : ('a, 'e) t -> ('a -> ('b, 'e) t) -> ('b, 'e) t
+  val ( *> ) : ('a, 'e) t -> ('a, 'e) t -> ('a, 'e) t
 end
 
 type error_message = string
@@ -146,18 +147,21 @@ end = struct
        | OR, VBool x, VBool y -> return @@ VBool (x || y)
        | (AND | OR), _, _ -> fail "Runtime error: bool type was expected.")
     | EIdentifier name ->
-      (match Map.find environment name with
-       | Some v ->
-         (match v with
-          | VFun (id_list, function_body, environment, true) ->
-            return
-            @@ VFun
-                 ( id_list
-                 , function_body
-                 , Map.update environment name ~f:(fun _ -> v)
-                 , true )
-          | _ -> return v)
-       | None -> fail "Runtime error: unbound value.")
+      if name = "_"
+      then fail "Runtime error: used wildcard in right-hand expression."
+      else (
+        match Map.find environment name with
+        | Some v ->
+          (match v with
+           | VFun (id_list, function_body, environment, true) ->
+             return
+             @@ VFun
+                  ( id_list
+                  , function_body
+                  , Map.update environment name ~f:(fun _ -> v)
+                  , true )
+           | _ -> return v)
+        | None -> fail "Runtime error: unbound value.")
     | EApplication (function_expr, argument_expr) ->
       let* eval_argument = eval argument_expr environment in
       let* eval_function = eval function_expr environment in
@@ -172,7 +176,11 @@ end = struct
         | Some v1, Some v2 -> return (v1, v2)
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
-      let environment = Map.update environment id ~f:(fun _ -> eval_argument) in
+      let environment =
+        if id <> "_"
+        then Map.update environment id ~f:(fun _ -> eval_argument)
+        else environment
+      in
       if id_list = []
       then eval function_body environment
       else return @@ VFun (id_list, function_body, environment, recursive)
@@ -273,7 +281,83 @@ end = struct
         | _ -> eval expression environment
       in
       eval_bindings environment bindings_list
-    | _ -> fail ""
+    | EMatchWith (matched_expression, case_list) ->
+      let rec compare_patterns matched_expression case action environment =
+        let rec helper environment = function
+          | matched_head :: matched_tail, head :: tail ->
+            let result, environment, head_success =
+              compare_patterns
+                matched_head
+                head
+                (EFun ([ "_" ], ELiteral LUnit))
+                environment
+            in
+            let monadic_execution, new_environment, tail_success =
+              helper environment (matched_tail, tail)
+            in
+            result *> monadic_execution, new_environment, head_success && tail_success
+          | [], [] -> eval action environment, environment, true
+          | _ -> fail "Runtime error: pattern-matching failed.", environment, false
+        in
+        match matched_expression, case with
+        | VInt value, ELiteral (LInt x) when value = x ->
+          eval action environment, environment, true
+        | VChar value, ELiteral (LChar x) when value = x ->
+          eval action environment, environment, true
+        | VBool value, ELiteral (LBool x) when value = x ->
+          eval action environment, environment, true
+        | VString value, ELiteral (LString x) when value = x ->
+          eval action environment, environment, true
+        | VUnit, ELiteral LUnit -> eval action environment, environment, true
+        | VInt value, EUnaryOperation (Minus, ELiteral (LInt x)) when value = -x ->
+          eval action environment, environment, true
+        | VFun _, EIdentifier _ ->
+          fail "Runtime error: function cannot be matched.", environment, false
+        | value, EIdentifier id ->
+          let new_environment =
+            if id <> "_"
+            then Map.update environment id ~f:(fun _ -> value)
+            else environment
+          in
+          eval action new_environment, new_environment, true
+        | VList matched_list, EList list -> helper environment (matched_list, list)
+        | VTuple matched_tuple, ETuple tuple -> helper environment (matched_tuple, tuple)
+        | VList matched_list, EConstructList (head, tail) ->
+          (match matched_list with
+           | matched_head :: matched_tail ->
+             let result, environment, head_success =
+               compare_patterns
+                 matched_head
+                 head
+                 (EFun ([ "_" ], ELiteral LUnit))
+                 environment
+             in
+             let monadic_execution, new_environment, tail_success =
+               compare_patterns (VList matched_tail) tail action environment
+             in
+             result *> monadic_execution, new_environment, head_success && tail_success
+           | [] -> fail "Runtime error: pattern-matching failed.", environment, false)
+        | VADT (matched_name, value_list), EDataConstructor (name, expression_list) ->
+          if matched_name <> name
+          then fail "Runtime error: pattern-matching failed.", environment, false
+          else
+            compare_patterns
+              (VTuple value_list)
+              (ETuple expression_list)
+              action
+              environment
+        | _ -> fail "Runtime error: pattern-matching failed.", environment, false
+      in
+      let* eval_matched_expression = eval matched_expression environment in
+      let rec helper = function
+        | case :: tail ->
+          let result, _, success =
+            compare_patterns eval_matched_expression (fst case) (snd case) environment
+          in
+          if success then result else helper tail
+        | [] -> fail "Runtime error: pattern-matching is not exhaustive."
+      in
+      helper case_list
   ;;
 
   let run (program : expression list) =
@@ -298,6 +382,7 @@ module InterpretResult = Interpret (struct
   include Base.Result
 
   let ( let* ) m f = bind m ~f
+  let ( *> ) l r = l >>= fun _ -> r
 end)
 
 (* let rec factorial n acc = if n <= 1 then acc else factorial (n - 1) (acc * n) *)
@@ -513,3 +598,55 @@ let test_program =
 ;;
 
 let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 55)
+
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , EMatchWith
+          ( ETuple [ ELiteral (LInt 1); ELiteral (LInt 2) ]
+          , [ ETuple [ EIdentifier "x"; ELiteral (LInt 2) ], ELiteral (LBool true) ] ) )
+  ]
+;;
+
+let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VBool true)
+
+let test_program =
+  [ EDeclaration
+      ( "main"
+      , []
+      , EMatchWith
+          ( ETuple [ ELiteral (LInt 1); ELiteral (LInt 2) ]
+          , [ ( ETuple [ EIdentifier "x"; EIdentifier "y" ]
+              , EList [ EIdentifier "x"; EIdentifier "y" ] )
+            ] ) )
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VList [ VInt 1; VInt 2 ])
+;;
+
+let test_program =
+  [ EDeclaration
+      ( "head"
+      , []
+      , EFun
+          ( [ "list" ]
+          , EMatchWith
+              ( EIdentifier "list"
+              , [ ( EConstructList (EIdentifier "h", EIdentifier "_")
+                  , EDataConstructor ("Some", [ EIdentifier "h" ]) )
+                ; EIdentifier "_", EDataConstructor ("None", [])
+                ] ) ) )
+  ; EDeclaration
+      ( "main"
+      , []
+      , EApplication (EIdentifier "head", EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
+      )
+  ]
+;;
+
+let%test _ =
+  Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VADT ("Some", [ VInt 2 ]))
+;;
