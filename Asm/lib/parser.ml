@@ -356,14 +356,16 @@ let%test _ = fail_all_instructions "label_without_colon"
 
 let%test _ =
   ok_all_instructions
-    "l1:\n\
-    \ mov ax, bx\n\
-    \ je LAbEl$  \n\
-    \ add eax, ecx\n\
-    \ inc bl\n\
-    \ l@abel2:   \n\
-    \ sub dh, 5\n\
-     jmp l1  \n"
+    {|l1:
+       mov ax, bx
+       je LAbEl$
+        add eax, ecx
+        inc bl
+      l@abel2:
+        sub dh, 5
+         jmp l1
+
+    |}
     [ LCommand "l1"
     ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; SCommand (Je (Label "LAbEl$"))
@@ -379,17 +381,19 @@ let%test _ = fail_all_instructions "call eax, edx"
 
 let%test _ =
   ok_all_instructions
-    ";comment\n\n\
-     ;  comment   \n\
-     l1:\n\
-    \ mov ax, bx\n\
-    \ je LAbEl$ ; something \n\
-    \ add eax, ecx\n\
-    \ inc bl\n\
-    \ l@abel2:   \n\
-    \ sub dh, 5\n\
-     jmp l1  \n\
-    \    ;    and comment at the end"
+    {|
+  ;comment
+     l1:
+       mov ax, bx
+       je LAbEl$ ; something
+       add eax, ecx
+           ;comment on its own
+       inc bl
+     l@abel2: ; another comMem$nt
+       sub dh, 5
+       jmp l1
+    ; Comment at the end
+    |}
     [ LCommand "l1"
     ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; SCommand (Je (Label "LAbEl$"))
