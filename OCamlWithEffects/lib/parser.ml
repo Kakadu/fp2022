@@ -146,8 +146,8 @@ let parse_tuple d =
   remove_spaces
   *> ((let parse_content =
          choice
-           [ d.parse_list_constructing d
-           ; parens self
+           [ parens self
+           ; d.parse_list_constructing d
            ; d.parse_binary_operation d
            ; d.parse_unary_operation d
            ; d.parse_list d
@@ -177,8 +177,8 @@ let parse_list d =
   and separator = remove_spaces *> char ';' *> remove_spaces <|> remove_spaces
   and parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_tuple d
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; self
@@ -203,8 +203,8 @@ let parse_fun d =
   *>
   let parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_tuple d
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
@@ -230,8 +230,8 @@ let parse_fun d =
 let declaration_helper constructing_function d =
   let parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_tuple d
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
@@ -270,8 +270,8 @@ let parse_let_in d =
   *>
   let parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_tuple d
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
@@ -305,8 +305,8 @@ let parse_conditional d =
   *>
   let parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_tuple d
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
@@ -336,8 +336,8 @@ let parse_matching d =
   *>
   let parse_content =
     choice
-      [ d.parse_list_constructing d
-      ; d.parse_tuple d
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
@@ -443,8 +443,8 @@ let parse_application d =
          ]
      and operand_parser =
        choice
-         [ parens @@ d.parse_list_constructing d
-         ; parens @@ d.parse_tuple d
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
          ; parens @@ d.parse_binary_operation d
          ; parens @@ d.parse_unary_operation d
          ; d.parse_list d
@@ -470,8 +470,8 @@ let parse_data_constructor d =
   *>
   let parse_content =
     choice
-      [ parens @@ d.parse_list_constructing d
-      ; parens @@ d.parse_tuple d
+      [ parens @@ d.parse_tuple d
+      ; parens @@ d.parse_list_constructing d
       ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_unary_operation d
       ; d.parse_list d
@@ -493,7 +493,10 @@ let parse_data_constructor d =
       >>= function
       | constructor_name, expression_list ->
         if List.exists (( = ) constructor_name) data_constructors
-        then return @@ edata_constructor constructor_name expression_list
+        then
+          if List.length expression_list > 1
+          then fail "Parsing error: data constructor received too many arguments."
+          else return @@ edata_constructor constructor_name expression_list
         else fail "Parsing error: invalid constructor.")
 ;;
 
@@ -540,8 +543,8 @@ let parse_list_constructing d =
      let separator = remove_spaces *> string "::" *> remove_spaces
      and parse_content =
        choice
-         [ parens self
-         ; parens @@ d.parse_tuple d
+         [ parens @@ d.parse_tuple d
+         ; parens self
          ; parens @@ d.parse_binary_operation d
          ; d.parse_unary_operation d
          ; d.parse_list d
@@ -562,8 +565,8 @@ let parse_list_constructing d =
 
 let parse_expression d =
   choice
-    [ d.parse_list_constructing d
-    ; d.parse_tuple d
+    [ d.parse_tuple d
+    ; d.parse_list_constructing d
     ; d.parse_binary_operation d
     ; d.parse_unary_operation d
     ; d.parse_list d
@@ -865,28 +868,30 @@ let%test _ =
 
 (* 17 *)
 let%test _ =
-  parse " let main = (-2, -3) :: [-5, -10; -6, -12; 7, -8] "
+  parse
+    "let rec zip xs ys = \n\
+     match xs, ys with \n\
+     | [], _ -> []\n\
+     | _, [] -> []\n\
+     | x :: xs, y :: ys -> (x, y) :: (zip xs ys)"
   = Result.ok
-    @@ [ EDeclaration
-           ( "main"
+    @@ [ ERecursiveDeclaration
+           ( "zip"
            , []
-           , EConstructList
-               ( ETuple
-                   [ EUnaryOperation (Minus, ELiteral (LInt 2))
-                   ; EUnaryOperation (Minus, ELiteral (LInt 3))
-                   ]
-               , EList
-                   [ ETuple
-                       [ EUnaryOperation (Minus, ELiteral (LInt 5))
-                       ; EUnaryOperation (Minus, ELiteral (LInt 10))
+           , EMatchWith
+               ( ETuple [ EIdentifier "xs"; EIdentifier "ys" ]
+               , [ ETuple [ EList []; EIdentifier "_" ], EList []
+                 ; ETuple [ EIdentifier "_"; EList [] ], EList []
+                 ; ( ETuple
+                       [ EConstructList (EIdentifier "x", EIdentifier "xs")
+                       ; EConstructList (EIdentifier "y", EIdentifier "ys")
                        ]
-                   ; ETuple
-                       [ EUnaryOperation (Minus, ELiteral (LInt 6))
-                       ; EUnaryOperation (Minus, ELiteral (LInt 12))
-                       ]
-                   ; ETuple
-                       [ ELiteral (LInt 7); EUnaryOperation (Minus, ELiteral (LInt 8)) ]
-                   ] ) )
+                   , EConstructList
+                       ( ETuple [ EIdentifier "x"; EIdentifier "y" ]
+                       , EApplication
+                           ( EApplication (EIdentifier "zip", EIdentifier "xs")
+                           , EIdentifier "ys" ) ) )
+                 ] ) )
        ]
 ;;
 
