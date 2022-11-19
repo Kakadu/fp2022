@@ -61,28 +61,14 @@ let int_p =
   const_str_p >>| int_of_string <?> "int_p"
 ;;
 
-(* const_str_p *)
-(* >>| fun x -> *)
-(* let y = int_of_string x in *)
-(* print_endline "IN INT_P"; *)
-(* print_int y; *)
-(* print_endline (string_of_int y); *)
-(* y *)
-
 (* Generate parser for an integer *)
 let gen_const_p int_is_t_const int_to_t_const =
   int_p
   >>= fun x ->
-  (* print_endline "AFTER INT_P"; *)
   if int_is_t_const x
-  then (* print_endline "IN THEN"; *)
-    return (Const (int_to_t_const x))
-  else (* print_endline "IN ELSE"; *)
-    fail "Integer is too big"
+  then return (Const (int_to_t_const x))
+  else fail "Integer is too big"
 ;;
-
-(* then return (Const (int_to_t_const x)) *)
-(* else fail "Integer is too big" *)
 
 (****************************************************************************************)
 (* Parse an integer and return it as a Const (...) *)
