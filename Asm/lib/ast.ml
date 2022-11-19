@@ -53,9 +53,27 @@ end = struct
   let int_is_byte_const x = x >= -(2 ** 7) && x <= (2 ** 7) - 1
   let int_is_word_const x = x >= -(2 ** 15) && x <= (2 ** 15) - 1
   let int_is_dword_const x = x >= -(2 ** 31) && x <= (2 ** 31) - 1
-  let int_to_byte_const x = if int_is_byte_const x then x else failwith "Int8 expected"
-  let int_to_word_const x = if int_is_word_const x then x else failwith "Int16 expected"
-  let int_to_dword_const x = if int_is_dword_const x then x else failwith "Int32 expected"
+
+  (* Though the following three function may look strange, they copy NASM's behaviour *)
+  let int_to_byte_const x =
+    if not (int_is_byte_const x) then failwith "Int8 expected" else if x < 0 then 0 else x
+  ;;
+
+  let int_to_word_const x =
+    if not (int_is_word_const x)
+    then failwith "Int16 expected"
+    else if x < 0
+    then 0
+    else x
+  ;;
+
+  let int_to_dword_const x =
+    if not (int_is_dword_const x)
+    then failwith "Int32 expected"
+    else if x < 0
+    then 0
+    else x
+  ;;
 
   (* Lists of register names *)
   let byte_reg_name_list = [ "ah"; "al"; "bh"; "bl"; "ch"; "cl"; "dh"; "dl" ]
