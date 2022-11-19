@@ -35,13 +35,6 @@ module OperandsHandler : sig
   val byte_reg_name_list : string list
   val word_reg_name_list : string list
   val dword_reg_name_list : string list
-
-  (* Get register id *)
-  val reg_id_to_int : 'a reg -> int
-
-  (* Get value of a constant *)
-  val const_val : 'a const -> int
-  val reg_name_to_int : string -> int
   val reg_name_to_byte_reg : string -> byte reg
   val reg_name_to_word_reg : string -> word reg
   val reg_name_to_dword_reg : string -> dword reg
@@ -70,18 +63,18 @@ end = struct
   let word_reg_name_list = [ "ax"; "bx"; "cx"; "dx" ]
   let dword_reg_name_list = [ "eax"; "ebx"; "ecx"; "edx" ]
   let all_reg_name_list = byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list
-  let reg_id_to_int = Fun.id
-  let const_val = Fun.id
+  let reg_to_id : 'a reg -> int = Fun.id
+  let const_val : 'a const -> int = Fun.id
 
-  let reg_name_to_int reg_name =
+  let reg_name_to_id reg_name =
     match List.index_of_elem reg_name String.equal all_reg_name_list with
     | None -> failwith ("No register called \"" ^ reg_name ^ "\"")
     | Some x -> x
   ;;
 
-  let reg_name_to_byte_reg reg_name = reg_name |> reg_name_to_int |> int_to_byte_reg
-  let reg_name_to_word_reg reg_name = reg_name |> reg_name_to_int |> int_to_word_reg
-  let reg_name_to_dword_reg reg_name = reg_name |> reg_name_to_int |> int_to_dword_reg
+  let reg_name_to_byte_reg reg_name = reg_name |> reg_name_to_id |> int_to_byte_reg
+  let reg_name_to_word_reg reg_name = reg_name |> reg_name_to_id |> int_to_word_reg
+  let reg_name_to_dword_reg reg_name = reg_name |> reg_name_to_id |> int_to_dword_reg
 end
 
 open OperandsHandler
