@@ -39,6 +39,12 @@ module OperandsHandler : sig
   val reg_name_to_word_reg : string -> word reg
   val reg_name_to_dword_reg : string -> dword reg
 
+  (* Get internal register id by its name *)
+  val reg_name_to_id : string -> int
+
+  (* Get integer value of a constant *)
+  val const_val : 'a const -> int
+
   (* These two functions require us to have ids of all dword registers as keys
      in the reg_map *)
   val reg_val_get : 'a reg -> int IntMap.t -> int
