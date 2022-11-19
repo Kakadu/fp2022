@@ -209,7 +209,7 @@ let parse_tree text (g : grammar) (input : string list) =
   let main_tree = Nonterm (start_rule text, tree_list) in
   let rec printTree tree =
     match tree with
-    | Term s -> " %s "
+    | Term s -> " " ^ s ^ " "
     | Nonterm (s, parse_treeList) ->
       " [ "
       ^ s
