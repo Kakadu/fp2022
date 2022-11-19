@@ -300,7 +300,7 @@ type instruction =
 (* For now the AST may contain invalid instructions like Inc (Const 5).
    It should be fixed, probably by scanning the AST after parsing and
    producing an error if an invalid instruction is found *)
-type all_instructions = instruction list [@@deriving show { with_path = false }]
+type ast = instruction list [@@deriving show { with_path = false }]
 
 module CmdHandler = struct
   let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]

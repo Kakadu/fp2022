@@ -294,11 +294,11 @@ let%test _ = fail_instruction instr_p "add al, edx"
 let%test _ = ok_instruction instr_p "abc?def$:" (LCommand "abc?def$")
 let%test _ = fail_instruction instr_p "@abc:"
 
-let ok_all_instructions = test_ok pp_all_instructions program_p
-let fail_all_instructions = test_fail pp_all_instructions program_p
+let ok_ast = test_ok pp_ast program_p
+let fail_ast = test_fail pp_ast program_p
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     "mov ax, bx\n     add eax, ecx"
     [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
@@ -306,7 +306,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     "mov ax, bx\n     add eax, ecx\n inc ax  "
     [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
@@ -315,7 +315,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     "l1:\n mov ax, bx\n add eax, ecx\n inc bl\n l@abel2:   \n sub dh, 5\n\n\n\n   \n"
     [ LCommand "l1"
     ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
@@ -326,11 +326,11 @@ let%test _ =
     ]
 ;;
 
-let%test _ = fail_all_instructions "mov ax, bx   inc ax"
-let%test _ = fail_all_instructions "label_without_colon"
+let%test _ = fail_ast "mov ax, bx   inc ax"
+let%test _ = fail_ast "label_without_colon"
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     {|l1:
        mov ax, bx
        je LAbEl$
@@ -352,10 +352,10 @@ let%test _ =
     ]
 ;;
 
-let%test _ = fail_all_instructions "call eax, edx"
+let%test _ = fail_ast "call eax, edx"
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     {|
   ;comment
      l1:
@@ -381,7 +381,7 @@ let%test _ =
 ;;
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     {|l1:
         mov ax, bx
         push eax
@@ -409,11 +409,11 @@ let%test _ =
     ]
 ;;
 
-let%test _ = fail_all_instructions "sub al, 1000"
-let%test _ = fail_all_instructions "mov ax, 1000000"
+let%test _ = fail_ast "sub al, 1000"
+let%test _ = fail_ast "mov ax, 1000000"
 
 let%test _ =
-  ok_all_instructions
+  ok_ast
     "add edx, 1000000"
     [ DCommand (Add (RegConst (reg_name_to_dword_reg "edx", int_to_dword_const 1000000)))
     ]
