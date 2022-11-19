@@ -5,9 +5,7 @@ open Format
 
 let rec print result =
   let rec print_list delimiter = function
-    | [ head ] ->
-      print head;
-      printf "%c " delimiter
+    | [ head ] -> print head
     | head :: tail ->
       print head;
       printf "%c " delimiter;
@@ -42,8 +40,8 @@ let print_run code =
   match parse code with
   | Ok ast ->
     (match run ast with
-     | Ok result -> print result
-     | Error error -> printf "%s" error)
+    | Ok result -> print result
+    | Error error -> printf "%s" error)
   | Error error ->
     printf "%s" error;
     printf "\n"
