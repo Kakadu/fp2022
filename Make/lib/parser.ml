@@ -134,6 +134,11 @@ let rules =
   trim_start (both rule (many expr_rule))
 ;;
 
+let parse str =
+  let open Result in
+  parse_string ~consume:Consume.All rules str
+;;
+
 (* ------------------------------------------------- *)
 (* ----------------------TESTS---------------------- *)
 (* ------------------------------------------------- *)
