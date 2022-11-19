@@ -41,27 +41,6 @@ let is_backslash = function
 let some_pred preds el = List.exists (fun fn -> fn el) preds
 let all_pred preds el = List.for_all (fun fn -> fn el) preds
 
-let test_ok, test_fail =
-  let ok ppf parser input expected =
-    match parse_string ~consume:All parser input with
-    | Ok res when expected = res -> true
-    | Ok res ->
-      ppf Format.std_formatter res;
-      false
-    | Error e ->
-      print_string e;
-      false
-  in
-  let fail ppf parser input =
-    match parse_string ~consume:All parser input with
-    | Ok res ->
-      ppf Format.std_formatter res;
-      false
-    | _ -> true
-  in
-  ok, fail
-;;
-
 (* runs p and discards it's output *)
 let discard p = p *> return ()
 
@@ -90,24 +69,6 @@ let trim_start, trim_end =
   start, finish
 ;;
 
-let tmp = { targets = "abc", []; prerequisites = []; recipes = [] }
-let rule = char 't' >>| fun _ -> Rule tmp
-let parser = trim_start rule |> many1 |> trim_end
-let parse_ok = test_ok (Format.pp_print_list pp_expr) parser
-let parse_fail = test_fail (Format.pp_print_list pp_expr) parser
-
-let%test _ = parse_ok "#\nt" [ Rule tmp ]
-let%test _ = parse_ok "t#" [ Rule tmp ]
-let%test _ = parse_ok "t#\n" [ Rule tmp ]
-let%test _ = parse_ok "#\n #\n t #\n #\n t" [ Rule tmp; Rule tmp ]
-let%test _ = parse_ok "#\n   #\n    #fdsf\n t" [ Rule tmp ]
-let%test _ = parse_ok " #fdsfs\n    t    #fdfsf" [ Rule tmp ]
-let%test _ = parse_ok " #fdsfs\n    t    #fdfsf  \n  " [ Rule tmp ]
-let%test _ = parse_ok "  #39139\r   t   t  #" [ Rule tmp; Rule tmp ]
-let%test _ = parse_fail "#"
-let%test _ = parse_fail "    #fodsfjo \r#x  \n# f"
-let%test _ = parse_fail "#fodsfjo\n \t \t \n "
-
 (* ban '\' in filenames *)
 let filename =
   take_while1
@@ -132,6 +93,92 @@ let filenames = sep_and_trim filename_delim filename
 (* ========================================== *)
 let targets = both filename filenames <* char ':'
 
+(* ========================================= *)
+(* Parse prerequisites (could be multilined) *)
+(* We could not insert comments in between.  *)
+(* ========================================= *)
+let prerequisites =
+  fix (fun p ->
+    lift2
+      List.append
+      (filename_delim *> many comment *> filenames)
+      ((char '\\' <* filename_delim *> char '\n') *> p <|> many comment *> return []))
+;;
+
+(* ============================================ *)
+(* Parse recipes                                *)
+(* After targets:prerequisites parsing, recipes *)
+(* are lines __starting with the tab__.         *)
+(* ============================================ *)
+let recipes =
+  let empty_line =
+    let ws_line = char ' ' *> filename_delim in
+    wrap ws_line eols <|> discard (many1 end_of_line)
+  in
+  let recipe_delim = many (empty_line <|> comment) in
+  let recipe_line = char '\t' *> take_while not_newline in
+  sep_and_trim recipe_delim recipe_line
+;;
+
+(* ================================================= *)
+(* Main parser                                       *)
+(* Parses rules                                      *)
+(* <target> [<target[s]>...]: [<prerequisite[s]>...] *)
+(*  \t[<recipe[s]>...]                               *)
+(* ================================================  *)
+let rules =
+  let rule_constructor t p r = { targets = t; prerequisites = p; recipes = r } in
+  let ast_constructor t p r = Rule (rule_constructor t p r) in
+  let rule = lift3 rule_constructor targets prerequisites recipes in
+  let expr_rule = lift3 ast_constructor targets prerequisites recipes in
+  trim_start (both rule (many expr_rule))
+;;
+
+(* ------------------------------------------------- *)
+(* ----------------------TESTS---------------------- *)
+(* ------------------------------------------------- *)
+
+let test_ok, test_fail =
+  let ok ppf parser input expected =
+    match parse_string ~consume:All parser input with
+    | Ok res when expected = res -> true
+    | Ok res ->
+      ppf Format.std_formatter res;
+      false
+    | Error e ->
+      print_string e;
+      false
+  in
+  let fail ppf parser input =
+    match parse_string ~consume:All parser input with
+    | Ok res ->
+      ppf Format.std_formatter res;
+      false
+    | _ -> true
+  in
+  ok, fail
+;;
+
+(* trim parser test *)
+let tmp = { targets = "abc", []; prerequisites = []; recipes = [] }
+let rule = char 't' >>| fun _ -> Rule tmp
+let parser = trim_start rule |> many1 |> trim_end
+let parse_ok = test_ok (Format.pp_print_list pp_expr) parser
+let parse_fail = test_fail (Format.pp_print_list pp_expr) parser
+
+let%test _ = parse_ok "#\nt" [ Rule tmp ]
+let%test _ = parse_ok "t#" [ Rule tmp ]
+let%test _ = parse_ok "t#\n" [ Rule tmp ]
+let%test _ = parse_ok "#\n #\n t #\n #\n t" [ Rule tmp; Rule tmp ]
+let%test _ = parse_ok "#\n   #\n    #fdsf\n t" [ Rule tmp ]
+let%test _ = parse_ok " #fdsfs\n    t    #fdfsf" [ Rule tmp ]
+let%test _ = parse_ok " #fdsfs\n    t    #fdfsf  \n  " [ Rule tmp ]
+let%test _ = parse_ok "  #39139\r   t   t  #" [ Rule tmp; Rule tmp ]
+let%test _ = parse_fail "#"
+let%test _ = parse_fail "    #fodsfjo \r#x  \n# f"
+let%test _ = parse_fail "#fodsfjo\n \t \t \n "
+
+(* targets parser test *)
 type targets = string * string list [@@deriving show { with_path = false }]
 
 let parser = targets
@@ -153,18 +200,7 @@ let%test _ = parse_fail ":::"
 let%test _ = parse_fail ""
 let%test _ = parse_fail ":  \t fdsf \n"
 
-(* ========================================= *)
-(* Parse prerequisites (could be multilined) *)
-(* We could not insert comments in between.  *)
-(* ========================================= *)
-let prerequisites =
-  fix (fun p ->
-    lift2
-      List.append
-      (filename_delim *> many comment *> filenames)
-      ((char '\\' <* filename_delim *> char '\n') *> p <|> many comment *> return []))
-;;
-
+(* prerequisites parser test *)
 let parser = prerequisites
 let parse_ok = test_ok (Format.pp_print_list (fun _ -> print_string)) parser
 let parse_fail = test_fail (Format.pp_print_list (fun _ -> print_string)) parser
@@ -207,13 +243,13 @@ let%test _ = parse_fail "a\\\n\na"
 let%test _ = parse_fail "a\\\n\n  abc:"
 let%test _ = parse_fail "a\\\n  b:"
 
+(* combined targets;prerequisites parser test *)
 type rule_wo_recepie =
   { targets : string * string list
   ; prerequisites : string list
   }
 [@@deriving show { with_path = false }]
 
-(* combine parsers to make <target> [<target[s]>...]: [<prerequisite[s]>...] parsing *)
 let parser = lift2 (fun t p -> { targets = t; prerequisites = p }) targets prerequisites
 let parse_ok = test_ok pp_rule_wo_recepie parser
 let parse_fail = test_fail pp_rule_wo_recepie parser
@@ -244,21 +280,7 @@ let%test _ = parse_fail ":::"
 let%test _ = parse_fail ""
 let%test _ = parse_fail ":  \t fdsf \n"
 
-(* ============================================ *)
-(* Parse recipes                                *)
-(* After targets:prerequisites parsing, recipes *)
-(* are lines __starting with the tab__.         *)
-(* ============================================ *)
-let recipes =
-  let empty_line =
-    let ws_line = char ' ' *> filename_delim in
-    wrap ws_line eols <|> discard (many1 end_of_line)
-  in
-  let recipe_delim = many (empty_line <|> comment) in
-  let recipe_line = char '\t' *> take_while not_newline in
-  sep_and_trim recipe_delim recipe_line
-;;
-
+(* recipes parser test *)
 let parser = recipes
 let parse_ok = test_ok (Format.pp_print_list (fun _ -> print_string)) parser
 let parse_fail = test_fail (Format.pp_print_list (fun _ -> print_string)) parser
@@ -276,6 +298,7 @@ let%test _ = parse_ok "\n\n\n    \n" []
 let%test _ = parse_ok "\n   \t\n\ta" [ "a" ]
 let%test _ = parse_fail "\n#abc\n  not a recipe cause not \t \n"
 
+(* combined targets;prerequisites;recipes parser test *)
 let rule_constructor t p r = { targets = t; prerequisites = p; recipes = r }
 let parser = lift3 rule_constructor targets prerequisites recipes
 let parse_ok = test_ok pp_rule parser
@@ -325,7 +348,7 @@ let%test _ =
     { targets = "a", []; prerequisites = [ "a"; "b"; "c" ]; recipes = [ "abc" ] }
 ;;
 
-(* Parser that returns list of exprs (not quite ast, but close) *)
+(* combined targets;prerequisites;recipes parser test that returns list of exprs test *)
 let rule_constructor t p r = Rule { targets = t; prerequisites = p; recipes = r }
 let rule = lift3 rule_constructor targets prerequisites recipes
 let parser = trim_start (many1 rule)
@@ -441,24 +464,8 @@ clean:
 let%test _ = parse_fail {|:b a|}
 let%test _ = parse_fail {|a#:b a|}
 
-(* ================================================= *)
-(* Main parser                                       *)
-(* Parses rules                                      *)
-(* <target> [<target[s]>...]: [<prerequisite[s]>...] *)
-(*  \t[<recipe[s]>...]                               *)
-(* ================================================  *)
-let parser =
-  let rule =
-    let rule_constructor t p r = { targets = t; prerequisites = p; recipes = r } in
-    lift3 rule_constructor targets prerequisites recipes
-  in
-  let expr =
-    let ast_constructor t p r = Rule { targets = t; prerequisites = p; recipes = r } in
-    lift3 ast_constructor targets prerequisites recipes
-  in
-  trim_start (both rule (many expr))
-;;
-
+(* Multiple rules parsing test *)
+let parser = rules
 let parse_ok = test_ok pp_ast parser
 let parse_fail = test_fail pp_ast parser
 
