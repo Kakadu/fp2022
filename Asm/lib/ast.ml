@@ -59,9 +59,9 @@ end = struct
   let int_is_byte_const x = x >= -(2 ** 7) && x <= (2 ** 7) - 1
   let int_is_word_const x = x >= -(2 ** 15) && x <= (2 ** 15) - 1
   let int_is_dword_const x = x >= -(2 ** 31) && x <= (2 ** 31) - 1
-  let int_to_byte_const = Fun.id
-  let int_to_word_const = Fun.id
-  let int_to_dword_const = Fun.id
+  let int_to_byte_const x = if int_is_byte_const x then x else failwith "Int8 expected"
+  let int_to_word_const x = if int_is_word_const x then x else failwith "Int16 expected"
+  let int_to_dword_const x = if int_is_dword_const x then x else failwith "Int32 expected"
   let int_to_byte_reg = Fun.id
   let int_to_word_reg = Fun.id
   let int_to_dword_reg = Fun.id
