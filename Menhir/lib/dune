@@ -2,7 +2,7 @@
  (name menhir_lib)
  (public_name Menhir.Lib)
  (modules Ast Interpret Parser)
- (libraries angstrom base re str unix stdio)
+ (libraries base re str unix stdio)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
  (inline_tests))

@@ -1,6 +1,7 @@
 (** Copyright 2021-2022, Artur Gagin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Parser
 
 exception UnknownCommand of string
@@ -243,7 +244,7 @@ let get_parser_and_tree_parser command =
       List.find
         (fun x ->
           let l, _ = x in
-          if l = "text" then true else false)
+          String.equal l "text")
         (command_list command)
     in
     try Ok (gen_parser text, gen_tree_parser text) with

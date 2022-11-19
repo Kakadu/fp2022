@@ -1,6 +1,7 @@
 (** Copyright 2021-2022, Artur Gagin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Menhir_lib
 
 let read_command () =
@@ -45,7 +46,7 @@ let () =
      --parser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
      \t> Note that this parser will return true or false depending on whether it can \
      parse your sentence or not;\n\
-     \t> If you want to get a parser which will return parseTree then type menhir \
+     \t> If you want to get a parser which will return parse_tree then type menhir \
      --treeParser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>;";
   print_endline "> To exit you can type 'exit'.";
   repl_command 0

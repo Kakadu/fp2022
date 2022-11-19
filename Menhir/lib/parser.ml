@@ -1,8 +1,8 @@
 (** Copyright 2021-2022, Artur Gagin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
-open Base
 
+open Base
 open Ast
 
 (* LEXICAL ANALYSIS *)
