@@ -3,6 +3,7 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Base
+open Utils
 
 module OperandsHandler : sig
   (* Phantom types *)
@@ -73,12 +74,9 @@ end = struct
   let const_val = Fun.id
 
   let reg_name_to_int reg_name =
-    (* Find index of element [reg_name] *)
-    let rec helper (idx : int) = function
-      | [] -> failwith ("No register called \"" ^ reg_name ^ "\"")
-      | h :: tl -> if String.compare h reg_name = 0 then idx else helper (idx + 1) tl
-    in
-    helper 0 all_reg_name_list
+    match List.index_of_elem reg_name String.equal all_reg_name_list with
+    | None -> failwith ("No register called \"" ^ reg_name ^ "\"")
+    | Some x -> x
   ;;
 
   let reg_name_to_byte_reg reg_name = reg_name |> reg_name_to_int |> int_to_byte_reg
