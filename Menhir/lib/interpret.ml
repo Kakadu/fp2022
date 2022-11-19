@@ -114,7 +114,7 @@ let rec start_rule_components text = function
 let rec is_string_list_contains_symbol symbol l =
   match l with
   | h :: tl ->
-    if String.equal h symbol then true else is_string_list_contains_symbol symbol tl
+    if not (String.equal h symbol) then is_string_list_contains_symbol symbol tl else true
   | [] -> false
 ;;
 
@@ -124,7 +124,7 @@ let get_all_nonterminals_of_rule rule_name text =
   List.filter
     (fun rule ->
       let nonterm, _ = rule in
-      if String.equal nonterm rule_name then true else false)
+      String.equal nonterm rule_name)
     rules
 ;;
 
@@ -132,7 +132,7 @@ let rec try_apply_rule text rule input =
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
-    if List.length input = 0 (* OVERSHOOT RIGHT HERE. *)
+    if input = [] (* OVERSHOOT RIGHT HERE. *)
     then false, -1
     else if is_string_list_contains_symbol h (terminals text)
     then
@@ -209,7 +209,7 @@ let parse_tree text (g : grammar) (input : string list) =
   let main_tree = Nonterm (start_rule text, tree_list) in
   let rec printTree tree =
     match tree with
-    | Term s -> " " ^ s ^ " "
+    | Term s -> " %s "
     | Nonterm (s, parse_treeList) ->
       " [ "
       ^ s

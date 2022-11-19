@@ -48,7 +48,7 @@ let file_text_where_only_rules text =
     выражения, то возвращаем -1. *)
 let is_string_contains regexp str =
   try Str.search_forward regexp str 0 with
-  | _ -> -1
+  | Not_found -> -1
 ;;
 
 exception ParseError of string
