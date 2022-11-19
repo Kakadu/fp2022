@@ -1,5 +1,3 @@
-open OCamlWithEffectsLib.Interpret.InterpretResult
-open OCamlWithEffectsLib.Parser
 open OCamlWithEffectsLib.Printer
 
 let _ =
