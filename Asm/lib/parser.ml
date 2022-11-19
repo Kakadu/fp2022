@@ -98,18 +98,17 @@ let dreg_p = gen_reg_p dreg_name_p reg_name_to_dword_reg <?> "dreg_p"
 
 (****************************************************************************************)
 (* Generate parser for two registers that returns RegReg (...) *)
-let gen_regreg_p reg_name_p reg_name_to_t_reg =
-  lift2
-    (fun reg_name1 reg_name2 ->
-      RegReg (reg_name_to_t_reg reg_name1, reg_name_to_t_reg reg_name2))
-    (reg_name_p <* comma_p)
-    reg_name_p
+let gen_regreg_p reg_p =
+  both (reg_p <* comma_p) reg_p
+  >>| function
+  | Reg r1, Reg r2 -> RegReg (r1, r2)
+  | _ -> failwith "reg_p returned non-register"
 ;;
 
 (* Parser two registers and convert them to RegReg (...) *)
-let bregreg_p = gen_regreg_p breg_name_p reg_name_to_byte_reg <?> "breg_const_p"
-let wregreg_p = gen_regreg_p wreg_name_p reg_name_to_word_reg <?> "wregreg_p"
-let dregreg_p = gen_regreg_p dreg_name_p reg_name_to_dword_reg <?> "dregreg_p"
+let bregreg_p = gen_regreg_p breg_p <?> "breg_const_p"
+let wregreg_p = gen_regreg_p wreg_p <?> "wregreg_p"
+let dregreg_p = gen_regreg_p dreg_p <?> "dregreg_p"
 
 (****************************************************************************************)
 (* Generate parser for register and constant that returns RegConst (...) *)
