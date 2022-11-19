@@ -415,14 +415,6 @@ let%test _ =
 ;;
 
 let test_program =
-  [ EDeclaration ("n", [], ELiteral (LInt 5))
-  ; EDeclaration ("main", [], EBinaryOperation (LTE, EIdentifier "n", ELiteral (LInt 1)))
-  ]
-;;
-
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VBool false)
-
-let test_program =
   [ EDeclaration
       ( "f"
       , [ "x"; "y"; "z" ]
