@@ -8,7 +8,8 @@ let read_command () =
 let rec repl_tokens_list parser tree_parser =
   let () =
     print_string "> ";
-    let input = Interpret.split_string_and_delete_spaces (read_command ()) in
+    let command = read_command () in
+    let input = Interpret.split_string_and_delete_spaces command in
     let res, ret = parser input in
     if res
     then print_endline ("ACCEPT\n" ^ tree_parser input)

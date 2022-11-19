@@ -1,7 +1,5 @@
 open Parser
 
-exception EmptyInputStringError of string
-exception GetPathError of string
 exception UnknownCommand of string
 
 let read_all_file_text file_path =
@@ -98,16 +96,6 @@ let getRhs = function
   | _, rhs -> rhs
 ;;
 
-let start_rule text =
-  let r, _ = start_rule_and_token_list text in
-  r
-;;
-
-let token_list text =
-  let _, l = start_rule_and_token_list text in
-  l
-;;
-
 let nonterminals text = get_nonterminals (take_grammar text)
 let terminals text = token_list text
 
@@ -119,10 +107,6 @@ let rec start_rule_components text = function
   | [] -> []
 ;;
 
-let start_nonterminals text =
-  List.filter (fun s -> String.equal s (start_rule text)) (nonterminals text)
-;;
-
 let rec is_string_list_contains_symbol symbol l =
   match l with
   | h :: tl ->
@@ -131,7 +115,7 @@ let rec is_string_list_contains_symbol symbol l =
 ;;
 
 (* Берет все правила, которые имеют имя rule_name *)
-let getAllNonterminalsOfRule rule_name text =
+let get_all_nonterminals_of_rule rule_name text =
   let _, rules = take_grammar text in
   List.filter
     (fun rule ->
@@ -140,8 +124,7 @@ let getAllNonterminalsOfRule rule_name text =
     rules
 ;;
 
-(* Здесь мы должны быть уверены, что длина списка input >= длине списка rhs. *)
-let rec tryApplyRule text rule input =
+let rec try_apply_rule text rule input =
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
@@ -150,14 +133,14 @@ let rec tryApplyRule text rule input =
     else if is_string_list_contains_symbol h (terminals text)
     then
       if String.equal (List.hd input) h
-      then tryApplyRule text (lhs, tl) (List.tl input)
+      then try_apply_rule text (lhs, tl) (List.tl input)
       else false, 0
     else if is_string_list_contains_symbol h (nonterminals text)
     then (
       let rec getNewInputIfNonterminalRuleIsFits allNonterminalsOfRule return_code =
         match allNonterminalsOfRule with
         | h' :: tl' ->
-          let flag, remaining_input_len = tryApplyRule text h' input in
+          let flag, remaining_input_len = try_apply_rule text h' input in
           if flag
           then get_last_n_elements_from_list remaining_input_len input, return_code
           else if return_code = -1
@@ -166,39 +149,40 @@ let rec tryApplyRule text rule input =
         | [] -> input, return_code
       in
       let new_input, return_code =
-        getNewInputIfNonterminalRuleIsFits (getAllNonterminalsOfRule h text) 0
+        getNewInputIfNonterminalRuleIsFits (get_all_nonterminals_of_rule h text) 0
       in
       if List.length new_input = List.length input
       then false, return_code
-      else tryApplyRule text (lhs, tl) new_input)
+      else try_apply_rule text (lhs, tl) new_input)
     else false, 0
   | [] -> true, List.length input (* remaining input len *)
 ;;
 
-let rec applyRule text rule input =
+let rec apply_rule text rule input =
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
     if not (is_string_list_contains_symbol h (nonterminals text))
-    then Term h :: applyRule text (lhs, tl) (List.tl input)
+    then Term h :: apply_rule text (lhs, tl) (List.tl input)
     else (
       let rec x newRules =
         match newRules with
         | (lh', rh') :: tl' ->
-          let flag, remaining_input_len = tryApplyRule text (lh', rh') input in
+          let flag, remaining_input_len = try_apply_rule text (lh', rh') input in
           if flag
           then
-            Nonterm (h, applyRule text (lh', rh') input)
-            :: applyRule
+            Nonterm (h, apply_rule text (lh', rh') input)
+            :: apply_rule
                  text
                  (lhs, tl)
                  (get_last_n_elements_from_list remaining_input_len input)
           else x tl'
         | _ ->
           failwith
-            "Should never happen because we checked it earlier in tryApplyRule function."
+            "Should never happen because we checked it earlier in try_apply_rule \
+             function."
       in
-      x (getAllNonterminalsOfRule h text))
+      x (get_all_nonterminals_of_rule h text))
   | [] -> []
 ;;
 
@@ -207,48 +191,48 @@ let parse text (g : grammar) (input : string list) =
   let rec rulesApplier input rules =
     match rules with
     | h :: tl ->
-      if let flag, applied_rule_len = tryApplyRule text h input in
+      if let flag, applied_rule_len = try_apply_rule text h input in
          flag && applied_rule_len = 0
-      then applyRule text h input
+      then apply_rule text h input
       else rulesApplier input tl
     | [] -> failwith "No such rule for your input"
   in
   rulesApplier input (start_rule_components text allRules)
 ;;
 
-let parseTree text (g : grammar) (input : string list) =
+let parse_tree text (g : grammar) (input : string list) =
   let tree_list = parse text g input in
   let main_tree = Nonterm (start_rule text, tree_list) in
   let rec printTree tree =
     match tree with
     | Term s -> " " ^ s ^ " "
-    | Nonterm (s, parseTreeList) ->
+    | Nonterm (s, parse_treeList) ->
       " [ "
       ^ s
       ^ " : "
-      ^ String.concat " " (List.map (fun x -> printTree x) parseTreeList)
+      ^ String.concat " " (List.map (fun x -> printTree x) parse_treeList)
       ^ " ] "
   in
   printTree main_tree
 ;;
 
-let tryApplyStartNonterm text input =
-  let rec x start_nonterms return_code =
+let try_apply_start_nonterm text input =
+  let rec applier start_nonterms return_code =
     match start_nonterms with
     | h :: tl ->
-      let cond, ret = tryApplyRule text h input in
+      let cond, ret = try_apply_rule text h input in
       if cond
-      then if ret = 0 then true, ret else x tl ret
+      then if ret = 0 then true, ret else applier tl ret
       else if return_code = -1
-      then x tl return_code
-      else x tl ret
+      then applier tl return_code
+      else applier tl ret
     | [] -> false, return_code
   in
-  x (getAllNonterminalsOfRule (start_rule text) text) 0
+  applier (get_all_nonterminals_of_rule (start_rule text) text) 0
 ;;
 
-let gen_parser text = tryApplyStartNonterm text
-let gen_tree_parser text = parseTree text (take_grammar text)
+let gen_parser text = try_apply_start_nonterm text
+let gen_tree_parser text = parse_tree text (take_grammar text)
 
 let get_parser_and_tree_parser command =
   try
@@ -259,8 +243,78 @@ let get_parser_and_tree_parser command =
           if l = "text" then true else false)
         (command_list command)
     in
-    Ok (gen_parser text, gen_tree_parser text)
+    try Ok (gen_parser text, gen_tree_parser text) with
+    | ParseError s -> Error s
+    | NoStartToken s -> Error s
   with
   | Not_found -> Error "ATTENTION: No path in your command"
   | UnknownCommand s -> Error ("Unknown command, switch or bad path: " ^ s)
+;;
+
+(* TESTS *)
+let test_text =
+  "%token INT\n\
+   %token PLUS\n\
+   %token MUL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %start main\n\
+   %%\n\
+   main:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "PLUS"; "INT"; "INT"; "EOL" ] in
+  res
+;;
+
+let%test _ =
+  let tree_parser = gen_tree_parser test_text in
+  tree_parser [ "PLUS"; "INT"; "INT"; "EOL" ]
+  = " [ main :  [ expr :  PLUS   [ expr :  INT  ]   [ expr :  INT  ]  ]   EOL  ] "
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "EOL" ] in
+  res
+;;
+
+let%test _ =
+  let tree_parser = gen_tree_parser test_text in
+  tree_parser [ "EOL" ] = " [ main :  EOL  ] "
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
+  res = false (* OVERSHOOT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "HELLOWORLD" ] in
+  res = false (* REJECT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ] in
+  res
+;;
+
+let%test _ =
+  let tree_parser = gen_tree_parser test_text in
+  tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
+  = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   [ \
+     expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
 ;;
