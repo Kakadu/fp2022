@@ -6,8 +6,8 @@
   Interpret
   Parser
   ;Lexer
-  )
- (libraries base re str unix stdio)
+  Parser1)
+ (libraries angstrom base re str unix stdio)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
  (inline_tests))

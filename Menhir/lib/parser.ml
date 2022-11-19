@@ -9,12 +9,11 @@ exception GetPathError of string
 let regexp_whitespace = Str.regexp "[\n\t\r ]"
 let regexp_procentprocent = Str.regexp "%%"
 let regexp_token = Str.regexp "%token[ \n\t\r]+[A-Z]+"
-let regexp_start = Str.regexp "%start\n*[ \n\t\r]+[a-zA-Z]+"
+let regexp_start = Str.regexp "%start\n*[ \n\t\r]+[a-z]+"
 
 (*   "\\(     [ \n\t\r]+     |     \\(     [ \n\t\r]+     [a-zA-Z]+;     \\)+     \\)+"   *)
-let regexp_rule = Str.regexp "[a-zA-Z]+:\\([ \n\t\r]+|\\([ \t\r]+[a-zA-Z]+[;]?\\)+\\)+"
-let regexp_rule_name = Str.regexp "[ \n\t\r]*[a-zA-Z]+[ \n\t\r]*:"
-let regexp_rule_component = Str.regexp "[ \n\t\r]+|\\([ \n\t\r]+[a-zA-Z]+;\\)+"
+let regexp_rule = Str.regexp "[a-z]+:\\([ \n\t\r]+|\\([ \t\r]+[a-zA-Z]+[;]?\\)+\\)+"
+
 (*------------------------------------------------------*)
 
 (* Start position *)
@@ -50,14 +49,16 @@ let is_string_contains regexp str =
   | _ -> -1
 ;;
 
-(* Берем токены из строки и удаляем считанные. *)
-let rec get_tokens_list str =
-  if is_string_contains regexp_token !str >= 0
-  then (
-    let tkn = Str.matched_string !str in
-    str := Str.replace_first regexp_token "" !str;
-    tkn :: get_tokens_list str)
-  else []
+exception ParseError of string
+
+(* Если в строке осталось что-то, кроме %token и %start, то выдаем ошибку. *)
+(* Замечание: если %start присутствует в тексте более, чем один раз, то это тоже ParseError. *)
+let check_string_on_errors str =
+  let probably_empty_string = Str.global_replace regexp_whitespace "" !str in
+  if String.equal probably_empty_string ""
+  then true
+  else
+    raise (ParseError ("There are symbols which I can't parse: " ^ probably_empty_string))
 ;;
 
 exception NoStartToken of string
@@ -68,40 +69,30 @@ let get_start_rule str =
   then (
     let start = Str.matched_string !str in
     str := Str.replace_first regexp_start "" !str;
-    start)
+    start, str)
   else raise (NoStartToken "No %start in input file")
 ;;
 
-exception ParseError of string
-
-(* Если в строке осталось что-то, кроме %token и %start, то выдаем ошибку. *)
-(* Замечание: если %start присутствует в тексте более, чем один раз, то это тоже ParseError. *)
-let check_string_with_tokens_on_errors str =
-  let probably_empty_string = Str.global_replace regexp_whitespace "" !str in
-  if String.equal probably_empty_string ""
-  then true
-  else
-    raise (ParseError ("There are symbols which I can't parse: " ^ probably_empty_string))
+(* Берем токены из строки и удаляем считанные. *)
+let rec get_tokens_list str =
+  if is_string_contains regexp_token !str >= 0
+  then (
+    let tkn = Str.matched_string !str in
+    str := Str.replace_first regexp_token "" !str;
+    tkn :: get_tokens_list str)
+  else if check_string_on_errors str
+  then []
+  else [] (* Last else ~ failwith in check function *)
 ;;
 
-(* Берем список токенов. *)
-let token_list text =
-  List.map
-    ~f:(fun s -> Str.replace_first (Str.regexp "%token[\n\t\r ]+") "" s)
-    (get_tokens_list (file_text_where_only_tokens_names text))
-;;
-
-(* Берем название стартового правила. *)
-let start_rule text =
-  Str.replace_first
-    (Str.regexp "%start[\n\t\r ]+")
-    ""
-    (get_start_rule (file_text_where_only_tokens_names text))
-;;
-
-(* Проверка на ошибки. *)
-let do_check_for_parse_errors_tokens text =
-  check_string_with_tokens_on_errors (file_text_where_only_tokens_names text)
+(* Берем список токенов и стартовое правило. *)
+let start_rule_and_token_list text =
+  let s = file_text_where_only_tokens_names text in
+  let s, s_ref = get_start_rule s in
+  ( Str.replace_first (Str.regexp "%start[\n\t\r ]+") "" s
+  , List.map
+      ~f:(fun s -> Str.replace_first (Str.regexp "%token[\n\t\r ]+") "" s)
+      (get_tokens_list s_ref) )
 ;;
 
 (* Функция, которая разделяет строку на пару по регулярному выражению. *)
@@ -115,12 +106,6 @@ let split_string_on_pair str regexpr =
       ~len:(String.length str - regexpr_pos - regexpr_len) )
 ;;
 
-(*  Функция для взятия списка пар, где первый элемент является именем правила, а 
-      следующий -- списком списков компонентов правил.
-    Более понятно на примере:  
-    [("main", [["expr"]; ["EOL"]]);
-     ("expr", [["LBRACE"; "expr"; "RBRACE"]; ["expr"; "MUL"; "expr"]; ["NUM"]])].
-*)
 let rec get_rules_list str =
   if is_string_contains regexp_rule !str >= 0
   then (
@@ -135,197 +120,228 @@ let rec get_rules_list str =
         (String.split ~on:'|' rule_cmpn)
     in
     l @ get_rules_list str)
-  else []
+  else if check_string_on_errors str
+  then []
+  else [] (* Last else ~ failwith in check function *)
 ;;
 
 (* Takes grammar from text *)
-let take_grammar text = start_rule text, get_rules_list (file_text_where_only_rules text)
-
-(* Syntax analysis *)
+let take_grammar text =
+  let start_rule, _ = start_rule_and_token_list text in
+  start_rule, get_rules_list (file_text_where_only_rules text)
+;;
 
 open Stdlib
 
-(*
-  We will give comments about what is happeing right here on next example:
-    ("main",
-      [("main", ["expr"; "EOL"]); ("main", ["EOL"]);
-        ("expr", ["LBRACE"; "expr"; "RBRACE"]); ("expr", ["MUL"; "expr"; "expr"]);
-        ("expr", ["PLUS"; "expr"; "expr"]); ("expr", ["INT"])])  
-
-  It is like:
-    main:
-      | expr; EOL
-      | EOL
-    expr:
-      | LBRACE; expr; RBRACE
-      | MUL; expr; expr
-      | PLUS; expr; expr
-      | INT
-  
-  Note that operator goes first in addition and multiplication in this example: PLUS INT INT and MUL INT INT.
-*)
-
-(* Takes start rule (%start) from our grammar. *)
-(* From example we take "main". *)
-let getStartSymbol (g : grammar) =
-  let start, _ = g in
-  start
-;;
-
-(* Takes all nonterminals symbols. *)
-(* From example we take ["main"; "main"; "expr"; "expr"; "expr"; "expr"] *)
-let getNonterminals (g : grammar) =
+let get_nonterminals (g : grammar) =
   let _, rules = g in
   List.map (fun (nonterm, _) -> nonterm) rules
 ;;
 
-let rec get_last_n_elements_from_list n l =
-  if List.length l <= n
-  then l
-  else (
-    match l with
-    | _ :: tl -> get_last_n_elements_from_list n tl
-    | _ -> [])
+let start_rule text =
+  let r, _ = start_rule_and_token_list text in
+  r
 ;;
 
-let getRhs = function
-  | _, rhs -> rhs
+let token_list text =
+  let _, l = start_rule_and_token_list text in
+  l
 ;;
 
-let nonterminals text = getNonterminals (take_grammar text)
+(* TESTS *)
 
-let rec start_rule_components text = function
-  | (lhs, rhs) :: tl ->
-    if String.equal (start_rule text) lhs
-    then (lhs, rhs) :: start_rule_components text tl
-    else start_rule_components text tl
-  | [] -> []
+let grammar_compare (g : grammar) (g' : grammar) : bool =
+  let start_rule_g, rules_g = g in
+  let start_rule_g', rules_g' = g' in
+  String.equal start_rule_g start_rule_g'
+  && List.equal
+       (fun (g_h, g_tl) (g'_h, g'_tl) ->
+         String.equal g_h g'_h && List.equal String.equal g_tl g'_tl)
+       rules_g
+       rules_g'
 ;;
 
-let start_nonterminals text =
-  List.filter (fun s -> String.equal s (start_rule text)) (nonterminals text)
+let string_list_compare n n' = List.equal String.equal n n'
+
+(* TEST 1: EVERYTHING IS OKAY: *)
+let test_text =
+  "%token INT\n\
+   %token PLUS\n\
+   %token MUL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %start main\n\
+   %%\n\
+   main:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
 ;;
 
-let rec is_symbol_nonterm symbol (g : grammar) nonterminals =
-  match nonterminals with
-  | h :: tl -> if String.equal h symbol then true else is_symbol_nonterm symbol g tl
-  | [] -> false
+let%test "start_rule_test" = String.equal (start_rule test_text) "main"
+
+let%test "nonterms_test" =
+  string_list_compare
+    (get_nonterminals (take_grammar test_text))
+    [ "main"; "main"; "expr"; "expr"; "expr"; "expr" ]
 ;;
 
-(* Берет все правила, которые имеют имя rule_name *)
-let getAllNonterminalsOfRule rule_name text =
-  let _, rules = take_grammar text in
-  List.filter
-    (fun rule ->
-      let nonterm, _ = rule in
-      if String.equal nonterm rule_name then true else false)
-    rules
+let%test "grammar_and_terms_test" =
+  let x = take_grammar test_text in
+  let y = token_list test_text in
+  grammar_compare
+    x
+    ( "main"
+    , [ "main", [ "expr"; "EOL" ]
+      ; "main", [ "EOL" ]
+      ; "expr", [ "LBRACE"; "expr"; "RBRACE" ]
+      ; "expr", [ "PLUS"; "expr"; "expr" ]
+      ; "expr", [ "MUL"; "expr"; "expr" ]
+      ; "expr", [ "INT" ]
+      ] )
+  && string_list_compare y [ "INT"; "PLUS"; "MUL"; "LBRACE"; "RBRACE"; "EOL" ]
 ;;
 
-(* Здесь мы должны быть уверены, что длина списка input >= длине списка rhs. *)
-let rec tryApplyRule text rule input =
-  let lhs, rhs = rule in
-  match rhs with
-  | h :: tl ->
-    if List.length input = 0 (* OVERSHOOT RIGHT HERE. *)
-    then false, -1
-    else if not (is_symbol_nonterm h (take_grammar text) (nonterminals text))
-    then
-      if String.equal (List.hd input) h
-      then tryApplyRule text (lhs, tl) (List.tl input)
-      else false, 0
-    else (
-      let rec getNewInputIfNonterminalRuleIsFits allNonterminalsOfRule return_code =
-        match allNonterminalsOfRule with
-        | h' :: tl' ->
-          let flag, remaining_input_len = tryApplyRule text h' input in
-          if flag
-          then get_last_n_elements_from_list remaining_input_len input, return_code
-          else if return_code = -1
-          then getNewInputIfNonterminalRuleIsFits tl' return_code
-          else getNewInputIfNonterminalRuleIsFits tl' remaining_input_len
-        | [] -> input, return_code
-      in
-      let new_input, return_code =
-        getNewInputIfNonterminalRuleIsFits (getAllNonterminalsOfRule h text) 0
-      in
-      if List.length new_input = List.length input
-      then false, return_code
-      else tryApplyRule text (lhs, tl) new_input)
-  | [] -> true, List.length input (* remaining input len *)
+(* TEST 2: LOWERCASE TOKEN IN TOKENS DESCRIPTION: *)
+let test_text =
+  "%token INT\n\
+   %token plus\n\
+   %token MUL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %start main\n\
+   %%\n\
+   main:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
 ;;
 
-let rec applyRule text rule input =
-  let lhs, rhs = rule in
-  match rhs with
-  | h :: tl ->
-    if not (is_symbol_nonterm h (take_grammar text) (nonterminals text))
-    then Term h :: applyRule text (lhs, tl) (List.tl input)
-    else (
-      let rec x newRules =
-        match newRules with
-        | (lh', rh') :: tl' ->
-          let flag, remaining_input_len = tryApplyRule text (lh', rh') input in
-          if flag
-          then
-            Nonterm (h, applyRule text (lh', rh') input)
-            :: applyRule
-                 text
-                 (lhs, tl)
-                 (get_last_n_elements_from_list remaining_input_len input)
-          else x tl'
-        | _ ->
-          failwith
-            "Should never happen because we checked it earlier in tryApplyRule function."
-      in
-      x (getAllNonterminalsOfRule h text))
-  | [] -> []
+let%test "tokens_test" =
+  try
+    string_list_compare
+      (token_list test_text)
+      [ "INT"; "plus"; "MUL"; "LBRACE"; "RBRACE"; "EOL" ]
+  with
+  | ParseError s -> s = "There are symbols which I can't parse: %tokenplus"
 ;;
 
-let parse text (g : grammar) (input : string list) =
-  let _, allRules = g in
-  let rec rulesApplier input rules =
-    match rules with
-    | h :: tl ->
-      if let flag, applied_rule_len = tryApplyRule text h input in
-         flag && applied_rule_len = 0
-      then applyRule text h input
-      else rulesApplier input tl
-    | [] -> failwith "No such rule for your input"
-  in
-  rulesApplier input (start_rule_components text allRules)
+(* TEST 3: TOKEN WITH BADSYMBOLS IN TOKENS DESCRIPTION: *)
+let test_text =
+  "%token INT\n\
+   %token PLUS\n\
+   %token M1_$!@#*&(UL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %start main\n\
+   %%\n\
+   main:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
 ;;
 
-let parseTree text (g : grammar) (input : string list) =
-  let tree_list = parse text g input in
-  let main_tree = Nonterm (start_rule text, tree_list) in
-  let rec printTree tree =
-    match tree with
-    | Term s -> " " ^ s ^ " "
-    | Nonterm (s, parseTreeList) ->
-      " [ "
-      ^ s
-      ^ " : "
-      ^ String.concat " " (List.map (fun x -> printTree x) parseTreeList)
-      ^ " ] "
-  in
-  printTree main_tree
+let%test "tokens_test" =
+  try
+    string_list_compare
+      (token_list test_text)
+      [ "INT"; "plus"; "M1_$!@#*&(UL"; "LBRACE"; "RBRACE"; "EOL" ]
+  with
+  | ParseError s -> s = "There are symbols which I can't parse: 1_$!@#*&(UL"
 ;;
 
-let tryApplyStartNonterm text input =
-  let rec x start_nonterms return_code =
-    match start_nonterms with
-    | h :: tl ->
-      let cond, ret = tryApplyRule text h input in
-      if cond
-      then if ret = 0 then true, ret else x tl ret
-      else if return_code = -1
-      then x tl return_code
-      else x tl ret
-    | [] -> false, return_code
-  in
-  x (getAllNonterminalsOfRule (start_rule text) text) 0
+(* TEST 4: NO START RULE IN TOKENS DESCRIPTION: *)
+let test_text =
+  "%token INT\n\
+   %token PLUS\n\
+   %token MUL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %%\n\
+   main:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
 ;;
 
-let genParser text = tryApplyStartNonterm text
-let genTreeParser text = parseTree text (take_grammar text)
+let%test "tokens_test" =
+  try String.equal (start_rule test_text) "" with
+  | NoStartToken s -> s = "No %start in input file"
+;;
+
+(* TEST 5: UPPERCASE START TOKEN IN TOKENS DESCRIPTION: *)
+let test_text =
+  "%token INT\n\
+   %token PLUS\n\
+   %token MUL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %start mAIN\n\
+   %%\n\
+   main:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
+;;
+
+let%test "tokens_test" =
+  try String.equal (start_rule test_text) "" with
+  | ParseError s -> s = "There are symbols which I can't parse: AIN"
+;;
+
+(* TEST 6: UPPERCASE RULE IN RULE DESCRIPTION: *)
+let test_text =
+  "%token INT\n\
+   %token PLUS\n\
+   %token MUL\n\
+   %token LBRACE\n\
+   %token RBRACE\n\
+   %token EOL\n\
+   %start main\n\
+   %%\n\
+   MAIN:\n\
+  \    | expr; EOL\n\
+  \    | EOL\n\
+   expr:\n\
+  \    | LBRACE; expr; RBRACE\n\
+  \    | PLUS; expr; expr\n\
+  \    | MUL; expr; expr\n\
+  \    | INT"
+;;
+
+let%test "tokens_test" =
+  try take_grammar test_text = ("", [ "", [ "" ] ]) with
+  | ParseError s -> s = "There are symbols which I can't parse: MAIN:|expr;EOL|EOL"
+;;
+
+(*  
+Note that something like this:    
+  expr:
+      | LBRACE; sOmEtHiNg; RBRACE
+will be useless rule, but no one forbids user to enter it. 
+*)
