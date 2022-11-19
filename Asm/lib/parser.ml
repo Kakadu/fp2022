@@ -127,26 +127,19 @@ let dregreg_p = gen_regreg_p dreg_name_p reg_name_to_dword_reg <?> "dregreg_p"
 
 (****************************************************************************************)
 (* Generate parser for register and constant that returns RegConst (...) *)
-let gen_regconst_p reg_name_p reg_name_to_t_reg int_to_t_const =
-  lift2
-    (fun reg_name integer ->
-      RegConst (reg_name_to_t_reg reg_name, int_to_t_const integer))
-    (reg_name_p <* comma_p)
-    int_p
+
+let gen_regconst_p reg_p const_p =
+  both (reg_p <* comma_p) const_p
+  >>| function
+  | Reg r, Const x -> RegConst (r, x)
+  (* This branch is not reachable if we did everything right *)
+  | _ -> failwith "reg_p returned non-register or const_p returned non-constant"
 ;;
 
 (* Parse register and constant and convert them to RegConst (...) *)
-let bregconst_p =
-  gen_regconst_p breg_name_p reg_name_to_byte_reg int_to_byte_const <?> "bregconst_p"
-;;
-
-let wregconst_p =
-  gen_regconst_p wreg_name_p reg_name_to_word_reg int_to_word_const <?> "wregconst_p"
-;;
-
-let dregconst_p =
-  gen_regconst_p dreg_name_p reg_name_to_dword_reg int_to_dword_const <?> "dregconst_p"
-;;
+let bregconst_p = gen_regconst_p breg_p bconst_p <?> "bregconst_p"
+let wregconst_p = gen_regconst_p wreg_p wconst_p <?> "wregconst_p"
+let dregconst_p = gen_regconst_p dreg_p dconst_p <?> "dregconst_p"
 
 (****************************************************************************************)
 (* Generate a parser of one-line command *)
@@ -321,12 +314,6 @@ let fail_all_instructions = test_fail pp_all_instructions program_p
 
 let%test _ =
   ok_all_instructions
-    "mov ax, bx"
-    [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx"))) ]
-;;
-
-let%test _ =
-  ok_all_instructions
     "mov ax, bx\n     add eax, ecx"
     [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
     ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
@@ -434,5 +421,15 @@ let%test _ =
     ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
     ; WCommand (Pop (Reg (reg_name_to_word_reg "dx")))
     ; SCommand (Jmp (Label "l1"))
+    ]
+;;
+
+let%test _ = fail_all_instructions "sub al, 1000"
+let%test _ = fail_all_instructions "mov ax, 1000000"
+
+let%test _ =
+  ok_all_instructions
+    "add edx, 1000000"
+    [ DCommand (Add (RegConst (reg_name_to_dword_reg "edx", int_to_dword_const 1000000)))
     ]
 ;;
