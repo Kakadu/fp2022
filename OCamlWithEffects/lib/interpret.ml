@@ -489,15 +489,6 @@ let%test _ =
 ;;
 
 let test_program =
-  [ EDeclaration ("main", [], EList [ ELiteral (LInt 2); ELiteral (LInt 3); EList [] ]) ]
-;;
-
-let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Error "Runtime error: mismatching types in list."
-;;
-
-let test_program =
   [ EDeclaration
       ( "main"
       , []
