@@ -18,3 +18,18 @@ module ListStack = struct
     | _ :: tl -> Some tl
   ;;
 end
+
+(* Stdlib.List with some custom utility functions *)
+module List = struct
+  include Stdlib.List
+
+  (* Get index of an element in the 'a list.
+   [equal] checks if two 'a elemets are equal *)
+  let index_of_elem elem equal lst =
+    let rec helper idx = function
+      | [] -> None
+      | h :: tl -> if equal h elem then Some idx else helper (idx + 1) tl
+    in
+    helper 0 lst
+  ;;
+end
