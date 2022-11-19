@@ -33,3 +33,13 @@ module List = struct
     helper 0 lst
   ;;
 end
+
+module IntMap = struct
+  include Map.Make (Int)
+
+  (* Pretty printer for int IntMap *)
+  let pp_int_intmap =
+    let helper ppf m = iter (fun k v -> Format.fprintf ppf "%d -> %d@\n" k v) m in
+    Format.printf "%a" helper
+  ;;
+end
