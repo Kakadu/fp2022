@@ -56,12 +56,44 @@ end = struct
   let int_to_byte_const x = if int_is_byte_const x then x else failwith "Int8 expected"
   let int_to_word_const x = if int_is_word_const x then x else failwith "Int16 expected"
   let int_to_dword_const x = if int_is_dword_const x then x else failwith "Int32 expected"
-  let int_to_byte_reg = Fun.id
-  let int_to_word_reg = Fun.id
-  let int_to_dword_reg = Fun.id
+
+  (* Lists of register names *)
   let byte_reg_name_list = [ "ah"; "al"; "bh"; "bl"; "ch"; "cl"; "dh"; "dl" ]
   let word_reg_name_list = [ "ax"; "bx"; "cx"; "dx" ]
   let dword_reg_name_list = [ "eax"; "ebx"; "ecx"; "edx" ]
+
+  (* Lengths of each of the lists just to avoid calculating them everytime we need them *)
+  let byte_reg_list_len = List.length byte_reg_name_list
+  let word_reg_list_len = List.length word_reg_name_list
+  let dword_reg_list_len = List.length dword_reg_name_list
+
+  (* Functions to check if the id belongs to a register of particular size *)
+  let reg_id_is_byte_reg reg_id = reg_id < byte_reg_list_len
+  let reg_id_is_dword_reg reg_id = reg_id >= byte_reg_list_len + word_reg_list_len
+
+  let reg_id_is_word_reg reg_id =
+    (not (reg_id_is_byte_reg reg_id)) && not (reg_id_is_dword_reg reg_id)
+  ;;
+
+  (* Convert register id to 'a reg *)
+  let int_to_byte_reg reg_id =
+    if reg_id_is_byte_reg reg_id
+    then reg_id
+    else failwith ("Register with id " ^ string_of_int reg_id ^ " is not a byte register")
+  ;;
+
+  let int_to_word_reg reg_id =
+    if reg_id_is_word_reg reg_id
+    then reg_id
+    else failwith ("Register with id " ^ string_of_int reg_id ^ " is not a word register")
+  ;;
+
+  let int_to_dword_reg reg_id =
+    if reg_id_is_dword_reg reg_id
+    then reg_id
+    else failwith ("Register with id " ^ string_of_int reg_id ^ " is not a dword register")
+  ;;
+
   let all_reg_name_list = byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list
   let reg_to_id : 'a reg -> int = Fun.id
   let const_val : 'a const -> int = Fun.id
