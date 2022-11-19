@@ -30,7 +30,7 @@ let command_list command =
   let command_args = split_string_and_delete_spaces command in
   match command_args with
   | h :: tl when h = "menhir" ->
-    if List.length tl = 0
+    if tl = []
     then (
       let () = print_endline "ATTENTION: No flags in your command" in
       [])
@@ -58,7 +58,7 @@ open Ast
 open Stdlib
 
 (*
-  We will give comments about what is happeing right here on next example:
+  We will give comments about what is happening right here on next example:
     ("main",
       [("main", ["expr"; "EOL"]); ("main", ["EOL"]);
         ("expr", ["LBRACE"; "expr"; "RBRACE"]); ("expr", ["MUL"; "expr"; "expr"]);
@@ -209,13 +209,16 @@ let parse_tree text (g : grammar) (input : string list) =
   let main_tree = Nonterm (start_rule text, tree_list) in
   let rec printTree tree =
     match tree with
-    | Term s -> " " ^ s ^ " "
+    | Term s -> String.concat s [ " "; " " ]
     | Nonterm (s, parse_treeList) ->
-      " [ "
-      ^ s
-      ^ " : "
-      ^ String.concat " " (List.map (fun x -> printTree x) parse_treeList)
-      ^ " ] "
+      String.concat
+        ""
+        [ " [ "
+        ; s
+        ; " : "
+        ; String.concat " " (List.map (fun x -> printTree x) parse_treeList)
+        ; " ] "
+        ]
   in
   printTree main_tree
 ;;
