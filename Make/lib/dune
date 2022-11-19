@@ -1,0 +1,8 @@
+(library
+ (name make_lib)
+ (public_name Make.lib)
+ (modules Ast Parser)
+ (libraries base angstrom)
+ (preprocess
+  (pps ppx_expect ppx_fields_conv ppx_deriving.show ppx_variants_conv))
+ (inline_tests))
