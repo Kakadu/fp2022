@@ -10,7 +10,6 @@ homepage: "https://github.com/lastdesire/fp2022"
 bug-reports: "https://github.com/lastdesire/fp2022/issues"
 depends: [
   "dune" {>= "2.8"}
-  "angstrom"
   "ppx_inline_test" {with-test}
   "qcheck-core"
   "ppx_expect"

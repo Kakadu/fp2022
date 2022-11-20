@@ -1,5 +1,7 @@
 (lang dune 2.8)
 
+(using menhir 2.1)
+
 (generate_opam_files true)
 
 (cram enable)
@@ -21,7 +23,6 @@
  (version 0.1)
  (depends
   dune
-  angstrom
   (ppx_inline_test :with-test)
   qcheck-core
   ppx_expect

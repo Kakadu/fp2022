@@ -2,7 +2,54 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open Parser
+open Unix
+open Ast
+
+let start_position_of_mly_tokens = 0
+
+(* Position where %% *)
+let end_position_of_mly_tokens text =
+  Str.search_forward (Str.regexp "%%") text start_position_of_mly_tokens
+;;
+
+(* the text where %token and %start only available. *)
+let file_text_where_only_tokens_names text =
+  String.sub text start_position_of_mly_tokens (end_position_of_mly_tokens text)
+;;
+
+let file_text_where_only_rules text =
+  String.sub
+    text
+    (end_position_of_mly_tokens text)
+    (String.length text - end_position_of_mly_tokens text)
+;;
+
+(* tokens, start_rule, grammar *)
+let parse text =
+  let parse_tokens_and_start_rule = Lexer.from_string Parser.token_and_start in
+  let tokens_and_start_rule =
+    parse_tokens_and_start_rule (file_text_where_only_tokens_names text)
+  in
+  let parse_rules = Lexer.from_string Parser.grammar in
+  let grammar = parse_rules (file_text_where_only_rules text) in
+  let tokens, start_rule = tokens_and_start_rule in
+  tokens, start_rule, grammar
+;;
+
+let take_grammar text : grammar =
+  let _, s_r, g = parse text in
+  s_r, g
+;;
+
+let get_tokens text =
+  let t_l, _, _ = parse text in
+  t_l
+;;
+
+let start_rule text =
+  let _, s_r, _ = parse text in
+  s_r
+;;
 
 exception UnknownCommand of string
 
@@ -54,7 +101,6 @@ let command_list command =
 
 exception NoFile of string
 
-open Ast
 open Stdlib
 
 (*
@@ -100,8 +146,13 @@ let getRhs = function
   | _, rhs -> rhs
 ;;
 
+let get_nonterminals (g : grammar) =
+  let _, rules = g in
+  List.map (fun (nonterm, _) -> nonterm) rules
+;;
+
 let nonterminals text = get_nonterminals (take_grammar text)
-let terminals text = token_list text
+let terminals text = get_tokens text
 
 let rec start_rule_components text = function
   | (lhs, rhs) :: tl ->
@@ -251,8 +302,7 @@ let get_parser_and_tree_parser command =
         (command_list command)
     in
     try Ok (gen_parser text, gen_tree_parser text) with
-    | ParseError s -> Error s
-    | NoStartToken s -> Error s
+    | _ -> failwith "ERROR" (* TODO exception handling *)
   with
   | Not_found -> Error "ATTENTION: No path in your command"
   | UnknownCommand s -> Error ("Unknown command, switch or bad path: " ^ s)
