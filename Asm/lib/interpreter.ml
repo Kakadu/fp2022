@@ -110,12 +110,14 @@ module Interpreter = struct
   ;;
 
   (* Eval B-, W- or DCommand *)
-  let eval_bwdcommand state = function
-    | Mov x -> { state with reg_map = eval_mov state.reg_map x }
-    | Add x -> { state with reg_map = eval_add state.reg_map x }
-    | Sub x -> { state with reg_map = eval_sub state.reg_map x }
-    | Inc x -> { state with reg_map = eval_inc state.reg_map x }
-    | Mul x -> { state with reg_map = eval_mul state.reg_map x }
+  let eval_bwdcommand state =
+    let eval_helper eval_op x = { state with reg_map = eval_op state.reg_map x } in
+    function
+    | Mov x -> eval_helper eval_mov x
+    | Add x -> eval_helper eval_add x
+    | Sub x -> eval_helper eval_sub x
+    | Inc x -> eval_helper eval_inc x
+    | Mul x -> eval_helper eval_mul x
     | Push x -> eval_push state x
     | Pop x -> eval_pop state x
     | Cmp x -> { state with flags = eval_cmp state.reg_map x }
