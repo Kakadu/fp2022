@@ -46,3 +46,12 @@ module IntMap = struct
     Format.(iter (fun k v -> fprintf ppf "@[%a=%a@] " pp_print_int k pp_v v) m)
   ;;
 end
+
+module StringMap = struct
+  include Map.Make (String)
+
+  (* Pretty printer for int IntMap *)
+  let pp pp_v ppf m =
+    Format.(iter (fun k v -> fprintf ppf "@[%a=%a@] " pp_print_string k pp_v v) m)
+  ;;
+end
