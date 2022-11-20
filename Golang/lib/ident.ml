@@ -26,4 +26,6 @@ end
 
 type 'v tbl = (ident, 'v, Ident_comparator.comparator_witness) Map.t
 
+let set = Map.set
+let find = Map.find
 let empty_tbl = Map.empty (module Ident_comparator)

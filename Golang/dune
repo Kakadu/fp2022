@@ -10,7 +10,7 @@
  (name INTERPRET)
  (public_name INTERPRET)
  (modules INTERPRET)
- (libraries golang stdio))
+ (libraries golang_lib stdio))
 
 (cram
  (deps ./INTERPRET.exe %{bin:INTERPRET}))

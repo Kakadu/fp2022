@@ -26,12 +26,12 @@ open P
 
 let set id value =
   let* s = access in
-  put { s with tbl = Map.set s.tbl ~key:id ~data:value }
+  put { s with tbl = Ident.set s.tbl ~key:id ~data:value }
 ;;
 
 let get id =
   let* s = access in
-  match Map.find s.tbl id with
+  match Ident.find s.tbl id with
   | Some value -> return value
   | None -> failwith "Value not found!"
 ;;

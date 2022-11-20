@@ -1,5 +1,6 @@
 open Base
 open Ast
+open Ast_utils
 open Ident
 open Pass
 

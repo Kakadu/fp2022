@@ -1,4 +1,4 @@
-open Golang
+open Golang_lib
 
 let synopsis = "gocaml FILEPATH"
 
