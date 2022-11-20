@@ -2,7 +2,6 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open Unix
 open Ast
 
 let start_position_of_mly_tokens = 0
@@ -123,17 +122,7 @@ open Stdlib
   Note that operator goes first in addition and multiplication in this example: PLUS INT INT and MUL INT INT.
 *)
 
-(* Takes start rule (%start) from our grammar. *)
-(* From example we take "main". *)
-let get_start_symbol (g : grammar) =
-  let start, _ = g in
-  start
-;;
-
-(* Takes all nonterminals symbols. *)
-(* From example we take ["main"; "main"; "expr"; "expr"; "expr"; "expr"] *)
-
-let rec get_last_n_elements_from_list n l =
+let rec get_last_n_elements_from_list (n : int) l =
   if List.length l <= n
   then l
   else (
@@ -319,13 +308,13 @@ let test_text =
    %start main\n\
    %%\n\
    main:\n\
-  \    | expr; EOL\n\
-  \    | EOL\n\
+   | expr; EOL\n\
+   | EOL\n\
    expr:\n\
-  \    | LBRACE; expr; RBRACE\n\
-  \    | PLUS; expr; expr\n\
-  \    | MUL; expr; expr\n\
-  \    | INT"
+   | LBRACE; expr; RBRACE\n\
+   | PLUS; expr; expr\n\
+   | MUL; expr; expr\n\
+   | INT"
 ;;
 
 let%test _ =
