@@ -8,7 +8,10 @@ let read_whole_file filename =
 ;;
 
 let run_topaz (filename : string) : unit =
-  let _ = read_whole_file filename |> Parser.parse |> Interpret.run |> Utils.string_of_value in ()
+  let _ =
+    read_whole_file filename |> Parser.parse |> Interpret.run |> Utils.string_of_value
+  in
+  ()
 ;;
 
 let help =
@@ -23,7 +26,7 @@ let arg =
 
 let () =
   match arg with
-  | Some filename ->  run_topaz filename
+  | Some filename -> run_topaz filename
   | _ ->
     print_endline help;
     exit 1
