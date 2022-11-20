@@ -119,6 +119,19 @@ module Interpreter = struct
     | _ -> state
   ;;
 
+  let from_label label_map l =
+    match StringMap.find_opt l label_map with
+    | None -> failwith ("Label \"" ^ l ^ "\" not found in the program")
+    | Some v -> v
+  ;;
+
+  let eval_scommand state tl = function
+    | Jmp (Label l) -> from_label state.label_map l
+    | Je (Label l) -> if state.flags = 0 then from_label state.label_map l else tl
+    | Jne (Label l) -> if state.flags <> 0 then from_label state.label_map l else tl
+    | _ -> failwith "Command not supported"
+  ;;
+
   let rec eval state = function
     | [] -> state
     | instr :: tl ->
@@ -128,7 +141,7 @@ module Interpreter = struct
        | BCommand x -> eval (eval_bwdcommand state x) tl
        | WCommand x -> eval (eval_bwdcommand state x) tl
        | DCommand x -> eval (eval_bwdcommand state x) tl
-       | _ -> state)
+       | SCommand x -> eval state (eval_scommand state tl x))
   ;;
 
   let eval_whole whole_program =
@@ -209,4 +222,64 @@ let%test _ =
   in
   let final_flags = (eval_whole program).flags in
   final_flags < 0
+;;
+
+let%test _ =
+  let program =
+    [ WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 1)))
+    ; SCommand (Jmp (Label "l1"))
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 2)))
+    ; LCommand "l1"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "bx", int_to_word_const 1)))
+    ; WCommand (Cmp (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; SCommand (Je (Label "l2"))
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "cx", int_to_word_const 3)))
+    ; SCommand (Jmp (Label "exit"))
+    ; LCommand "l2"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "cx", int_to_word_const 4)))
+    ; LCommand "exit"
+    ]
+  in
+  let final_reg_map = (eval_whole program).reg_map in
+  reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 4
+;;
+
+let%test _ =
+  let program =
+    [ WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 1)))
+    ; SCommand (Jmp (Label "l1"))
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 2)))
+    ; LCommand "l1"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "bx", int_to_word_const 1)))
+    ; WCommand (Cmp (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; SCommand (Jne (Label "l2"))
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "cx", int_to_word_const 3)))
+    ; SCommand (Jmp (Label "exit"))
+    ; LCommand "l2"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "cx", int_to_word_const 4)))
+    ; LCommand "exit"
+    ]
+  in
+  let final_reg_map = (eval_whole program).reg_map in
+  reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
+;;
+
+let%test _ =
+  let program =
+    [ WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 1)))
+    ; SCommand (Jmp (Label "l1"))
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 2)))
+    ; LCommand "l1"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "bx", int_to_word_const 43)))
+    ; WCommand (Cmp (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
+    ; SCommand (Je (Label "l2"))
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "cx", int_to_word_const 3)))
+    ; SCommand (Jmp (Label "exit"))
+    ; LCommand "l2"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "cx", int_to_word_const 4)))
+    ; LCommand "exit"
+    ]
+  in
+  let final_reg_map = (eval_whole program).reg_map in
+  reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
 ;;
