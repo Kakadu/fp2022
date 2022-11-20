@@ -1,3 +1,5 @@
+(** Copyright 2021-2022, Kakadu, Furetur and contributors *)
+
 type read_result =
   | Ok of string
   | FileNotFound

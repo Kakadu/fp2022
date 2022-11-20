@@ -1,3 +1,5 @@
+(** Copyright 2021-2022, Kakadu, Furetur and contributors *)
+
 type typ =
   | IntTyp
   | ArrayTyp of array_typ

@@ -1,3 +1,5 @@
+(** Copyright 2021-2022, Kakadu, Furetur and contributors *)
+
 open Golang_lib
 
 let synopsis = "gocaml FILEPATH"
