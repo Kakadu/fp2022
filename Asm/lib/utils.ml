@@ -17,6 +17,8 @@ module ListStack = struct
     | [] -> None
     | _ :: tl -> Some tl
   ;;
+
+  let pp pp_v ppf m = Format.(List.iter (fun k -> fprintf ppf "@[%a@] " pp_v k) m)
 end
 
 (* Stdlib.List with some custom utility functions *)
@@ -32,14 +34,15 @@ module List = struct
     in
     helper 0 lst
   ;;
+
+  let pp pp_v ppf m = Format.(iter (fun k -> fprintf ppf "@[%a@] " pp_v k) m)
 end
 
 module IntMap = struct
   include Map.Make (Int)
 
   (* Pretty printer for int IntMap *)
-  let pp_int_intmap =
-    let helper ppf m = iter (fun k v -> Format.fprintf ppf "%d -> %d@\n" k v) m in
-    Format.printf "%a" helper
+  let pp pp_v ppf m =
+    Format.(iter (fun k v -> fprintf ppf "@[%a=%a@] " pp_print_int k pp_v v) m)
   ;;
 end
