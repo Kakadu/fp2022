@@ -9,6 +9,7 @@
 ...
 ```
 
+
 This is a homework for functional programming course.
 
 License: LGPL for implementation code + WTFPL for test examles in miniLanguage
@@ -44,7 +45,17 @@ TODO:
 - Add conditionals
 
 Done:
-- Explicit rules parsing and iterpreting
+- Explicit rules parsing
     - Support multiline prerequisite definitions
-- Ignore comment lines
+    - Ignore comment lines
+- Explicit rules interpreting
+    - Dropping circular dependencies
+    - Timestamp and file presence checking
+    - Result verdicts, like
+        - `No rule to make target 'x', needed by 'y'`
+        - `Nothing to be done for 'x'`
+        - `No rule to make target 'x'`
 
+## Running tests
+
+go to demos and run `dune exec demoInterpret`
