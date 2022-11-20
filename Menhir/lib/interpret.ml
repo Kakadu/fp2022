@@ -123,12 +123,19 @@ open Stdlib
 *)
 
 let rec get_last_n_elements_from_list (n : int) l =
-  if List.length l <= n
+  let len = List.length l in
+  if len <= n
   then l
   else (
-    match l with
-    | _ :: tl -> get_last_n_elements_from_list n tl
-    | _ -> [])
+    let rec deleter l counter =
+      if counter > 0
+      then (
+        match l with
+        | _ :: tl -> deleter tl (counter - 1)
+        | _ -> [])
+      else l
+    in
+    deleter l (len - n))
 ;;
 
 let getRhs = function
