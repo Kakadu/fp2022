@@ -46,7 +46,10 @@ let normalize ast =
   match result with
   | Ok _ -> Ok
   | Error errs ->
-    let errs = Base.List.fold_left errs ~init:"" ~f:(fun acc err -> String.concat "" [acc; err; "\n"]) in
+    let errs =
+      Base.List.fold_left errs ~init:"" ~f:(fun acc err ->
+        String.concat "" [ acc; err; "\n" ])
+    in
     CE errs
 ;;
 

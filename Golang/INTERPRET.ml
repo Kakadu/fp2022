@@ -4,7 +4,11 @@ open Golang_lib
 
 let synopsis = "gocaml FILEPATH"
 
-let help = Format.sprintf "gocaml -- Go compiler written in OCaml\nUsage: %s\n\nExample: gocaml main.go" synopsis;;
+let help =
+  Format.sprintf
+    "gocaml -- Go compiler written in OCaml\nUsage: %s\n\nExample: gocaml main.go"
+    synopsis
+;;
 
 let args =
   match Array.to_list Sys.argv with
