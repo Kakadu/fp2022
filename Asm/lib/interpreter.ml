@@ -20,6 +20,9 @@ module Interpreter = struct
            operand of cmp was less than the right one, zero if they
            were equal, positive otherwise *)
     ; label_map : instruction list StringMap.t
+    ; cstack : instruction list ListStack.t
+        (* Call stack. We push the list of instructions after the call and pop
+           it after ret *)
     }
   [@@deriving show]
 
@@ -125,11 +128,21 @@ module Interpreter = struct
     | Some v -> v
   ;;
 
+  (* Returns tuple of state and list of instructions which we should execute *)
   let eval_scommand state tl = function
-    | Jmp (Label l) -> from_label state.label_map l
-    | Je (Label l) -> if state.flags = 0 then from_label state.label_map l else tl
-    | Jne (Label l) -> if state.flags <> 0 then from_label state.label_map l else tl
+    | Jmp (Label l) -> state, from_label state.label_map l
+    | Je (Label l) -> state, if state.flags = 0 then from_label state.label_map l else tl
+    | Jne (Label l) ->
+      state, if state.flags <> 0 then from_label state.label_map l else tl
+    | Call (Label l) ->
+      { state with cstack = ListStack.push tl state.cstack }, from_label state.label_map l
     | _ -> failwith "Command not supported"
+  ;;
+
+  let eval_ret state =
+    match ListStack.peek state.cstack with
+    | None -> failwith "Cannot return from function, the call stack is empty"
+    | Some instrs -> { state with cstack = ListStack.pop state.cstack }, instrs
   ;;
 
   let rec eval state = function
@@ -138,10 +151,15 @@ module Interpreter = struct
       (match instr with
        (* We do not care, labels are taken into account in the label_map *)
        | LCommand _ -> eval state tl
+       | BCommand Ret ->
+         (match eval_ret state with
+          | state, instrs -> eval state instrs)
        | BCommand x -> eval (eval_bwdcommand state x) tl
        | WCommand x -> eval (eval_bwdcommand state x) tl
        | DCommand x -> eval (eval_bwdcommand state x) tl
-       | SCommand x -> eval state (eval_scommand state tl x))
+       | SCommand x ->
+         (match eval_scommand state tl x with
+          | state, instrs -> eval state instrs))
   ;;
 
   let eval_whole whole_program =
@@ -158,6 +176,7 @@ module Interpreter = struct
       ; stack = ListStack.empty
       ; flags = 0
       ; label_map = initial_label_map
+      ; cstack = ListStack.empty
       }
     in
     eval initial_state whole_program
@@ -282,4 +301,38 @@ let%test _ =
   in
   let final_reg_map = (eval_whole program).reg_map in
   reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
+;;
+
+let%test _ =
+  let program =
+    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 9)))
+    ; SCommand (Call (Label "fib"))
+    ; SCommand (Jmp (Label "end"))
+    ; LCommand "fib"
+    ; DCommand (Cmp (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 0)))
+    ; SCommand (Jne (Label "l1"))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 0)))
+    ; BCommand Ret
+    ; LCommand "l1"
+    ; DCommand (Cmp (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; SCommand (Jne (Label "l2"))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 1)))
+    ; BCommand Ret
+    ; LCommand "l2"
+    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
+    ; DCommand (Sub (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 2)))
+    ; SCommand (Call (Label "fib"))
+    ; DCommand (Pop (Reg (reg_name_to_dword_reg "eax")))
+    ; DCommand (Push (Reg (reg_name_to_dword_reg "ebx")))
+    ; DCommand (Sub (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; SCommand (Call (Label "fib"))
+    ; DCommand (Pop (Reg (reg_name_to_dword_reg "ecx")))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "ebx", reg_name_to_dword_reg "ecx")))
+    ; BCommand Ret
+    ; LCommand "end"
+    ]
+  in
+  let final_reg_map = (eval_whole program).reg_map in
+  (* pp_state_t Format.std_formatter (eval_whole program); *)
+  reg_val_get (reg_name_to_dword_reg "ebx") final_reg_map = 34
 ;;
