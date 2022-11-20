@@ -271,6 +271,7 @@ type 'a command =
   | Mov of 'a operands_double
   | Add of 'a operands_double
   | Sub of 'a operands_double
+  | Cmp of 'a operands_double
   | Inc of 'a operand_single
   | Mul of 'a operand_single
   | Push of 'a operand_single
@@ -304,7 +305,7 @@ type ast = instruction list [@@deriving show { with_path = false }]
 
 module CmdHandler = struct
   let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]
-  let cmd_two_args_list = [ "mov"; "add"; "sub" ]
+  let cmd_two_args_list = [ "mov"; "add"; "sub"; "cmp" ]
   let scmd_list = [ "jmp"; "je"; "jne"; "call" ]
 
   let cmd_one_arg_str_to_command = function
@@ -319,6 +320,7 @@ module CmdHandler = struct
     | "mov" -> fun x -> Mov x
     | "add" -> fun x -> Add x
     | "sub" -> fun x -> Sub x
+    | "cmp" -> fun x -> Cmp x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
