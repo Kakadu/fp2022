@@ -9,8 +9,10 @@ let rec string_of_value = function
   | Integer v -> string_of_int v
   | String v -> v
   | Nil -> "nil"
-  | Array l -> "[" ^ (List.map string_of_value l |> String.concat ", ") ^ "]"
-  | Function (name, params, _) -> name ^ "(" ^ String.concat ", " params ^ ")"
+  | Array l ->
+    String.concat "" [ "["; List.map string_of_value l |> String.concat ", "; "]" ]
+  | Function (name, params, _) ->
+    String.concat "" [ name; "("; String.concat ", " params; ")" ]
 ;;
 
 let value_of_literal (lit_t : ruby_literal) (s : string) =

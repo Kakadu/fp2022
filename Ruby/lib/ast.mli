@@ -2,11 +2,12 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
+(** Ast types for literals *)
 type ruby_literal =
-  | BoolL
-  | IntegerL
-  | StringL
-  | NilL
+  | BoolL (** Bool literal*)
+  | IntegerL (** Integer literal *)
+  | StringL (** String literal *)
+  | NilL (** Nil literal *)
 
 (** Ast types used in parsing*)
 type ast =

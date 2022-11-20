@@ -1,14 +1,21 @@
+(** Copyright 2021-2022, Kakadu and contributors *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Ast
 open Utils
 
 let binop_typefail (op : string) (l : value) (r : value) =
   typefail
-    ("No candidates for "
-    ^ op
-    ^ " with arguments: "
-    ^ string_of_value l
-    ^ " and "
-    ^ string_of_value r)
+    (String.concat
+       ""
+       [ "No candidates for "
+       ; op
+       ; " with arguments: "
+       ; string_of_value l
+       ; " and "
+       ; string_of_value r
+       ])
 ;;
 
 let plus x y =

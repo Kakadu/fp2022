@@ -6,19 +6,19 @@
 
 (license LGPL-3.0-or-later)
 
-(authors "FIXME Vasya Pupkin")
+(authors "Ilya Utkin")
 
-(maintainers "FIXME Vasya Pupkin")
+(maintainers "Ilya Utkin")
 
-(bug_reports "FIXME where to put bug reports about the code")
+(bug_reports "https://github.com/illided/fp2022/issues")
 
-(homepage "FIXME Homepage")
+(homepage "https://github.com/illided/fp2022")
 
 (package
- (name Ruby) ; FIXME and regenerate .opam file using 'dune build @install'
- (synopsis "FIXME An interpreter for language")
+ (name Ruby)
+ (synopsis "An interpreter for language Ruby")
  (description
-  "FIXME. A longer description, for example, which are the most interesing features being supported, etc.")
+  "Simple Ruby interpreter written in Ocaml. Supports simple arithmetic expressions, conditions, loops and custom functions")
  (version 0.1)
  (depends
   dune

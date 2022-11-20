@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Kakadu and contributors *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Ruby_lib
 
 let read_whole_file filename =
@@ -15,7 +19,9 @@ let run_topaz (filename : string) : unit =
 ;;
 
 let help =
-  "topaz -- Ruby interpreter written in OCaml\n" ^ "Usage:\n" ^ "topaz [FILENAME]"
+  String.concat
+    ""
+    [ "topaz -- Ruby interpreter written in OCaml\n"; "Usage:\n"; "topaz [FILENAME]" ]
 ;;
 
 let arg =
