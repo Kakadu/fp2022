@@ -13,9 +13,10 @@ module ListStack = struct
     | h :: _ -> Some h
   ;;
 
+  (* You must be sure that the stack is not empty when calling the function *)
   let pop = function
-    | [] -> None
-    | _ :: tl -> Some tl
+    | [] -> failwith "Failed to pop, the stack is empty"
+    | _ :: tl -> tl
   ;;
 
   let pp pp_v ppf m = Format.(List.iter (fun k -> fprintf ppf "@[%a@] " pp_v k) m)
