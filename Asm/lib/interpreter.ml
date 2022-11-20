@@ -19,18 +19,9 @@ module Interpreter = struct
         (* Updated after each cmp command. Negative if the left
            operand of cmp was less than the right one, zero if they
            were equal, positive otherwise *)
+    ; label_map : instruction list StringMap.t
     }
   [@@deriving show]
-
-  (* Each of dword registers is associated with 0 initial value *)
-  let initial_reg_map =
-    List.fold_left
-      (fun map reg_name -> IntMap.add (reg_name_to_id reg_name) 0 map)
-      IntMap.empty
-      dword_reg_name_list
-  ;;
-
-  let initial_state = { reg_map = initial_reg_map; stack = ListStack.empty; flags = 0 }
 
   (* Generate a map from label commands to suffixes of the instruction list.
      When jumping to label, we will obtain the instructions that we should
@@ -139,6 +130,25 @@ module Interpreter = struct
        | DCommand x -> eval (eval_bwdcommand state x) tl
        | _ -> state)
   ;;
+
+  let eval_whole whole_program =
+    let initial_label_map = gen_label_map whole_program in
+    (* Each of dword registers is associated with 0 initial value *)
+    let initial_reg_map =
+      List.fold_left
+        (fun map reg_name -> IntMap.add (reg_name_to_id reg_name) 0 map)
+        IntMap.empty
+        dword_reg_name_list
+    in
+    let initial_state =
+      { reg_map = initial_reg_map
+      ; stack = ListStack.empty
+      ; flags = 0
+      ; label_map = initial_label_map
+      }
+    in
+    eval initial_state whole_program
+  ;;
 end
 
 open Interpreter
@@ -149,7 +159,7 @@ let%test _ =
     ; WCommand (Add (RegConst (reg_name_to_word_reg "ax", int_to_word_const 2)))
     ]
   in
-  let final_reg_map = (eval initial_state program).reg_map in
+  let final_reg_map = (eval_whole program).reg_map in
   reg_val_get (reg_name_to_byte_reg "al") final_reg_map = 5
 ;;
 
@@ -165,7 +175,7 @@ let%test _ =
     ; DCommand (Mul (Reg (reg_name_to_dword_reg "ecx")))
     ]
   in
-  let final_reg_map = (eval initial_state program).reg_map in
+  let final_reg_map = (eval_whole program).reg_map in
   reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
 ;;
 
@@ -185,7 +195,7 @@ let%test _ =
     ; BCommand (Pop (Reg (reg_name_to_byte_reg "bh")))
     ]
   in
-  let final_reg_map = (eval initial_state program).reg_map in
+  let final_reg_map = (eval_whole program).reg_map in
   reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
   && reg_val_get (reg_name_to_dword_reg "edx") final_reg_map = 43
   && reg_val_get (reg_name_to_byte_reg "bh") final_reg_map = 8
@@ -197,6 +207,6 @@ let%test _ =
     ; BCommand (Cmp (RegConst (reg_name_to_byte_reg "al", int_to_byte_const 5)))
     ]
   in
-  let final_flags = (eval initial_state program).flags in
+  let final_flags = (eval_whole program).flags in
   final_flags < 0
 ;;
