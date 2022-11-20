@@ -4,5 +4,5 @@
  (modules Ast Parser Interpreter Utils OperandsHandler)
  (libraries base angstrom)
  (preprocess
-  (pps ppx_expect ppx_fields_conv ppx_deriving.show ppx_variants_conv))
+  (pps ppx_expect ppx_deriving.show))
  (inline_tests))
