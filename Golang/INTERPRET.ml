@@ -4,13 +4,7 @@ open Golang_lib
 
 let synopsis = "gocaml FILEPATH"
 
-let help =
-  "gocaml -- Go compiler written in OCaml\n"
-  ^ "Usage: "
-  ^ synopsis
-  ^ "\n\n"
-  ^ "Example: gocaml main.go"
-;;
+let help = Format.sprintf "gocaml -- Go compiler written in OCaml\nUsage: %s\n\nExample: gocaml main.go" synopsis;;
 
 let args =
   match Array.to_list Sys.argv with
@@ -21,7 +15,7 @@ let args =
 let run_compiler inpath =
   match Interpret.interpret inpath with
   | Ok -> ()
-  | FileNotFound -> print_endline ("File " ^ inpath ^ " not found!")
+  | FileNotFound -> print_endline (Format.sprintf "File %s not found!" inpath)
   | CE err ->
     let () = print_endline "Error!" in
     let () = print_endline err in

@@ -90,8 +90,7 @@ let chainl1 e op =
 
 let payload_simple =
   any_char
-  >>= fun c ->
-  match c with
+  >>= function
   | 'a' -> return "\u{0007}"
   | 'b' -> return "\u{0008}"
   | 'f' -> return "\u{000C}"
@@ -168,7 +167,7 @@ type type_dispatch =
   ; typ : type_dispatch -> typ t
   }
 
-let _types =
+let type_dis =
   (* ==================== *)
   (* ===== TypeName ===== *)
   let type_name =
@@ -232,13 +231,13 @@ let _types =
 ;;
 
 (** Parses type literals  *)
-let typ = _types.typ _types
+let typ = type_dis.typ type_dis
 
 (** Parses function signatures  *)
-let signature = _types.signature _types
+let signature = type_dis.signature type_dis
 
 (** Parses array types  *)
-let array_typ = _types.array_typ _types
+let array_typ = type_dis.array_typ type_dis
 
 (* ============================================================
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -261,7 +260,7 @@ type args_or_index =
   | Args of string expr list
   | Index of string expr
 
-let _eds =
+let eds =
   (* ============================================================
      --------               Expressions                  --------
      ============================================================ *)
@@ -484,13 +483,13 @@ let _eds =
   { expr_list; expr; var_decl; func_decl; top_level_decl; block; stmt }
 ;;
 
-let expr_list = _eds.expr_list _eds
-let expr = _eds.expr _eds
-let var_decl = _eds.var_decl _eds
-let func_decl = _eds.func_decl _eds
-let top_level_decl = _eds.top_level_decl _eds
-let block = _eds.block _eds
-let stmt = _eds.stmt _eds
+let expr_list = eds.expr_list eds
+let expr = eds.expr eds
+let var_decl = eds.var_decl eds
+let func_decl = eds.func_decl eds
+let top_level_decl = eds.top_level_decl eds
+let block = eds.block eds
+let stmt = eds.stmt eds
 
 (* ============================================================
    ---------          Parser entrypoint         ---------------
