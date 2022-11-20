@@ -74,7 +74,8 @@ and 'id top_level_decl =
 [@@deriving show]
 
 and 'id block = 'id stmt list [@@deriving show, ord]
- and 'id stmt =
+
+and 'id stmt =
   | AssignStmt of 'id expr * 'id expr (* a = 1 and b[i] = 1 *)
   | VarDecl of 'id var_decl (* var a = expr *)
   | BlockStmt of 'id block (* { ... } *)
