@@ -11,8 +11,7 @@ type id = string
 type const =
   | Bool of bool (** true or false *)
   | Int of int (** integer literal *)
-  | Nil (** empty list [] *)
-  | Unit (** value ()  FIXME: Do i need it?*)
+  | Unit (** () *)
 
 (** Enumeration of all available binary operators *)
 type bin_op =
@@ -28,28 +27,47 @@ type bin_op =
   | Gt (** > operator *)
   | Gtq (** >= operator *)
 
-(** Type for expressions *)
-type expr =
-  | Const of const
-  | Var of id
-  | Binop of bin_op * expr * expr
-  | Fun of id * expr (* Only one argument => Parser should handle multiple args*)
-  | Cons of expr * expr (* FIXME: Do i need it? *)
-  | If of expr * expr * expr
-  | Let of id * expr * expr
-  | LetRec of id * expr * expr
-
 (** Representation of function arguments *)
 type arg_label =
-  | NoLabel
-  | Labelled of string
-  | Optional of string
+  | ArgNoLabel
+  | ArgLabelled of id
+  | ArgOptional of id
+
+(** Type for expressions *)
+type expr =
+  | Const of const (** Constant expressions *)
+  | Var of id (** Variable names expressions *)
+  | Binop of bin_op * expr * expr (** Expressions involving binary operations *)
+  (* For anonymous functions "fun a b -> e" is syntactic sugar, 
+     which parser has to resolve to "Fun (Var "x", Fun (Var "y"), e)" *)
+  | Fun of id * expr (** Anonymous functions *)
+  | App of expr * expr (** Function application *)
+  | IfThenElse of expr * expr * expr (** Conditional operator if-then-else *)
+  (* Expressions like "let f x = x" are handled by parser,
+     which produces Let (Var "f", Fun ("x", Var "x") *)
+  | Let of id * expr * expr (** Expression for "let x = e1 in e2" *)
+  | LetRec of id * expr * expr (** Fixpointed Let *)
+
+(* ---------- Not used for now ----------*)
+(* --------- Will be used in TC ---------*)
+
+(** Mapping from variable names to values *)
+module IdMap : Map.S with type key = id
+
+(** Possible output values of expressions *)
+type value =
+  | VUndef (** internall value for implementing rec *)
+  | VUnit (** internall value for () *)
+  | VBool of bool (** represents boolean values *)
+  | VInt of int (** represents integer values *)
+  | VClosure of value Pervasives.ref IdMap.t * id * expr
+      (** represents high-order functions in form of (env, "x", e) *)
 
 (** Representation of types *)
 type typ =
   | TBool (** boolean type *)
   | TInt (** integer type *)
   | TUnit (** unit type *)
-  | TVar of id (** representation of type variable 'name, needed for polymorphism *)
+  | TVar of id (** representation of type variable 'id, needed for polymorphism *)
   | TList of typ (** representation of typ list *)
   | Arrow of typ * typ (** representation of function types *)
