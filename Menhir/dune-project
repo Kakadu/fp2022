@@ -22,6 +22,7 @@
  (description "You can read more about this project in file README.pdf")
  (version 0.1)
  (depends
+  sedlex
   dune
   (ppx_inline_test :with-test)
   qcheck-core

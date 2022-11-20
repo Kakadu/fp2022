@@ -9,6 +9,7 @@ license: "LGPL-3.0-or-later"
 homepage: "https://github.com/lastdesire/fp2022"
 bug-reports: "https://github.com/lastdesire/fp2022/issues"
 depends: [
+  "sedlex"
   "dune" {>= "2.8"}
   "ppx_inline_test" {with-test}
   "qcheck-core"
