@@ -84,6 +84,25 @@ module Interpreter = struct
     | _ -> failwith "Mul command operand must be a register or a constant"
   ;;
 
+  let eval_push state = function
+    (* We assume that we may push any register's value, i.e. "push ah"
+       is a valid command *)
+    | Reg r ->
+      { state with stack = ListStack.push (reg_val_get r state.reg_map) state.stack }
+    | Const c -> { state with stack = ListStack.push (const_val c) state.stack }
+    | _ -> failwith "Push command operand must be a register or a constant"
+  ;;
+
+  let eval_pop state = function
+    | Reg r ->
+      let value = ListStack.peek state.stack in
+      (match value with
+       | None -> failwith "Trying to pop when the stack is empty"
+       | Some v ->
+         { stack = ListStack.pop state.stack; reg_map = reg_val_set r v state.reg_map })
+    | _ -> failwith "Pop command operand must be a register"
+  ;;
+
   (* Eval B-, W- or DCommand *)
   let eval_bwdcommand state = function
     | Mov x -> { state with reg_map = eval_mov state.reg_map x }
@@ -91,6 +110,8 @@ module Interpreter = struct
     | Sub x -> { state with reg_map = eval_sub state.reg_map x }
     | Inc x -> { state with reg_map = eval_inc state.reg_map x }
     | Mul x -> { state with reg_map = eval_mul state.reg_map x }
+    | Push x -> eval_push state x
+    | Pop x -> eval_pop state x
     | _ -> state
   ;;
 
@@ -133,4 +154,26 @@ let%test _ =
   in
   let final_reg_map = (eval initial_state program).reg_map in
   reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
+;;
+
+let%test _ =
+  let program =
+    [ LCommand "label"
+    ; WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 8)))
+    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
+    ; WCommand (Sub (RegConst (reg_name_to_word_reg "ax", int_to_word_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 7)))
+    ; BCommand (Push (Const (int_to_byte_const 43)))
+    ; BCommand (Add (RegReg (reg_name_to_byte_reg "ah", reg_name_to_byte_reg "bl")))
+    ; WCommand (Inc (Reg (reg_name_to_word_reg "ax")))
+    ; BCommand (Mov (RegConst (reg_name_to_byte_reg "cl", int_to_byte_const 3)))
+    ; WCommand (Pop (Reg (reg_name_to_word_reg "dx")))
+    ; DCommand (Mul (Reg (reg_name_to_dword_reg "ecx")))
+    ; BCommand (Pop (Reg (reg_name_to_byte_reg "bh")))
+    ]
+  in
+  let final_reg_map = (eval initial_state program).reg_map in
+  reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
+  && reg_val_get (reg_name_to_dword_reg "edx") final_reg_map = 43
+  && reg_val_get (reg_name_to_byte_reg "bh") final_reg_map = 8
 ;;
