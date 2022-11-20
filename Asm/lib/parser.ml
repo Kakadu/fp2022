@@ -144,6 +144,12 @@ let gen_bcommand_p operand_p cmd_str_to_command cmd_str =
   gen_command_p operand_p (fun x -> BCommand (cmd_str_to_command cmd_str x)) cmd_str
 ;;
 
+(* For now we'll consider all zero-args commands as BCommands *)
+let gen_bcommand_zero_args_p cmd_str =
+  (* We cannot use gen_bcommand_p since it wants at least one space after the command *)
+  string cmd_str >>| fun _ -> BCommand (cmd_zero_args_str_to_command cmd_str)
+;;
+
 (* Generate a parser of one-arg byte command *)
 let gen_bcommand_one_arg_p =
   gen_bcommand_p (breg_p <|> bconst_p) cmd_one_arg_str_to_command
@@ -194,7 +200,8 @@ let lcommand_p = label_str_p <* char ':' >>| (fun s -> LCommand s) <?> "lcommand
 
 let bcommand_p =
   choice
-    (List.map gen_bcommand_one_arg_p cmd_one_arg_list
+    (List.map gen_bcommand_zero_args_p cmd_zero_args_list
+    @ List.map gen_bcommand_one_arg_p cmd_one_arg_list
     @ List.map gen_bcommand_two_args_p cmd_two_args_list)
   <?> "bcommand_p"
 ;;
@@ -447,5 +454,70 @@ let%test _ =
     ; WCommand (Pop (Reg (reg_name_to_word_reg "dx")))
     ; WCommand (Cmp (RegConst (reg_name_to_word_reg "dx", int_to_word_const 1)))
     ; SCommand (Jne (Label "l1"))
+    ]
+;;
+
+let%test _ =
+  ok_ast
+    {|l1:
+      ret
+      call l1
+    |}
+    [ LCommand "l1"; BCommand Ret; SCommand (Call (Label "l1")) ]
+;;
+
+let%test _ =
+  ok_ast
+    {|mov eax, 9
+      call fib
+      jmp end
+      fib:
+        cmp eax, 0
+        jne l1
+        mov ebx, 0
+        ret
+      l1:
+        cmp eax, 1
+        jne l2
+        mov ebx, 1
+        ret
+      l2:
+        push eax
+        sub eax, 2
+        call fib
+        pop eax
+        push ebx
+        sub eax, 1
+        call fib
+        pop ecx
+        add ebx, ecx
+        ret
+      end:
+    |}
+    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 9)))
+    ; SCommand (Call (Label "fib"))
+    ; SCommand (Jmp (Label "end"))
+    ; LCommand "fib"
+    ; DCommand (Cmp (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 0)))
+    ; SCommand (Jne (Label "l1"))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 0)))
+    ; BCommand Ret
+    ; LCommand "l1"
+    ; DCommand (Cmp (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; SCommand (Jne (Label "l2"))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 1)))
+    ; BCommand Ret
+    ; LCommand "l2"
+    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
+    ; DCommand (Sub (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 2)))
+    ; SCommand (Call (Label "fib"))
+    ; DCommand (Pop (Reg (reg_name_to_dword_reg "eax")))
+    ; DCommand (Push (Reg (reg_name_to_dword_reg "ebx")))
+    ; DCommand (Sub (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; SCommand (Call (Label "fib"))
+    ; DCommand (Pop (Reg (reg_name_to_dword_reg "ecx")))
+    ; DCommand (Add (RegReg (reg_name_to_dword_reg "ebx", reg_name_to_dword_reg "ecx")))
+    ; BCommand Ret
+    ; LCommand "end"
     ]
 ;;

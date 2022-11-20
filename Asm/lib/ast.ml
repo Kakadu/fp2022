@@ -304,9 +304,15 @@ type instruction =
 type ast = instruction list [@@deriving show { with_path = false }]
 
 module CmdHandler = struct
+  let cmd_zero_args_list = [ "ret" ]
   let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]
   let cmd_two_args_list = [ "mov"; "add"; "sub"; "cmp" ]
   let scmd_list = [ "jmp"; "je"; "jne"; "call" ]
+
+  let cmd_zero_args_str_to_command = function
+    | "ret" -> Ret
+    | str -> failwith ("Unknown command " ^ str)
+  ;;
 
   let cmd_one_arg_str_to_command = function
     | "inc" -> fun x -> Inc x
