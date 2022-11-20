@@ -32,7 +32,7 @@ let grammar :=
 
 let nonterms := 
     | n = NONTERM; rls = rules; nms = nonterms; { (List.map (fun a -> n, a) rls) @ nms }
-    | n = NONTERM; rls = rules; {(List.map (fun a -> n, a) rls)}
+    | n = NONTERM; rls = rules; { (List.map (fun a -> n, a) rls) }
 
 let rules :=
     | VERT; rc = rulecomps; rls = rules; { rc :: rls }
