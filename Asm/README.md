@@ -6,7 +6,7 @@ License: LGPL for implementation code + WTFPL for test examles in miniLanguage
 
 Author: Andrei Izrailev
 
-Features in progress (and TODOs):
+Features done:
 
 - Parser and Interpreter of NASM instructions that are required for calculating
   a factorial and Fibonacci numbers
