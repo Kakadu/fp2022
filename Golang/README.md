@@ -6,7 +6,7 @@ License: LGPL for implementation code
 
 Author: Egor Porsev, furetur@gmail.com
 
-Features done:
+**Features done**:
 
 - Parser: all required features (I think)
 - Compile-time scopes
@@ -20,7 +20,7 @@ Features done:
   - Recursion
 - ...
 
-Features in progress (and TODOs):
+**Features in progress (and TODOs)**:
 
 - `main` function signature validation
 - Runtime scopes (currently the scope is flat)
