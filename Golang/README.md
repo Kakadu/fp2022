@@ -22,7 +22,8 @@ Features done:
 
 Features in progress (and TODOs):
 
-- Runtime scopes
+- `main` function signature validation
+- Runtime scopes (currently the scope is flat)
 - Array element assignment
 - Closures
 - Goroutines and channels
