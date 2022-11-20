@@ -335,6 +335,5 @@ let%test _ =
     ]
   in
   let final_reg_map = (eval_whole program).reg_map in
-  (* pp_state_t Format.std_formatter (eval_whole program); *)
   reg_val_get (reg_name_to_dword_reg "ebx") final_reg_map = 34
 ;;

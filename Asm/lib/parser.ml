@@ -247,7 +247,6 @@ let test_ok, test_fail =
       false
     | Error e ->
       Printf.printf "Failed to parse \"%s\"%s" input e;
-      (* print_string ("Failed to parse \"" ^ input ^ "\"" ^ e); *)
       false
   in
   let fail ppf parser input =
