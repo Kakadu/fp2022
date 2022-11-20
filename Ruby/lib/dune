@@ -1,0 +1,18 @@
+(library
+ (name ruby_lib)
+ (public_name Ruby.Lib)
+ (modules
+  Ast
+  Lexer
+  Interpret
+  Builtinops
+  Environment
+  Parser
+  Stdlib
+  utils
+  Tests)
+ (modules_without_implementation ast)
+ (libraries base angstrom)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show))
+ (inline_tests))
