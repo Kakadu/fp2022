@@ -9,12 +9,16 @@ open Ast.OperandsHandler
 module Interpreter = struct
   (* Current state of execution *)
   type state_t =
-    { (* Map from register ids to their values.
+    { reg_map : int IntMap.t
+        (* Map from register ids to their values.
          Note that we won't have registers like "ax" here since their value can be
          obtained from "eax". So, the map only contains "primary" registers, i.e.
          ones that are not part of the others *)
-      reg_map : int IntMap.t
     ; stack : int ListStack.t (* Program stack in an oridnary sense *)
+    ; flags : int
+        (* Updated after each cmp command. Negative if the left
+           operand of cmp was less than the right one, zero if they
+           were equal, positive otherwise *)
     }
   [@@deriving show]
 
@@ -26,7 +30,7 @@ module Interpreter = struct
       dword_reg_name_list
   ;;
 
-  let initial_state = { reg_map = initial_reg_map; stack = ListStack.empty }
+  let initial_state = { reg_map = initial_reg_map; stack = ListStack.empty; flags = 0 }
 
   (* Generate a map from label commands to suffixes of the instruction list.
      When jumping to label, we will obtain the instructions that we should
@@ -99,8 +103,16 @@ module Interpreter = struct
       (match value with
        | None -> failwith "Trying to pop when the stack is empty"
        | Some v ->
-         { stack = ListStack.pop state.stack; reg_map = reg_val_set r v state.reg_map })
+         { state with
+           stack = ListStack.pop state.stack
+         ; reg_map = reg_val_set r v state.reg_map
+         })
     | _ -> failwith "Pop command operand must be a register"
+  ;;
+
+  let eval_cmp reg_map = function
+    | RegReg (r1, r2) -> reg_val_get r1 reg_map - reg_val_get r2 reg_map
+    | RegConst (r, c) -> reg_val_get r reg_map - const_val c
   ;;
 
   (* Eval B-, W- or DCommand *)
@@ -112,6 +124,7 @@ module Interpreter = struct
     | Mul x -> { state with reg_map = eval_mul state.reg_map x }
     | Push x -> eval_push state x
     | Pop x -> eval_pop state x
+    | Cmp x -> { state with flags = eval_cmp state.reg_map x }
     | _ -> state
   ;;
 
@@ -176,4 +189,14 @@ let%test _ =
   reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
   && reg_val_get (reg_name_to_dword_reg "edx") final_reg_map = 43
   && reg_val_get (reg_name_to_byte_reg "bh") final_reg_map = 8
+;;
+
+let%test _ =
+  let program =
+    [ WCommand (Mov (RegConst (reg_name_to_word_reg "ax", int_to_word_const 4)))
+    ; BCommand (Cmp (RegConst (reg_name_to_byte_reg "al", int_to_byte_const 5)))
+    ]
+  in
+  let final_flags = (eval initial_state program).flags in
+  final_flags < 0
 ;;
