@@ -17,7 +17,7 @@
 (homepage "https://github.com/lastdesire/fp2022")
 
 (package
- (name Menhir) ; FIXME and regenerate .opam file using 'dune build @install'
+ (name Menhir)
  (synopsis "Implementation of Menhir mini-library.")
  (description "You can read more about this project in file README.pdf")
  (version 0.1)
@@ -30,6 +30,4 @@
   ppx_deriving
   (odoc :with-doc)
   (ocamlformat :build)
-  base
-  ; After adding dependencies to 'dune' files and the same dependecies here too
-  ))
+  base))
