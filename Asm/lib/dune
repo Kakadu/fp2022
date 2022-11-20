@@ -1,7 +1,7 @@
 (library
  (name asm_lib)
  (public_name Asm.Lib)
- (modules Ast Parser Interpreter Utils)
+ (modules Ast Parser Interpreter Utils OperandsHandler)
  (libraries base angstrom)
  (preprocess
   (pps ppx_expect ppx_fields_conv ppx_deriving.show ppx_variants_conv))

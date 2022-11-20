@@ -4,7 +4,7 @@
 
 open Utils
 open Ast
-open Ast.OperandsHandler
+open OperandsHandler
 
 module Interpreter = struct
   (* Current state of execution *)
