@@ -55,19 +55,31 @@ let reg_id_is_word_reg reg_id =
 let int_to_byte_reg reg_id =
   if reg_id_is_byte_reg reg_id
   then reg_id
-  else failwith ("Register with id " ^ string_of_int reg_id ^ " is not a byte register")
+  else
+    failwith
+      (Printf.sprintf
+         "Register with id \"%s\" is not a byte register"
+         (string_of_int reg_id))
 ;;
 
 let int_to_word_reg reg_id =
   if reg_id_is_word_reg reg_id
   then reg_id
-  else failwith ("Register with id " ^ string_of_int reg_id ^ " is not a word register")
+  else
+    failwith
+      (Printf.sprintf
+         "Register with id \"%s\" is not a word register"
+         (string_of_int reg_id))
 ;;
 
 let int_to_dword_reg reg_id =
   if reg_id_is_dword_reg reg_id
   then reg_id
-  else failwith ("Register with id " ^ string_of_int reg_id ^ " is not a dword register")
+  else
+    failwith
+      (Printf.sprintf
+         "Register with id \"%s\" is not a dword register"
+         (string_of_int reg_id))
 ;;
 
 let all_reg_name_list = byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list
@@ -76,7 +88,7 @@ let const_val : 'a const -> int = Fun.id
 
 let reg_name_to_id reg_name =
   match List.index_of_elem reg_name String.equal all_reg_name_list with
-  | None -> failwith ("No register called \"" ^ reg_name ^ "\"")
+  | None -> failwith (Printf.sprintf "No register called \"%s\"" reg_name)
   | Some x -> x
 ;;
 
