@@ -2,7 +2,7 @@
  (name make_lib)
  (public_name Make.lib)
  (modules Ast Parser Interpret)
- (libraries base angstrom)
+ (libraries base angstrom unix)
  (preprocess
   (pps ppx_expect ppx_fields_conv ppx_deriving.show ppx_variants_conv))
  (inline_tests))
