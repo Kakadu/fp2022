@@ -32,4 +32,4 @@ type value =
   | Array of value list (** Array [value_list]*)
   | Function of string * string list * (value list -> value)
       (** Function [name param_list body]*)
-  | Nil
+  | Nil (** Nil *)

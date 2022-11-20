@@ -12,10 +12,9 @@ let read_whole_file filename =
 ;;
 
 let run_topaz (filename : string) : unit =
-  let _ =
-    read_whole_file filename |> Parser.parse |> Interpret.run |> Utils.string_of_value
-  in
-  ()
+  let ast = read_whole_file filename |> Parser.parse in
+  try ignore (Interpret.run ast) with
+  | Failure msg -> print_endline ("Error: " ^ msg)
 ;;
 
 let help =
