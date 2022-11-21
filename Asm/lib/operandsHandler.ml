@@ -55,31 +55,19 @@ let reg_id_is_word_reg reg_id =
 let int_to_byte_reg reg_id =
   if reg_id_is_byte_reg reg_id
   then reg_id
-  else
-    failwith
-      (Printf.sprintf
-         "Register with id \"%s\" is not a byte register"
-         (string_of_int reg_id))
+  else failwith (Printf.sprintf "Register with id %d is not a byte register" reg_id)
 ;;
 
 let int_to_word_reg reg_id =
   if reg_id_is_word_reg reg_id
   then reg_id
-  else
-    failwith
-      (Printf.sprintf
-         "Register with id \"%s\" is not a word register"
-         (string_of_int reg_id))
+  else failwith (Printf.sprintf "Register with id %d is not a word register" reg_id)
 ;;
 
 let int_to_dword_reg reg_id =
   if reg_id_is_dword_reg reg_id
   then reg_id
-  else
-    failwith
-      (Printf.sprintf
-         "Register with id \"%s\" is not a dword register"
-         (string_of_int reg_id))
+  else failwith (Printf.sprintf "Register with id %d is not a dword register" reg_id)
 ;;
 
 let all_reg_name_list = byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list
