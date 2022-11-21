@@ -88,7 +88,7 @@ let const_val : 'a const -> int = Fun.id
 
 let reg_name_to_id reg_name =
   match List.index_of_elem reg_name String.equal all_reg_name_list with
-  | None -> failwith (Printf.sprintf "No register called \"%s\"" reg_name)
+  | None -> failwith (Printf.sprintf "No register called %S" reg_name)
   | Some x -> x
 ;;
 

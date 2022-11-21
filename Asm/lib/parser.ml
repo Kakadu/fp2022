@@ -246,7 +246,7 @@ let test_ok, test_fail =
       ppf Format.std_formatter res;
       false
     | Error e ->
-      Printf.printf "Failed to parse \"%s\"%s" input e;
+      Printf.printf "Failed to parse %S%s" input e;
       false
   in
   let fail ppf parser input =

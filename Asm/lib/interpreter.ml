@@ -126,7 +126,7 @@ module Interpreter = struct
 
   let from_label label_map l =
     match StringMap.find_opt l label_map with
-    | None -> failwith (Printf.sprintf "Label \"%s\" not found in the program" l)
+    | None -> failwith (Printf.sprintf "Label %S not found in the program" l)
     | Some v -> v
   ;;
 
