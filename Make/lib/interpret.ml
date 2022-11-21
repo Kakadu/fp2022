@@ -306,9 +306,9 @@ let recompile info target is_main_target =
     in
     traverse_recipes recipes
   in
-  if List.length recipes = 0
-  then if is_main_target then raise (NothingToBeDone target) else info
-  else execute_recipes
+  match recipes with
+  | [] -> if is_main_target then raise (NothingToBeDone target) else info
+  | _ -> execute_recipes
 ;;
 
 (* Could raise exception *)
