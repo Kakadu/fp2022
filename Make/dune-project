@@ -26,6 +26,7 @@
   qcheck-core
   ppx_expect
   ppx_deriving
+  core
   (odoc :with-doc)
   (ocamlformat :build)
   base

@@ -3,12 +3,11 @@
 (** SPDX-License-Identifier: CC0-1.0 *)
 
 open Make_lib
-open Core
 
 let _ =
   Stdlib.Sys.chdir "test_project";
   let () =
-    let input = In_channel.read_all "./Makefile" in
+    let input = Core.In_channel.read_all "./Makefile" in
     match Parser.parse input with
     | Result.Ok ast ->
       Format.printf "%a\n%!\n" Ast.pp_ast ast;
