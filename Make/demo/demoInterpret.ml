@@ -12,7 +12,7 @@ let _ =
     match Parser.parse input with
     | Result.Ok ast ->
       Format.printf "%a\n%!\n" Ast.pp_ast ast;
-      (match Interpret.interpret ast [ ] with
+      (match Interpret.interpret ast [] with
        | Result.Ok str -> print_string str
        | Error str -> print_string str)
     | Error m -> Format.printf "Parse error \n%s!" m
