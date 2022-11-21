@@ -88,15 +88,13 @@ let filename_delim =
 (* parse filenames separated by delimeters *)
 let filenames = sep_and_trim filename_delim filename
 
-(* ========================================== *)
-(* Parse targets `<target> [<target[s]>...]:` *)
-(* ========================================== *)
+(** Parse targets `<target> [<target[s]>...]:` *)
 let targets = both filename filenames <* char ':'
 
-(* ========================================= *)
-(* Parse prerequisites (could be multilined) *)
-(* We could not insert comments in between.  *)
-(* ========================================= *)
+(**
+ Parse prerequisites (could be multilined)
+ We could not insert comments in between.
+*)
 let prerequisites =
   fix (fun p ->
     lift2
@@ -105,11 +103,11 @@ let prerequisites =
       ((char '\\' <* filename_delim *> char '\n') *> p <|> many comment *> return []))
 ;;
 
-(* ============================================ *)
-(* Parse recipes                                *)
-(* After targets:prerequisites parsing, recipes *)
-(* are lines __starting with the tab__.         *)
-(* ============================================ *)
+(**
+ Parse recipes
+ After targets:prerequisites parsing, recipes
+ are lines __starting with the tab__.
+*)
 let recipes =
   let empty_line =
     let ws_line = char ' ' *> filename_delim in
@@ -120,12 +118,12 @@ let recipes =
   sep_and_trim recipe_delim recipe_line
 ;;
 
-(* ================================================= *)
-(* Main parser                                       *)
-(* Parses rules                                      *)
-(* <target> [<target[s]>...]: [<prerequisite[s]>...] *)
-(*  \t[<recipe[s]>...]                               *)
-(* ================================================  *)
+(**
+ Main parser
+ Parses rules
+ <target> [<target[s]>...]: [<prerequisite[s]>...]
+  \t[<recipe[s]>...]
+*)
 let rules =
   let rule_constructor t p r = { targets = t; prerequisites = p; recipes = r } in
   let ast_constructor t p r = Rule (rule_constructor t p r) in
@@ -134,10 +132,7 @@ let rules =
   trim_start (both rule (many expr_rule))
 ;;
 
-let parse str =
-  let open Result in
-  parse_string ~consume:Consume.All rules str
-;;
+let parse str = parse_string ~consume:Consume.All rules str
 
 (* ------------------------------------------------- *)
 (* ----------------------TESTS---------------------- *)

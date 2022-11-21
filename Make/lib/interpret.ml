@@ -4,8 +4,7 @@
 
 open Ast
 
-(* Extracts list of rules from ast *)
-(* Keeps rules order *)
+(** Extracts list of rules from ast. Keeps rules order *)
 let rules_of_ast =
   let rec rules_of_exprs = function
     | [] -> []
@@ -20,16 +19,16 @@ let rules_of_ast =
   | rule, exprs -> rule :: rules_of_exprs exprs
 ;;
 
-(* Original rule type has tuple as "targets" type, *)
-(* But it is easier to works with lists *)
+(** Original rule type has tuple as "targets" type,
+But it is easier to works with lists *)
 type rule_as_lists =
   { targets : string list
   ; prerequisites : string list
   ; recipes : string list
   }
 
-(* Transform list of ast's rules to rule_as_lists list*)
-(* Keeps rules order *)
+(** Transform list of ast's rules to rule_as_lists list
+ Keeps rules order *)
 let rules_as_lists_of_rules =
   let rule_as_lists_of_rule : rule -> rule_as_lists = function
     | { targets = t; prerequisites = p; recipes = r } ->
@@ -53,19 +52,16 @@ let remove_duplicates l =
 
 (* Return true if a target is present somewhere in targets in rules *)
 let rules_has_target target rules =
-  Printf.printf "Checking %s\n" target;
   let rule_has_target rule =
     Option.is_some (List.find_opt (String.equal target) rule.targets)
   in
   let rules_with_target = List.filter rule_has_target rules in
-  Printf.printf "ans is %b\n" (List.length rules_with_target = 0);
   List.length rules_with_target <> 0
 ;;
 
-(* Return target data among all rules for specified target. *)
-(* If two or more rules are found with the same target in the target list, *)
-(* and with different recipes, the newer one will be used *)
-(*TODO: check that this function actually returns the oldest recipe for the target *)
+(** Return target data among all rules for specified target.
+If two or more rules are found with the same target in the target list,
+and with different recipes, the newer one will be used *)
 let target_data_of_rules target rules =
   let rule_has_target rule =
     Option.is_some (List.find_opt (String.equal target) rule.targets)
@@ -106,22 +102,6 @@ let get_unique_filenames rules =
   get_all_filenames rules |> remove_duplicates
 ;;
 
-(* Targets and dependencies graph as adjacency list *)
-type graph = (string, target_data) Hashtbl.t
-
-(* Construct graph *)
-let graph_of_rules rules =
-  let filenames = get_unique_filenames rules in
-  let graph : graph = Hashtbl.create (List.length filenames) in
-  let rec fill_hashmap = function
-    | [] -> graph
-    | target :: tl ->
-      Hashtbl.add graph target (target_data_of_rules target rules);
-      fill_hashmap tl
-  in
-  fill_hashmap filenames
-;;
-
 (* ============DFS TRAVERSAL============ *)
 
 module NodeMap = Map.Make (struct
@@ -129,6 +109,22 @@ module NodeMap = Map.Make (struct
 
   let compare : string -> string -> int = compare
 end)
+
+(* Targets and dependencies graph as adjacency list *)
+type graph = target_data NodeMap.t
+
+(* Construct graph *)
+let graph_of_rules rules =
+  let filenames = get_unique_filenames rules in
+  let graph : graph = NodeMap.empty in
+  let rec fill_map graph = function
+    | [] -> graph
+    | target :: tl ->
+      let graph = NodeMap.add target (target_data_of_rules target rules) graph in
+      fill_map graph tl
+  in
+  fill_map graph filenames
+;;
 
 type dfs_info =
   { dfs_dtime : int NodeMap.t (* discovery time *)
@@ -143,7 +139,7 @@ type dfs_info =
 
 let dfs_init_info rules graph =
   let edgeList node =
-    match Hashtbl.find_opt graph node with
+    match NodeMap.find_opt node graph with
     | None -> []
     | Some data -> data.deps
   in
@@ -151,7 +147,7 @@ let dfs_init_info rules graph =
   ; dfs_ftime = NodeMap.empty
   ; dfs_parents = NodeMap.empty
   ; dfs_time = 0
-  ; dfs_edgeList = edgeList (*(fun node -> .deps)*)
+  ; dfs_edgeList = edgeList
   ; dfs_recompile = NodeMap.empty
   ; rules
   ; graph
@@ -201,6 +197,7 @@ let dfs_set_flag info node flag =
   { info with dfs_recompile = recompile }
 ;;
 
+(* get flag of node *)
 let flag_of_node info node =
   match NodeMap.find_opt node info.dfs_recompile with
   | None -> false
@@ -292,7 +289,7 @@ exception UpToDate of string
 exception NothingToBeDone of string
 
 let get_recipes info target =
-  match Hashtbl.find_opt info.graph target with
+  match NodeMap.find_opt target info.graph with
   | None -> []
   | Some data -> data.recipes
 ;;
@@ -339,8 +336,8 @@ let try_execute_recipes info target is_main_target =
   else raise (NoRule (target, NodeMap.find target info.dfs_parents))
 ;;
 
-(* Traverse graph from node u, executing recipes of u in the end *)
-(* Could raise exception *)
+(** Traverse graph from node u, executing recipes of u in the end
+Could raise exception *)
 let rec dfs_visit info u =
   (* Visit all neighbours v of node u *)
   let visit_node info v =
