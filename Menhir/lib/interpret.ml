@@ -122,7 +122,7 @@ open Stdlib
   Note that operator goes first in addition and multiplication in this example: PLUS INT INT and MUL INT INT.
 *)
 
-let rec get_last_n_elements_from_list (n : int) l =
+let get_last_n_elements_from_list (n : int) l =
   let len = List.length l in
   if len <= n
   then l
@@ -175,11 +175,16 @@ let get_all_nonterminals_of_rule rule_name text =
     rules
 ;;
 
+let is_list_empty = function
+  | [] -> true
+  | _ -> false
+;;
+
 let rec try_apply_rule text rule input =
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
-    if input = [] (* OVERSHOOT RIGHT HERE. *)
+    if is_list_empty input (* OVERSHOOT RIGHT HERE. *)
     then false, -1
     else if is_string_list_contains_symbol h (terminals text)
     then
@@ -188,21 +193,24 @@ let rec try_apply_rule text rule input =
       else false, 0
     else if is_string_list_contains_symbol h (nonterminals text)
     then (
-      let rec getNewInputIfNonterminalRuleIsFits allNonterminalsOfRule return_code =
-        match allNonterminalsOfRule with
+      let rec get_new_input_if_nonterminal_rule_is_fits
+        all_nonterminals_of_rule
+        return_code
+        =
+        match all_nonterminals_of_rule with
         | h' :: tl' ->
           let flag, remaining_input_len = try_apply_rule text h' input in
           if flag
           then get_last_n_elements_from_list remaining_input_len input, return_code
           else if return_code = -1
-          then getNewInputIfNonterminalRuleIsFits tl' return_code
-          else getNewInputIfNonterminalRuleIsFits tl' remaining_input_len
+          then get_new_input_if_nonterminal_rule_is_fits tl' return_code
+          else get_new_input_if_nonterminal_rule_is_fits tl' remaining_input_len
         | [] -> input, return_code
       in
       let new_input, return_code =
-        getNewInputIfNonterminalRuleIsFits (get_all_nonterminals_of_rule h text) 0
+        get_new_input_if_nonterminal_rule_is_fits (get_all_nonterminals_of_rule h text) 0
       in
-      if List.length new_input = List.length input
+      if List.compare_lengths new_input input = 0
       then false, return_code
       else try_apply_rule text (lhs, tl) new_input)
     else false, 0
