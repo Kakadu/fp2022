@@ -134,7 +134,7 @@ let data_line_parser =
     else return (fun dt y -> Variable (x, dt, y))
   in
   let sep = trim @@ char ',' in
-  var >>= fun v ->
+  var <* char ':' >>= fun v ->
   data_t >>= fun dt ->
   trim @@ sep_by sep (word <|> nums) >>= fun l -> return (v dt l)
 
@@ -227,21 +227,21 @@ let%test _ =
        (Command (Args2 (Mnemonic "INC", Reg "RAX", Reg "RAX")))
 
 let%test _ =
-  test_p data_line_parser "a dd 1" (Variable ("a", DataType "DD", [ "1" ]))
+  test_p data_line_parser "a: dd 1" (Variable ("a", DataType "DD", [ "1" ]))
 
 let%test _ =
-  test_p data_line_parser "a dd 1, 2"
+  test_p data_line_parser "a: dd 1, 2"
     (Variable ("a", DataType "DD", [ "1"; "2" ]))
 
 let%test _ =
-  test_p data_line_parser "a   dd    1   ,     2"
+  test_p data_line_parser "a:   dd    1   ,     2"
     (Variable ("a", DataType "DD", [ "1"; "2" ]))
 
 let%test _ =
-  test_p data_line_parser "a dD 1" (Variable ("a", DataType "DD", [ "1" ]))
+  test_p data_line_parser "a: dD 1" (Variable ("a", DataType "DD", [ "1" ]))
 
 let%test _ =
-  test_p data_line_parser "A dd 1" (Variable ("A", DataType "DD", [ "1" ]))
+  test_p data_line_parser "A: dd 1" (Variable ("A", DataType "DD", [ "1" ]))
 
 let%test _ =
   not
@@ -275,11 +275,11 @@ let%test _ =
        ])
 
 let%test _ =
-  test_p sec_parser "section .data a dd 1"
+  test_p sec_parser "section .data a: dd 1"
     (Data [ Variable ("a", DataType "DD", [ "1" ]) ])
 
 let%test _ =
-  test_p sec_parser "section .data a dd 1 b dd 2"
+  test_p sec_parser "section .data a: dd 1 b: dd 2"
     (Data
        [
          Variable ("a", DataType "DD", [ "1" ]);
@@ -287,14 +287,14 @@ let%test _ =
        ])
 
 let%test _ =
-  test_p parser "section .data a dd 1 section .text ret"
+  test_p parser "section .data a: dd 1 section .text ret"
     [
       Data [ Variable ("a", DataType "DD", [ "1" ]) ];
       Code [ Command (Args0 (Mnemonic "RET")) ];
     ]
 
 let%test _ =
-  test_p parser "section .data a dd 1 section .data section .text ret"
+  test_p parser "section .data a: dd 1 section .data section .text ret"
     [
       Data [ Variable ("a", DataType "DD", [ "1" ]) ];
       Data [];
@@ -303,7 +303,7 @@ let%test _ =
 
 let%test _ =
   not
-  @@ test_p parser "section .data a dd 1 section .text ret section .text ret"
+  @@ test_p parser "section .data a: dd 1 section .text ret section .text ret"
        [
          Data [ Variable ("a", DataType "DD", [ "1" ]) ];
          Code [ Command (Args0 (Mnemonic "RET")) ];
