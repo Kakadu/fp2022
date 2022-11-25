@@ -1,6 +1,7 @@
 open Asm.Parser
 open Asm.Ast
 
+(* answer in RAX *)
 let fib =
   {|
    section .code
@@ -28,6 +29,7 @@ let fib =
        ret
    |}
 
+(* answer in RAX *)
 (* let fac =
    {|
      section .text
