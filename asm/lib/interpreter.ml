@@ -42,6 +42,7 @@ module Interpret (M : MONADERROR) = struct
 
   (** global constans *)
   type var =
+    | Flag of bool  (** EFLAGS *)
     | Reg64 of int64  (** not so large registers *)
     | Reg128 of string  (** large registers *)
     | Const of string  (** global consts *)
@@ -52,8 +53,9 @@ module Interpret (M : MONADERROR) = struct
   (** start values of registers *)
   let r_list =
     [
-      (* "EFLAGS", Reg64 0 *)
-      ("CMPFLAG", Reg64 0L);
+      ("ZF", Flag false);
+      ("SF", Flag false);
+      ("OF", Flag false);
       ("RAX", Reg64 0L);
       ("RBX", Reg64 0L);
       ("RCX", Reg64 0L);
@@ -96,16 +98,30 @@ module Interpret (M : MONADERROR) = struct
         else ev f l >>= fun l -> return (div l r)
     | const -> f const
 
-  (** return value of register named 'name' *)
+  (** return value of 64bit register named 'name' *)
   let find_reg64_cont env name =
     return (MapVar.find name env) >>= function
     | Reg64 x -> return x
     | _ -> error "not a R64"
 
+  (** return value of flag named 'name' *)
+  let find_flag_cont env name =
+    return (MapVar.find name env) >>= function
+    | Flag flag -> return flag
+    | _ -> error "not a flag"
+
+  let find_eflags env =
+    find_flag_cont env "ZF" >>= fun z ->
+    find_flag_cont env "SF" >>= fun s ->
+    find_flag_cont env "OF" >>= fun o -> return (z, s, o)
+
   (** change value of register by function f *)
   let change_reg64 env f name =
     find_reg64_cont env name >>= fun reg ->
     return @@ MapVar.add name (Reg64 (f reg)) env
+
+  (** change value of flag on 'v' *)
+  let change_flag env v name = return @@ MapVar.add name (Flag v) env
 
   (** interpret command and return map *)
   let inter_one_args_cmd env arg1 =
@@ -139,11 +155,15 @@ module Interpret (M : MONADERROR) = struct
     | "IMUL" -> helper (fun x -> mul x arg2)
     | "CMP" ->
         find_reg64_cont env arg1 >>= fun arg1 ->
-        change_reg64 env (fun _ -> if arg1 = arg2 then 1L else 0L) "CMPFLAG"
+        change_flag env (arg1 = arg2) "ZF" >>= fun env ->
+        change_flag env (arg1 < arg2) "SF"
     | "AND" -> helper (fun x -> logand x arg2)
     | "XOR" -> helper (fun x -> logxor x arg2)
     | "OR" -> helper (fun x -> logor x arg2)
-    | "SHL" | "SHR" | _ -> error "Not implemented yet"
+    | "SHL" -> helper (fun x -> shift_left x (to_int arg2))
+    | "SHR" -> helper (fun x -> shift_right x (to_int arg2))
+    (* | "ADDPD" | "SUBPD" | "MULPD" | "MOVAPD" *)
+    | _ -> error "Is not a mnemonic"
 
   (** general interpreter of commands not including jmp commands *)
   let inter_cmd env = function
@@ -164,23 +184,27 @@ module Interpret (M : MONADERROR) = struct
   (** code section interpreter that return map, ast - general code that shouldn't change *)
   let rec code_sec_inter env ast =
     let jump env ast tl = function
-      | Args1 (Mnemonic cmd, Lab label) -> (
+      | Args1 (Mnemonic cmd, Lab label) ->
           assoc label ast >>= fun code ->
-          match cmd with
-          | "JMP" -> code_sec_inter env ast code
-          | "JE" ->
-              find_reg64_cont env "CMPFLAG" >>= fun flag ->
-              if flag == 1L then code_sec_inter env ast code
-              else code_sec_inter env ast tl
-          | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" | _ -> error "")
+          (match cmd with
+          | "JMP" -> return true
+          | "JE" | "JZ" -> find_flag_cont env "ZF"
+          | "JNE" -> find_flag_cont env "ZF" >>= fun z -> return @@ not z
+          | "JG" -> find_eflags env >>= fun (z, s, o) -> return (o = s && not z)
+          | "JGE" -> find_eflags env >>= fun (_, s, o) -> return (o = s)
+          | "JL" -> find_eflags env >>= fun (_, s, o) -> return (o != s)
+          | "JLE" -> find_eflags env >>= fun (z, s, o) -> return (z && o != s)
+          | x -> error @@ x ^ " is not a jmp")
+          >>= fun cond ->
+          if cond then code_sec_inter env ast code
+          else code_sec_inter env ast tl
       | _ -> error "Isnt jmp"
     in
     function
     | Command cmd :: tl -> (
         match cmd with
         | Args1 (Mnemonic c, _) when is_jmp c -> jump env ast tl cmd
-        | Args0 _ | Args1 _ | Args2 _ ->
-            inter_cmd env cmd >>= fun env -> code_sec_inter env ast tl)
+        | _ -> inter_cmd env cmd >>= fun env -> code_sec_inter env ast tl)
     | Id _ :: tl -> code_sec_inter env ast tl
     | [] -> return env
 

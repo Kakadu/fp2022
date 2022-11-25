@@ -38,7 +38,12 @@ module Interpret : functor (M : MONADERROR) -> sig
     val empty : 'a t
   end
 
-  type var = Reg64 of int64 | Reg128 of string | Const of string
+  type var =
+    | Flag of bool
+    | Reg64 of int64
+    | Reg128 of string
+    | Const of string
+
   type envr = var MapVar.t
 
   val show_envr : envr -> string
