@@ -869,29 +869,47 @@ let%test _ =
 (* 17 *)
 let%test _ =
   parse
-    "let rec zip xs ys = \n\
-     match xs, ys with \n\
-     | [], _ -> []\n\
-     | _, [] -> []\n\
-     | x :: xs, y :: ys -> (x, y) :: (zip xs ys)"
+    " let rec matrix_mult_number matrix number =\n\
+    \     let rec line_mult_number line =\n\
+    \       match line with\n\
+    \         | head :: tail -> (head * number) :: line_mult_number tail\n\
+    \         | _ -> []\n\
+    \     in\n\
+    \     match matrix with\n\
+    \       | head :: tail -> line_mult_number head :: matrix_mult_number tail number\n\
+    \       | _ -> []"
   = Result.ok
     @@ [ ERecursiveDeclaration
-           ( "zip"
-           , []
-           , EMatchWith
-               ( ETuple [ EIdentifier "xs"; EIdentifier "ys" ]
-               , [ ETuple [ EList []; EIdentifier "_" ], EList []
-                 ; ETuple [ EIdentifier "_"; EList [] ], EList []
-                 ; ( ETuple
-                       [ EConstructList (EIdentifier "x", EIdentifier "xs")
-                       ; EConstructList (EIdentifier "y", EIdentifier "ys")
-                       ]
-                   , EConstructList
-                       ( ETuple [ EIdentifier "x"; EIdentifier "y" ]
-                       , EApplication
-                           ( EApplication (EIdentifier "zip", EIdentifier "xs")
-                           , EIdentifier "ys" ) ) )
-                 ] ) )
+           ( "matrix_mult_number"
+           , [ "matrix"; "number" ]
+           , ELetIn
+               ( [ ERecursiveDeclaration
+                     ( "line_mult_number"
+                     , [ "line" ]
+                     , EMatchWith
+                         ( EIdentifier "line"
+                         , [ ( EConstructList (EIdentifier "head", EIdentifier "tail")
+                             , EConstructList
+                                 ( EBinaryOperation
+                                     (Mul, EIdentifier "head", EIdentifier "number")
+                                 , EApplication
+                                     (EIdentifier "line_mult_number", EIdentifier "tail")
+                                 ) )
+                           ; EIdentifier "_", EList []
+                           ] ) )
+                 ]
+               , EMatchWith
+                   ( EIdentifier "matrix"
+                   , [ ( EConstructList (EIdentifier "head", EIdentifier "tail")
+                       , EConstructList
+                           ( EApplication
+                               (EIdentifier "line_mult_number", EIdentifier "head")
+                           , EApplication
+                               ( EApplication
+                                   (EIdentifier "matrix_mult_number", EIdentifier "tail")
+                               , EIdentifier "number" ) ) )
+                     ; EIdentifier "_", EList []
+                     ] ) ) )
        ]
 ;;
 
