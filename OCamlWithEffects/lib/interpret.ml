@@ -172,8 +172,8 @@ end = struct
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
       let* id, id_list =
-        match hd id_list, tl id_list with
-        | Some v1, Some v2 -> return (v1, v2)
+        match id_list with
+        | head :: tail -> return (head, tail)
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
       let environment =
@@ -250,7 +250,7 @@ end = struct
       | _ -> fail "Runtime error: mismatching types.")
     | EDataConstructor (constructor_name, contents_list) ->
       let rec eval_arguments = function
-        | [] -> return @@ []
+        | [] -> return []
         | list ->
           let* head = eval (hd_exn list) environment in
           let* tail = eval_arguments (tl_exn list) in
