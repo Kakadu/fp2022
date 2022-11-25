@@ -163,149 +163,188 @@ let test_p p str expr =
   | Ok v -> v = expr
   | Error _ -> false
 
-let%test _ = test_p expr_parser "0" (Const "0")
-let%test _ = test_p expr_parser "0xa" (Const "0xa")
-let%test _ = test_p expr_parser "    0xa   " (Const "0xa")
-let%test _ = test_p expr_parser "rax" (Reg "RAX")
-let%test _ = test_p expr_parser "rAx" (Reg "RAX")
-let%test _ = test_p expr_parser "rAx" (Reg "RAX")
-let%test _ = test_p expr_parser "%var" (Var "var")
-let%test _ = test_p expr_parser "%vAr" (Var "vAr")
-let%test _ = test_p expr_parser "labl" (Lab (Label "labl"))
-let%test _ = test_p expr_parser "lAbl" (Lab (Label "lAbl"))
-let%test _ = test_p expr_parser "0 + 0x0" (Add (Const "0", Const "0x0"))
-let%test _ = test_p expr_parser "0 + rax" (Add (Const "0", Reg "RAX"))
-let%test _ = test_p expr_parser "0 + %var" (Add (Const "0", Var "var"))
-let%test _ = test_p expr_parser "0+0x0" (Add (Const "0", Const "0x0"))
+let pr_opt p str = Result.get_ok @@ parse_string ~consume:All p str
 
-let%test _ =
-  test_p expr_parser "0      +     0x0" (Add (Const "0", Const "0x0"))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0");
+  [%expect {|(Const "0")|}]
 
-let%test _ = test_p expr_parser "0 + (0x0)" (Add (Const "0", Const "0x0"))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0xa");
+  [%expect {|(Const "0xa")|}]
 
-let%test _ =
-  test_p expr_parser "0 + (    0x0   )   " (Add (Const "0", Const "0x0"))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "    0xa   ");
+  [%expect {|(Const "0xa")|}]
 
-let%test _ = test_p expr_parser "(0 + (0x0))" (Add (Const "0", Const "0x0"))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "rax");
+  [%expect {|(Reg "RAX")|}]
 
-let%test _ =
-  test_p expr_parser "0 + 1 * 2" (Add (Const "0", Mul (Const "1", Const "2")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "rAx");
+  [%expect {|(Reg "RAX")|}]
 
-let%test _ =
-  test_p expr_parser "0 * 1 + 2" (Add (Mul (Const "0", Const "1"), Const "2"))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "%var");
+  [%expect {|(Var "var")|}]
 
-let%test _ =
-  test_p expr_parser "0 * (1 + 2)" (Mul (Const "0", Add (Const "1", Const "2")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "%vAr");
+  [%expect {|(Var "vAr")|}]
 
-let%test _ = test_p code_line_parser "ret" (Command (Args0 (Mnemonic "RET")))
-let%test _ = test_p code_line_parser "rEt" (Command (Args0 (Mnemonic "RET")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "labl");
+  [%expect {|(Lab (Label "labl"))|}]
 
-let%test _ =
-  test_p code_line_parser "       \nret    \n\n"
-    (Command (Args0 (Mnemonic "RET")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "lAbl");
+  [%expect {|(Lab (Label "lAbl"))|}]
 
-let%test _ =
-  test_p code_line_parser "inc rax"
-    (Command (Args1 (Mnemonic "INC", Reg "RAX")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 + 0x0");
+  [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
 
-let%test _ =
-  test_p code_line_parser "   inc              rax            "
-    (Command (Args1 (Mnemonic "INC", Reg "RAX")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 + rax");
+  [%expect {|(Add ((Const "0"), (Reg "RAX")))|}]
 
-let%test _ =
-  test_p code_line_parser "inc rax + 1"
-    (Command (Args1 (Mnemonic "INC", Add (Reg "RAX", Const "1"))))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 + %var");
+  [%expect {|(Add ((Const "0"), (Var "var")))|}]
 
-let%test _ =
-  not
-  @@ test_p code_line_parser "inc rax, rax"
-       (Command (Args2 (Mnemonic "INC", Reg "RAX", Reg "RAX")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0+0x0");
+  [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
 
-let%test _ =
-  not
-  @@ test_p code_line_parser "inc rax, rax, rax"
-       (Command (Args2 (Mnemonic "INC", Reg "RAX", Reg "RAX")))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0      +     0x0");
+  [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
 
-let%test _ =
-  test_p data_line_parser "a: dd 1" (Variable ("a", DataType "DD", [ "1" ]))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 + (0x0)");
+  [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
 
-let%test _ =
-  test_p data_line_parser "a: dd 1, 2"
-    (Variable ("a", DataType "DD", [ "1"; "2" ]))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 + (    0x0   )   ");
+  [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
 
-let%test _ =
-  test_p data_line_parser "a:   dd    1   ,     2"
-    (Variable ("a", DataType "DD", [ "1"; "2" ]))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "(0 + (0x0))");
+  [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
 
-let%test _ =
-  test_p data_line_parser "a: dD 1" (Variable ("a", DataType "DD", [ "1" ]))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 + 1 * 2");
+  [%expect {|(Add ((Const "0"), (Mul ((Const "1"), (Const "2")))))|}]
 
-let%test _ =
-  test_p data_line_parser "A: dd 1" (Variable ("A", DataType "DD", [ "1" ]))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 * 1 + 2");
+  [%expect {|(Add ((Mul ((Const "0"), (Const "1"))), (Const "2")))|}]
 
-let%test _ =
-  not
-  @@ test_p data_line_parser "dd dd 1" (Variable ("A", DataType "DD", [ "1" ]))
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "0 * (1 + 2)");
+  [%expect {|(Mul ((Const "0"), (Add ((Const "1"), (Const "2")))))|}]
 
-let%test _ = not @@ test_p sec_parser "section .test" (Code [])
-let%test _ = test_p sec_parser "section .code" (Code [])
-let%test _ = test_p sec_parser "section .text" (Code [])
-let%test _ = test_p sec_parser "section .data" (Data [])
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "ret");
+  [%expect {|(Command (Args0 (Mnemonic "RET")))|}]
 
-let%test _ =
-  test_p sec_parser "section .code ret"
-    (Code [ Command (Args0 (Mnemonic "RET")) ])
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "rEt");
+  [%expect {|(Command (Args0 (Mnemonic "RET")))|}]
 
-let%test _ =
-  test_p sec_parser "section .code   ret   "
-    (Code [ Command (Args0 (Mnemonic "RET")) ])
+let%expect_test _ =
+  print_string
+  @@ show_code_section (pr_opt code_line_parser "       \nret    \n\n");
+  [%expect {|(Command (Args0 (Mnemonic "RET")))|}]
 
-let%test _ =
-  not
-  @@ test_p sec_parser "section .code ret ret"
-       (Code
-          [ Command (Args0 (Mnemonic "RET")); Command (Args0 (Mnemonic "RET")) ])
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "inc rax");
+  [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))))|}]
 
-let%test _ =
-  test_p sec_parser "section .code inc rax inc rax"
-    (Code
-       [
-         Command (Args1 (Mnemonic "INC", Reg "RAX"));
-         Command (Args1 (Mnemonic "INC", Reg "RAX"));
-       ])
+let%expect_test _ =
+  print_string
+  @@ show_code_section
+       (pr_opt code_line_parser "    inc                  rax           ");
+  [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))))|}]
 
-let%test _ =
-  test_p sec_parser "section .data a: dd 1"
-    (Data [ Variable ("a", DataType "DD", [ "1" ]) ])
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "inc rax + 1");
+  [%expect
+    {|(Command (Args1 ((Mnemonic "INC"), (Add ((Reg "RAX"), (Const "1"))))))|}]
 
-let%test _ =
-  test_p sec_parser "section .data a: dd 1 b: dd 2"
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a: dd 1");
+  [%expect {|(Variable ("a", (DataType "DD"), ["1"]))|}]
+
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a: dd 1, 2");
+  [%expect {|(Variable ("a", (DataType "DD"), ["1"; "2"]))|}]
+
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a:   dd    1   ,     2");
+  [%expect {|(Variable ("a", (DataType "DD"), ["1"; "2"]))|}]
+
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a: dD 1");
+  [%expect {|(Variable ("a", (DataType "DD"), ["1"]))|}]
+
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "A: dd 1");
+  [%expect {|(Variable ("A", (DataType "DD"), ["1"]))|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code");
+  [%expect {|(Code [])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .text");
+  [%expect {|(Code [])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .data");
+  [%expect {|(Data [])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code ret");
+  [%expect {|(Code [(Command (Args0 (Mnemonic "RET")))])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code   ret   ");
+  [%expect {|(Code [(Command (Args0 (Mnemonic "RET")))])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code inc rax inc rax");
+  [%expect
+    {|
+      (Code
+         [(Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))));
+           (Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))))])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .data a: dd 1");
+  [%expect {|(Data [(Variable ("a", (DataType "DD"), ["1"]))])|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .data a: dd 1 b: dd 2");
+  [%expect
+    {|
     (Data
-       [
-         Variable ("a", DataType "DD", [ "1" ]);
-         Variable ("b", DataType "DD", [ "2" ]);
-       ])
+       [(Variable ("a", (DataType "DD"), ["1"]));
+         (Variable ("b", (DataType "DD"), ["2"]))])|}]
 
-let%test _ =
-  test_p parser "section .data a: dd 1 section .text ret"
-    [
-      Data [ Variable ("a", DataType "DD", [ "1" ]) ];
-      Code [ Command (Args0 (Mnemonic "RET")) ];
-    ]
+let%expect_test _ =
+  print_string
+  @@ show_ast (pr_opt parser "section .data a: dd 1 section .text ret");
+  [%expect{|
+    [(Data [(Variable ("a", (DataType "DD"), ["1"]))]);
+      (Code [(Command (Args0 (Mnemonic "RET")))])] |}]
 
-let%test _ =
-  test_p parser "section .data a: dd 1 section .data section .text ret"
-    [
-      Data [ Variable ("a", DataType "DD", [ "1" ]) ];
-      Data [];
-      Code [ Command (Args0 (Mnemonic "RET")) ];
-    ]
-
-let%test _ =
-  not
-  @@ test_p parser "section .data a: dd 1 section .text ret section .text ret"
-       [
-         Data [ Variable ("a", DataType "DD", [ "1" ]) ];
-         Code [ Command (Args0 (Mnemonic "RET")) ];
-         Code [ Command (Args0 (Mnemonic "RET")) ];
-       ]
+let%expect_test _ =
+  print_string
+  @@ show_ast
+       (pr_opt parser "section .data a: dd 1 section .data section .text ret");
+  [%expect
+    {|
+    [(Data [(Variable ("a", (DataType "DD"), ["1"]))]); (Data []);
+      (Code [(Command (Args0 (Mnemonic "RET")))])]|}]
