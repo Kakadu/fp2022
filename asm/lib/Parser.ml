@@ -66,7 +66,7 @@ let hex_nums = take_while1 is_hex_digit
 (** parse word of letters *)
 let word = take_while1 is_ch
 
-(** parse expression that may content +, -, *, /, registers and int constants in hex and decimal forms then return Ast.expr where operations have prio *)
+(** parse expression that may contain +, -, *, /, registers and int constants in hex and decimal forms then return Ast.expr where operations have prio *)
 let expr_parser =
   let add = char '+' *> return (fun x y -> Add (x, y)) in
   let sub = char '-' *> return (fun x y -> Sub (x, y)) in
