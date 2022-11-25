@@ -106,13 +106,15 @@ let parse_literal =
        | '0' .. '9' -> true
        | _ -> false
      in
-     let parse_int_literal = take_while1 is_digit >>| int_of_string >>| fun x -> LInt x
-     and parse_string_literal =
+     let parse_int_literal = take_while1 is_digit >>| int_of_string >>| fun x -> LInt x in
+     let parse_string_literal =
        char '"' *> take_while (( != ) '"') <* char '"' >>| fun x -> LString x
-     and parse_char_literal = char '\'' *> any_char <* char '\'' >>| fun x -> LChar x
-     and parse_bool_literal =
+     in
+     let parse_char_literal = char '\'' *> any_char <* char '\'' >>| fun x -> LChar x in
+     let parse_bool_literal =
        string "true" <|> string "false" >>| bool_of_string >>| fun x -> LBool x
-     and parse_unit_literal = string "()" >>| fun _ -> LUnit in
+     in
+     let parse_unit_literal = string "()" >>| fun _ -> LUnit in
      let parse_literal =
        choice
          [ parse_int_literal
