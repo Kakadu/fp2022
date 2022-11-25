@@ -21,7 +21,7 @@ let run_str env code =
       env
 
 let rec run_repl env =
-  print_string "> ";
+  print_string "~> ";
   run_repl @@ run_str env (read_line ())
 
 let () =
