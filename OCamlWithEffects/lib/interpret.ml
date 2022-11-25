@@ -11,7 +11,10 @@ module type MONAD_FAIL = sig
 end
 
 type error_message = string
-type recursive = bool
+
+type rec_flag =
+  | Recursive
+  | NonRecursive
 
 type environment = (id, value, Base.String.comparator_witness) Base.Map.t
 
@@ -23,7 +26,7 @@ and value =
   | VUnit
   | VList of value list
   | VTuple of value list
-  | VFun of id list * expression * environment * recursive
+  | VFun of id list * expression * environment * rec_flag
   | VADT of data_constructor_name * value list
 
 module Interpret (M : MONAD_FAIL) : sig
@@ -153,13 +156,13 @@ end = struct
         match Map.find environment name with
         | Some v ->
           (match v with
-          | VFun (id_list, function_body, environment, true) ->
+          | VFun (id_list, function_body, environment, Recursive) ->
             return
             @@ VFun
                  ( id_list
                  , function_body
                  , Map.update environment name ~f:(fun _ -> v)
-                 , true )
+                 , Recursive )
           | _ -> return v)
         | None -> fail (String.concat [ "Runtime error: unbound value "; name; "." ]))
     | EApplication (function_expr, argument_expr) ->
@@ -187,15 +190,15 @@ end = struct
     | EFun (arguments_list, function_body) ->
       (match arguments_list with
       | [] -> eval function_body environment
-      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
+      | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | EDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
       | [] -> eval function_body environment
-      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
+      | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | ERecursiveDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
       | [] -> eval function_body environment
-      | _ -> return @@ VFun (arguments_list, function_body, environment, true))
+      | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
     | EIf (condition, true_branch, false_branch) ->
       let* eval_conditional = eval condition environment in
       (match eval_conditional with
