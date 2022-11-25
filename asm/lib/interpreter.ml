@@ -3,6 +3,7 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
+open Int64
 
 module type MONAD = sig
   type 'a t
@@ -41,7 +42,7 @@ module Interpret (M : MONADERROR) = struct
 
   (** global constans *)
   type var =
-    | Reg64 of int  (** not so large registers *)
+    | Reg64 of int64  (** not so large registers *)
     | Reg128 of string  (** large registers *)
     | Const of string  (** global consts *)
   [@@deriving show { with_path = false }]
@@ -52,15 +53,15 @@ module Interpret (M : MONADERROR) = struct
   let r_list =
     [
       (* "EFLAGS", Reg64 0 *)
-      ("CMPFLAG", Reg64 0);
-      ("RAX", Reg64 0);
-      ("RBX", Reg64 0);
-      ("RCX", Reg64 0);
-      ("RDX", Reg64 0);
-      ("RSP", Reg64 0);
-      ("RBP", Reg64 0);
-      ("RSI", Reg64 0);
-      ("RDI", Reg64 0);
+      ("CMPFLAG", Reg64 0L);
+      ("RAX", Reg64 0L);
+      ("RBX", Reg64 0L);
+      ("RCX", Reg64 0L);
+      ("RDX", Reg64 0L);
+      ("RSP", Reg64 0L);
+      ("RBP", Reg64 0L);
+      ("RSI", Reg64 0L);
+      ("RDI", Reg64 0L);
       ("XMM0", Reg128 "0");
       ("XMM1", Reg128 "0");
       ("XMM2", Reg128 "0");
@@ -82,17 +83,17 @@ module Interpret (M : MONADERROR) = struct
   let rec ev f = function
     | Add (l, r) ->
         ev f l >>= fun l ->
-        ev f r >>= fun r -> return (l + r)
+        ev f r >>= fun r -> return (add l r)
     | Sub (l, r) ->
         ev f l >>= fun l ->
-        ev f r >>= fun r -> return (l - r)
+        ev f r >>= fun r -> return (sub l r)
     | Mul (l, r) ->
         ev f l >>= fun l ->
-        ev f r >>= fun r -> return (l * r)
+        ev f r >>= fun r -> return (mul l r)
     | Div (l, r) ->
         ev f r >>= fun r ->
-        if r = 0 then error "Division by zero"
-        else ev f l >>= fun l -> return (l / r)
+        if r = 0L then error "Division by zero"
+        else ev f l >>= fun l -> return (div l r)
     | const -> f const
 
   (** return value of register named 'name' *)
@@ -110,10 +111,10 @@ module Interpret (M : MONADERROR) = struct
   let inter_one_args_cmd env arg1 =
     let helper fu = change_reg64 env fu arg1 in
     function
-    | "INC" -> helper (fun x -> x + 1)
-    | "DEC" -> helper (fun x -> x - 1)
-    | "NOT" -> helper (fun x -> ~-x)
-    | "NEG" -> helper (fun x -> -x)
+    | "INC" -> helper (fun x -> add x 1L)
+    | "DEC" -> helper (fun x -> sub x 1L)
+    | "NOT" -> helper neg
+    | "NEG" -> helper (fun x -> add (neg x) 1L)
     (* | "PUSH" | "POP" | "CALL"  *)
     | x -> error (x ^ " is not implemented yet")
 
@@ -125,7 +126,7 @@ module Interpret (M : MONADERROR) = struct
   (** interpret command and return map *)
   let inter_two_args_cmd env arg1 arg2 cmd =
     let f = function
-      | Ast.Const c -> return @@ int_of_string c
+      | Ast.Const c -> return @@ of_string c
       | Ast.Reg reg_name -> find_reg64_cont env reg_name
       | _ -> error "Vars not implemented"
     in
@@ -133,15 +134,15 @@ module Interpret (M : MONADERROR) = struct
     ev f arg2 >>= fun arg2 ->
     match cmd with
     | "MOV" -> helper (fun _ -> arg2)
-    | "ADD" -> helper (fun x -> x + arg2)
-    | "SUB" -> helper (fun x -> x - arg2)
-    | "IMUL" -> helper (fun x -> x * arg2)
+    | "ADD" -> helper (fun x -> add x arg2)
+    | "SUB" -> helper (fun x -> sub x arg2)
+    | "IMUL" -> helper (fun x -> mul x arg2)
     | "CMP" ->
         find_reg64_cont env arg1 >>= fun arg1 ->
-        change_reg64 env (fun _ -> if arg1 = arg2 then 1 else 0) "CMPFLAG"
-    | "AND" -> helper (fun x -> Int.logand x arg2)
-    | "XOR" -> helper (fun x -> Int.logxor x arg2)
-    | "OR" -> helper (fun x -> Int.logor x arg2)
+        change_reg64 env (fun _ -> if arg1 = arg2 then 1L else 0L) "CMPFLAG"
+    | "AND" -> helper (fun x -> logand x arg2)
+    | "XOR" -> helper (fun x -> logxor x arg2)
+    | "OR" -> helper (fun x -> logor x arg2)
     | "SHL" | "SHR" | _ -> error "Not implemented yet"
 
   (** general interpreter of commands not including jmp commands *)
@@ -169,7 +170,7 @@ module Interpret (M : MONADERROR) = struct
           | "JMP" -> code_sec_inter env ast code
           | "JE" ->
               find_reg64_cont env "CMPFLAG" >>= fun flag ->
-              if flag == 1 then code_sec_inter env ast code
+              if flag == 1L then code_sec_inter env ast code
               else code_sec_inter env ast tl
           | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" | _ -> error "")
       | _ -> error "Isnt jmp"
