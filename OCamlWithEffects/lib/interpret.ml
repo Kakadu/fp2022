@@ -35,6 +35,13 @@ end = struct
   open M
 
   let rec eval expression environment =
+    let rec foldr f ini = function
+      | [] -> return ini
+      | h :: t ->
+        let* head = eval h environment in
+        let* tail = foldr f ini t in
+        return @@ f head tail
+    in
     let ( = ) = Poly.( = )
     and ( <> ) x y = not @@ Poly.( = ) x y
     and ( > ) = Poly.( > )
@@ -252,24 +259,10 @@ end = struct
       | x, VList list -> return @@ VList (x :: list)
       | _ -> fail "Runtime error: mismatching types.")
     | EDataConstructor (constructor_name, contents_list) ->
-      let rec eval_arguments = function
-        | [] -> return []
-        | list ->
-          let* head = eval (hd_exn list) environment in
-          let* tail = eval_arguments (tl_exn list) in
-          return @@ (head :: tail)
-      in
-      let* contents_list = eval_arguments contents_list in
+      let* contents_list = foldr (fun x xs -> x :: xs) [] contents_list in
       return @@ VADT (constructor_name, contents_list)
     | ETuple list ->
-      let rec eval_arguments = function
-        | [] -> return @@ []
-        | list ->
-          let* head = eval (hd_exn list) environment in
-          let* tail = eval_arguments (tl_exn list) in
-          return @@ (head :: tail)
-      in
-      let* list = eval_arguments list in
+      let* list = foldr (fun x xs -> x :: xs) [] list in
       return @@ VTuple list
     | ELetIn (bindings_list, expression) ->
       let rec eval_bindings environment = function
