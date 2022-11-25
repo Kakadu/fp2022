@@ -153,10 +153,10 @@ module Interpret (M : MONADERROR) = struct
     | _ -> error "Isnt argsn"
 
   (** returns list of code_section that placed after label l *)
-  let rec find_code_after_l (Label l) = function
+  let rec assoc (Label l) = function
     | [] -> error ("No such label: " ^ l)
     | Id (Label label) :: tl when label = l -> return tl
-    | _ :: tl -> find_code_after_l (Label l) tl
+    | _ :: tl -> assoc (Label l) tl
 
   (** not implemeted data secction interpreter *)
   let data_sec_inter env = function _ -> return env
@@ -165,7 +165,7 @@ module Interpret (M : MONADERROR) = struct
   let rec code_sec_inter env ast =
     let jump env ast tl = function
       | Args1 (Mnemonic cmd, Lab label) -> (
-          find_code_after_l label ast >>= fun code ->
+          assoc label ast >>= fun code ->
           match cmd with
           | "JMP" -> code_sec_inter env ast code
           | "JE" ->
