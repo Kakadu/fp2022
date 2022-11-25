@@ -311,8 +311,6 @@ end = struct
         | VUnit, ELiteral LUnit -> eval action environment, environment, true
         | VInt value, EUnaryOperation (Minus, ELiteral (LInt x)) when value = -x ->
           eval action environment, environment, true
-        | VFun _, EIdentifier _ ->
-          fail "Runtime error: function cannot be matched.", environment, false
         | value, EIdentifier id ->
           let new_environment =
             if id <> "_"
