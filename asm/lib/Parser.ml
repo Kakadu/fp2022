@@ -336,7 +336,8 @@ let%expect_test _ =
 let%expect_test _ =
   print_string
   @@ show_ast (pr_opt parser "section .data a: dd 1 section .text ret");
-  [%expect{|
+  [%expect
+    {|
     [(Data [(Variable ("a", (DataType "DD"), ["1"]))]);
       (Code [(Command (Args0 (Mnemonic "RET")))])] |}]
 
