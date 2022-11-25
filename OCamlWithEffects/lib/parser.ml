@@ -257,7 +257,10 @@ let declaration_helper constructing_function d =
 let parse_declaration d =
   fix
   @@ fun _ ->
-  remove_spaces *> string "let" *> remove_spaces *> (many @@ string "rec")
+  remove_spaces
+  *> string "let"
+  *> remove_spaces
+  *> (many @@ (string "rec" *> take_while1 space_predicate))
   >>= fun parsed_rec ->
   match parsed_rec with
   | [] -> declaration_helper edeclaration d
