@@ -4,27 +4,27 @@ open Asm.Parser
 let fib =
   {|
    section .code
-     fibbonach:
+     fibonachch:
        mov rbx, 0x2A
        mov rax, 0x0
        mov rcx, 1
        cmp rbx, 1
-       je fibbonachEnd
+       je fibonachchEnd
        cmp rbx, 2
-       je fibbonachTwo
+       je fibonachchTwo
        sub rbx, 1
-     fibbonachStart:
+     fibonachchStart:
        sub rbx, 1
        xor rax, rcx
        xor rcx, rax
        xor rax, rcx
        add rax, rcx
        cmp rbx, 0
-       je fibbonachEnd
-       jmp fibbonachStart
-     fibbonachTwo:
+       je fibonachchEnd
+       jmp fibonachchStart
+     fibonachchTwo:
        mov rax, 1
-     fibbonachEnd:
+     fibonachchEnd:
        ret
    |}
 
