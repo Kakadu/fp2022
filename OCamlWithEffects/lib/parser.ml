@@ -259,13 +259,12 @@ let parse_declaration d =
   @@ fun _ ->
   remove_spaces
   *> string "let"
-  *> remove_spaces
-  *> (many @@ (string "rec" *> take_while1 space_predicate))
+  *> take_while1 space_predicate
+  *> option "" (string "rec" <* take_while1 space_predicate)
   >>= fun parsed_rec ->
   match parsed_rec with
-  | [] -> declaration_helper edeclaration d
-  | [ _ ] -> declaration_helper erecursivedeclaration d
-  | _ -> fail "Parsing error: too many \"rec\"."
+  | "rec" -> declaration_helper erecursivedeclaration d
+  | _ -> declaration_helper edeclaration d
 ;;
 
 let parse_let_in d =
@@ -291,15 +290,16 @@ let parse_let_in d =
       ]
   in
   parens self
-  <|> (string "let" *> remove_spaces *> (many @@ string "rec")
+  <|> (string "let"
+       *> take_while1 space_predicate
+       *> option "" (string "rec" <* take_while1 space_predicate)
       >>= fun parsed_rec ->
       lift2
         eletin
-        (let separator = remove_spaces *> string "and" *> remove_spaces in
+        (let separator = remove_spaces *> string "and" *> take_while1 space_predicate in
          match parsed_rec with
-         | [] -> sep_by1 separator @@ declaration_helper edeclaration d
-         | [ _ ] -> sep_by1 separator @@ declaration_helper erecursivedeclaration d
-         | _ -> fail "Parsing error: too many \"rec\".")
+         | "rec" -> sep_by1 separator @@ declaration_helper erecursivedeclaration d
+         | _ -> sep_by1 separator @@ declaration_helper edeclaration d)
         (remove_spaces *> string "in" *> parse_content))
 ;;
 
