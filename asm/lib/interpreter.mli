@@ -47,7 +47,13 @@ module Interpret : functor (M : MONADERROR) -> sig
   type envr = var MapVar.t
 
   val show_envr : envr -> string
+  val show_var : var -> string
   val r_list : (string * var) list
   val prep : (MapVar.key * 'a) list -> 'a MapVar.t
-  val interpret : var MapVar.t -> ast -> var MapVar.t M.t
+
+  val interpret :
+    var MapVar.t ->
+    (string * var) list ->
+    dir list ->
+    (var MapVar.t * (string * var) list) M.t
 end

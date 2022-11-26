@@ -4,26 +4,29 @@
 
 open Asm.Interpreter
 open Asm.Parser
+open Asm.Ast
 open Interpret (Result)
 
-let run_str env code =
+let run_str env st code =
   match eval code with
   | Parsed ast -> (
-      match interpret env ast with
-      | Ok env ->
+      match interpret env st ast with
+      | Ok (env, st) ->
+          print_endline @@ show_ast ast;
+          List.iter print_endline (List.map (fun (_, v) -> show_var v) st);
           print_endline @@ show_envr env;
-          env
+          (env, st)
       | Error msg ->
           print_endline msg;
-          env)
+          (env, st))
   | Failed msg ->
       print_endline msg;
-      env
+      (env, st)
 
-let rec run_repl env =
+let rec run_repl env st =
   print_string "~> ";
-  run_repl @@ run_str env (read_line ())
+  match run_str env st (read_line ()) with env, st -> run_repl env st
 
 let () =
   print_endline "Welcome to ASM REPL!";
-  run_repl @@ prep r_list
+  run_repl (prep r_list) []

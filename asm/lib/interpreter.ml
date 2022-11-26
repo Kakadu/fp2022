@@ -123,15 +123,20 @@ module Interpret (M : MONADERROR) = struct
   (** change value of flag on 'v' *)
   let change_flag env v name = return @@ MapVar.add name (Flag v) env
 
-  (** interpret command and return map *)
-  let inter_one_args_cmd env arg1 =
-    let helper fu = change_reg64 env fu arg1 in
+  (** interpret command and return map and stack *)
+  let inter_one_args_cmd env st arg1 =
+    let helper fu = change_reg64 env fu arg1 >>= fun env -> return (env, st) in
     function
     | "INC" -> helper (fun x -> add x 1L)
     | "DEC" -> helper (fun x -> sub x 1L)
     | "NOT" -> helper neg
     | "NEG" -> helper (fun x -> add (neg x) 1L)
-    (* | "PUSH" | "POP" | "CALL"  *)
+    | "PUSH" ->
+        find_reg64_cont env arg1 >>= fun v -> return (env, (arg1, Reg64 v) :: st)
+    | "POP" ->
+        return
+          (MapVar.add arg1 (List.assoc arg1 st) env, List.remove_assoc arg1 st)
+    (* | "CALL"  *)
     | x -> error (x ^ " is not implemented yet")
 
   (** interpret command and return map *)
@@ -166,10 +171,12 @@ module Interpret (M : MONADERROR) = struct
     | _ -> error "Is not a mnemonic"
 
   (** general interpreter of commands not including jmp commands *)
-  let inter_cmd env = function
-    | Args0 (Mnemonic cmd) -> inter_zero_args_cmd env cmd
-    | Args1 (Mnemonic cmd, Ast.Reg x) -> inter_one_args_cmd env x cmd
-    | Args2 (Mnemonic cmd, Ast.Reg x, y) -> inter_two_args_cmd env x y cmd
+  let inter_cmd env st = function
+    | Args0 (Mnemonic cmd) ->
+        inter_zero_args_cmd env cmd >>= fun env -> return (env, st)
+    | Args1 (Mnemonic cmd, Ast.Reg x) -> inter_one_args_cmd env st x cmd
+    | Args2 (Mnemonic cmd, Ast.Reg x, y) ->
+        inter_two_args_cmd env x y cmd >>= fun env -> return (env, st)
     | _ -> error "Isnt argsn"
 
   (** returns list of code_section that placed after label l *)
@@ -179,10 +186,10 @@ module Interpret (M : MONADERROR) = struct
     | _ :: tl -> assoc (Label l) tl
 
   (** not implemeted data secction interpreter *)
-  let data_sec_inter env = function _ -> return env
+  let data_sec_inter env st = function _ -> return (env, st)
 
   (** code section interpreter that return map, ast - general code that shouldn't change *)
-  let rec code_sec_inter env ast =
+  let rec code_sec_inter env st ast =
     let jump env ast tl = function
       | Args1 (Mnemonic cmd, Lab label) ->
           assoc label ast >>= fun code ->
@@ -196,24 +203,28 @@ module Interpret (M : MONADERROR) = struct
           | "JLE" -> find_eflags env >>= fun (z, s, o) -> return (z && o != s)
           | x -> error @@ x ^ " is not a jmp")
           >>= fun cond ->
-          if cond then code_sec_inter env ast code
-          else code_sec_inter env ast tl
+          if cond then code_sec_inter env st ast code
+          else code_sec_inter env st ast tl
       | _ -> error "Isnt jmp"
     in
     function
     | Command cmd :: tl -> (
         match cmd with
         | Args1 (Mnemonic c, _) when is_jmp c -> jump env ast tl cmd
-        | _ -> inter_cmd env cmd >>= fun env -> code_sec_inter env ast tl)
-    | Id _ :: tl -> code_sec_inter env ast tl
-    | [] -> return env
+        | _ ->
+            inter_cmd env st cmd >>= fun (env, st) ->
+            code_sec_inter env st ast tl)
+    | Id _ :: tl -> code_sec_inter env st ast tl
+    | [] -> return (env, st)
 
   (** general general interpreter *)
-  let rec interpret env = function
-    | [] -> return env
+  let rec interpret env st = function
+    | [] -> return (env, st)
     | h :: tl -> (
         match h with
         | Code code ->
-            code_sec_inter env code code >>= fun env -> interpret env tl
-        | Data data -> data_sec_inter env data >>= fun env -> interpret env tl)
+            code_sec_inter env st code code >>= fun (env, st) ->
+            interpret env st tl
+        | _ -> error "Not implemented yet")
+  (* data_sec_inter st env data >>= fun (env, st) -> interpret env st tl) *)
 end
