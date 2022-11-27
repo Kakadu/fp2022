@@ -42,6 +42,13 @@ let ignored =
   >>| fun _ -> ()
 ;;
 
+let is_ignored = function
+  | '\x20' | '\x09' | '\x0d' | '\x0a' | '\x0c' -> true
+  | _ -> false
+;;
+
+let required_ws = take_while1 is_ignored
+
 (* Plain combinators for convenient spaces removal *)
 let ( *~> ) a b = a *> ignored *> b
 let ( <~* ) a b = a <* ignored <* b
@@ -117,47 +124,61 @@ let gtq = ignored *> string ">=" *> return (fun x y -> Binop (Gtq, x, y))
   [ eq <|> neq <|> lt <|> ltq <|> gt <|> gtq; plus <|> minus; mult <|> divide <|> _mod ]
 ;; *)
 
+(* ----------------- Function arguments ---------------- *)
+
+(* Helper type for representing the function arguments *)
+type argument =
+  { label : arg_label
+  ; name : id
+  ; default_value : expr option
+  }
+
+let label_parser =
+  let label =
+    string "~"
+    <|> string "?"
+    >>= fun parsed_arg_type ->
+    identifier
+    <* option ":" (string ":")
+    >>= fun name ->
+    match parsed_arg_type with
+    | "~" -> return (ArgLabeled name)
+    | "?" -> return (ArgOptional name)
+    | _ -> fail "Error parsing the label of the argument"
+  in
+  ignored *> label
+;;
+
 (* -------------------- Expressions -------------------- *)
 
 (* Helper functions for desugaring syntactic sugar *)
+
+(* For transforming "Fun x y -> e" into Fun (x, Fun (y, e)) *)
 let rec desugar_lambda exp = function
   | [] -> exp
-  | v :: vs -> Fun (v, desugar_lambda exp vs)
+  | a :: args -> Fun (a.label, a.default_value, a.name, desugar_lambda exp args)
 ;;
 
 let desugar_let exp in_exp names include_rec =
   let desugar_to_tuple exp in_exp = function
-    | [] as vs -> failwith (String.concat "::" vs) (* FIXME: error handling *)
-    | [ v ] -> v, exp, in_exp
-    | v :: vs -> v, desugar_lambda exp vs, in_exp
+    | [] -> failwith "Error desugaring let" (* FIXME: error handling *)
+    | [ a ] -> a, exp, in_exp
+    | a :: args -> a, desugar_lambda exp args, in_exp
   in
-  let v, new_exp, new_in_exp = desugar_to_tuple exp in_exp names in
-  if include_rec then LetRec (v, new_exp, new_in_exp) else Let (v, new_exp, new_in_exp)
+  let a, new_exp, new_in_exp = desugar_to_tuple exp in_exp names in
+  if include_rec
+  then LetRec (a.name, new_exp, new_in_exp)
+  else Let (a.name, new_exp, new_in_exp)
 ;;
 
-let desugar_def vs exp include_rec =
-  let ((v, exp) as t) =
-    match vs with
-    | [] -> failwith (String.concat "::" vs) (* FIXME: error handling *)
-    | [ v ] -> v, exp
-    | x :: xs -> x, desugar_lambda exp xs
+let desugar_def args exp include_rec =
+  let a, exp =
+    match args with
+    | [] -> failwith "Error desugaring letdef" (* FIXME: error handling *)
+    | [ a ] -> a, exp
+    | _a :: _args -> _a, desugar_lambda exp _args
   in
-  if include_rec then v, LetRec (v, exp, Var v) else t
-;;
-
-let arg_parser =
-  let arg_no_label name = ArgNoLabel name in
-  let arg_labelled name = ArgLabelled name in
-  let arg_optional name = ArgOptional name in
-  let arg =
-    option "" (string "~" <|> string "?")
-    >>= fun parsed_arg_type ->
-    match parsed_arg_type with
-    | "~" -> lift arg_labelled identifier
-    | "?" -> lift arg_optional identifier
-    | _ -> lift arg_no_label identifier
-  in
-  fix @@ fun self -> choice [ parens self; ignored *> arg ]
+  if include_rec then a.name, LetRec (a.name, exp, Var a.name) else a.name, exp
 ;;
 
 (* Dispatch table for mutually recursive parsers *)
@@ -176,13 +197,46 @@ let type_d =
     let const_expr x = Const x in
     lift const_expr (choice [ boolean; integer; unit ]) <?> "const_parser"
   in
+  let argument_parser d =
+    let lab = option ArgNoLabel label_parser in
+    ignored *> lab
+    >>= fun label ->
+    (* If there is no label then parse the argument name *)
+    (* If there is a label then parse the argument name or just the label:
+        let f ~name1:name1 ~name2:name2 = name1 + name2
+        let f ~name1 ~name2 = name1 + name2
+       are equivalent *)
+    (* If there is an optional label then parse the argument label, 
+       name and the (optional) default value in parentheses:
+        let f ?(arg = expr1) -> expr2
+       where expr1 is the default value *)
+    match label with
+    | ArgNoLabel ->
+      identifier
+      <|> parens identifier
+      <|> parens (string "" <|> required_ws)
+      >>= fun name -> return { label; name; default_value = None }
+    | ArgLabeled _ ->
+      option "" identifier
+      <|> parens identifier
+      >>= fun name -> return { label; name; default_value = None }
+    | ArgOptional _ ->
+      required_ws
+      >>= (fun _ -> return { label; name = ""; default_value = None })
+      <|> parens
+            (identifier
+            >>= fun name ->
+            ignored *> string "=" *~> d.expr d
+            >>= fun e -> return { label; name; default_value = Some e })
+      <?> "argument_parser"
+  in
   let fun_parser d =
     fix
     @@ fun self ->
     choice
       [ parens self
       ; (string "fun" (* TODO: fix keywords parsing (i.e. "funi" parses successfully) *)
-         *~> many_till (ignored *> identifier) (pstring "->")
+         *~> many_till (argument_parser d) (pstring "->")
         >>= fun fun_args -> d.expr d >>= fun e -> return (desugar_lambda e fun_args))
       ]
     <?> "fun_parser"
@@ -221,16 +275,16 @@ let type_d =
       [ parens self
       ; (string "let" *~> option "" (string "rec")
         >>= fun _rec ->
-        ignored *> many1 (ignored *> identifier)
+        ignored *> many1 (argument_parser d)
         >>= fun var_list ->
-        ignored *> char '=' *~> d.expr d
+        ignored *> string "=" *~> d.expr d
         >>= fun exp ->
         ignored *> string "in" *~> d.expr d
         >>= fun in_exp ->
         match _rec with
         | "" -> return (desugar_let exp in_exp var_list false)
         | "rec" -> return (desugar_let exp in_exp var_list true)
-        | _ -> fail "Error in parsing let" (* FIXME: error handling *))
+        | _ -> fail "Error in parsing let")
       ]
     <?> "let_parser"
   in
@@ -241,14 +295,14 @@ let type_d =
       [ parens self
       ; (string "let" *~> option "" (string "rec")
         >>= fun _rec ->
-        ignored *> many1 (ignored *> identifier)
+        ignored *> many1 (argument_parser d)
         >>= fun var_list ->
-        ignored *> char '=' *~> d.expr d
+        ignored *> string "=" *~> d.expr d
         >>= fun exp ->
         match _rec with
         | "" -> return (desugar_def var_list exp false)
         | "rec" -> return (desugar_def var_list exp true)
-        | _ -> fail "Error in parsing letdef" (* FIXME: error handling *))
+        | _ -> fail "Error in parsing letdef")
       ]
     <?> "def_parser"
   in

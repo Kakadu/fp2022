@@ -13,9 +13,8 @@ open Ast
 let%test _ = parse identifier "_" = Ok "_"
 let%test _ = parse ignored "\t\n\r " = Ok ()
 (* Arguments combinator*)
-let%test _ = parse arg_parser "label" = Ok (ArgNoLabel "label")
-let%test _ = parse arg_parser "~label" = Ok (ArgLabelled "label")
-let%test _ = parse arg_parser "?label" = Ok (ArgOptional "label")
+let%test _ = parse label_parser "~label:" = Ok (ArgLabeled "label")
+let%test _ = parse label_parser "?label:" = Ok (ArgOptional "label")
 (* Var combinator *)
 let%test _ = parse expr_parser "name" = Ok (Var "name")
 let%test _ = parse expr_parser "name1" = Ok (Var "name1")
@@ -44,8 +43,12 @@ let%test _ =
 ;;
 
 (* Lambda combinator (fun x -> e) *)
-let%test _ = parse expr_parser "fun x -> e" = Ok (Fun ("x", Var "e"))
-let%test _ = parse expr_parser "fun x y -> e" = Ok (Fun ("x", Fun ("y", Var "e")))
+let%test _ = parse expr_parser "fun x -> e" = Ok (Fun (ArgNoLabel, None, "x", Var "e"))
+
+let%test _ =
+  parse expr_parser "fun x y -> e"
+  = Ok (Fun (ArgNoLabel, None, "x", Fun (ArgNoLabel, None, "y", Var "e")))
+;;
 
 (* If-then-else combinator (if b then e else e') *)
 let%test _ =
@@ -75,9 +78,18 @@ let%test _ =
   = Ok
       ( "f"
       , Fun
-          ( "x"
-          , Fun ("y", Fun ("z", Binop (Plus, Binop (Plus, Var "x", Var "y"), Var "z"))) )
-      )
+          ( ArgNoLabel
+          , None
+          , "x"
+          , Fun
+              ( ArgNoLabel
+              , None
+              , "y"
+              , Fun
+                  ( ArgNoLabel
+                  , None
+                  , "z"
+                  , Binop (Plus, Binop (Plus, Var "x", Var "y"), Var "z") ) ) ) )
 ;;
 
 (* Combination of combinators *)
@@ -90,7 +102,9 @@ let%test _ =
       , LetRec
           ( "fact"
           , Fun
-              ( "n"
+              ( ArgNoLabel
+              , None
+              , "n"
               , IfThenElse
                   ( Binop (Eq, Var "n", Const (Int 0))
                   , Const (Int 1)
@@ -109,9 +123,13 @@ let%test _ =
       , LetRec
           ( "pow"
           , Fun
-              ( "x"
+              ( ArgNoLabel
+              , None
+              , "x"
               , Fun
-                  ( "y"
+                  ( ArgNoLabel
+                  , None
+                  , "y"
                   , IfThenElse
                       ( Binop (Eq, Var "y", Const (Int 0))
                       , Const (Int 1)
@@ -128,5 +146,84 @@ let%test _ =
 (* (3) Increment *)
 let%test _ =
   parse definition_parser "let inc = fun x -> x + 1"
-  = Ok ("inc", Fun ("x", Binop (Plus, Var "x", Const (Int 1))))
+  = Ok ("inc", Fun (ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1))))
+;;
+
+(* (4) Labeled arguments *)
+let%test _ =
+  parse definition_parser "let f ~name1:x ~name2:y = x + y"
+  = Ok
+      ( "f"
+      , Fun
+          ( ArgLabeled "name1"
+          , None
+          , "x"
+          , Fun (ArgLabeled "name2", None, "y", Binop (Plus, Var "x", Var "y")) ) )
+;;
+
+(* (5) Labeled arguments syntactic sugar *)
+let%test _ =
+  parse definition_parser "let f ~x ~y = x + y"
+  = Ok
+      ( "f"
+      , Fun
+          ( ArgLabeled "x"
+          , None
+          , ""
+          , Fun (ArgLabeled "y", None, "", Binop (Plus, Var "x", Var "y")) ) )
+;;
+
+(* (6) Optional arguments *)
+let%test _ =
+  parse definition_parser "let f ~name1:x ?y:(y = 0) = x + y"
+  = Ok
+      ( "f"
+      , Fun
+          ( ArgLabeled "name1"
+          , None
+          , "x"
+          , Fun
+              (ArgOptional "y", Some (Const (Int 0)), "y", Binop (Plus, Var "x", Var "y"))
+          ) )
+;;
+
+(* (6) Optional arguments without default value *)
+let%test _ =
+  parse definition_parser "let f ~name1:x ?y = x + y"
+  = Ok
+      ( "f"
+      , Fun
+          ( ArgLabeled "name1"
+          , None
+          , "x"
+          , Fun (ArgOptional "y", None, "", Binop (Plus, Var "x", Var "y")) ) )
+;;
+
+(* (7) More optional arguments *)
+let%test _ =
+  parse definition_parser "let test ?x:(x = 0) ?y:(y = 0) () ?z:(z = 0) () = x + y + z"
+  = Ok
+      ( "test"
+      , Fun
+          ( ArgOptional "x"
+          , Some (Const (Int 0))
+          , "x"
+          , Fun
+              ( ArgOptional "y"
+              , Some (Const (Int 0))
+              , "y"
+              , Fun
+                  ( ArgNoLabel
+                  , None
+                  , ""
+                  , Fun
+                      ( ArgOptional "z"
+                      , Some (Const (Int 0))
+                      , "z"
+                      , Fun
+                          ( ArgNoLabel
+                          , None
+                          , ""
+                          , Binop (Plus, Binop (Plus, Var "x", Var "y"), Var "z") ) ) ) )
+          ) )
 ;;

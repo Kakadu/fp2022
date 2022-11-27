@@ -25,8 +25,8 @@ type bin_op =
 [@@deriving show { with_path = false }]
 
 type arg_label =
-  | ArgNoLabel of id
-  | ArgLabelled of id
+  | ArgNoLabel
+  | ArgLabeled of id
   | ArgOptional of id
 [@@deriving show { with_path = false }]
 
@@ -34,7 +34,7 @@ type expr =
   | Const of const
   | Var of id
   | Binop of bin_op * expr * expr
-  | Fun of id * expr
+  | Fun of arg_label * expr option * id * expr
   | App of expr * expr
   | IfThenElse of expr * expr * expr
   | Let of id * expr * expr

@@ -29,8 +29,8 @@ type bin_op =
 
 (** Representation of function arguments *)
 type arg_label =
-  | ArgNoLabel of id
-  | ArgLabelled of id
+  | ArgNoLabel
+  | ArgLabeled of id
   | ArgOptional of id
 
 (** Type for expressions *)
@@ -40,7 +40,7 @@ type expr =
   | Binop of bin_op * expr * expr (** Expressions involving binary operations *)
   (* For anonymous functions "fun a b -> e" is syntactic sugar, 
      which parser has to resolve to "Fun ("x", Fun ("y", e))" *)
-  | Fun of id * expr (** Anonymous functions *)
+  | Fun of arg_label * expr option * id * expr (** Anonymous functions *)
   | App of expr * expr (** Function application *)
   | IfThenElse of expr * expr * expr (** Conditional operator if-then-else *)
   (* Expressions like "let f x = x" are handled by parser,
