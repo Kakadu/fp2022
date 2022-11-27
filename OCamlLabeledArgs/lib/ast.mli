@@ -29,7 +29,7 @@ type bin_op =
 
 (** Representation of function arguments *)
 type arg_label =
-  | ArgNoLabel
+  | ArgNoLabel of id
   | ArgLabelled of id
   | ArgOptional of id
 
@@ -39,14 +39,17 @@ type expr =
   | Var of id (** Variable names expressions *)
   | Binop of bin_op * expr * expr (** Expressions involving binary operations *)
   (* For anonymous functions "fun a b -> e" is syntactic sugar, 
-     which parser has to resolve to "Fun (Var "x", Fun (Var "y"), e)" *)
+     which parser has to resolve to "Fun ("x", Fun ("y", e))" *)
   | Fun of id * expr (** Anonymous functions *)
   | App of expr * expr (** Function application *)
   | IfThenElse of expr * expr * expr (** Conditional operator if-then-else *)
   (* Expressions like "let f x = x" are handled by parser,
-     which produces Let (Var "f", Fun ("x", Var "x") *)
+     which produces definition Let (Var "f", Fun ("x", Var "x")) *)
   | Let of id * expr * expr (** Expression for "let x = e1 in e2" *)
   | LetRec of id * expr * expr (** Fixpointed Let *)
+
+(** Type for definitions *)
+type definition = id * expr [@@deriving show { with_path = false }]
 
 (* ---------- Not used for now ----------*)
 (* --------- Will be used in TC ---------*)
@@ -69,5 +72,4 @@ type typ =
   | TInt (** integer type *)
   | TUnit (** unit type *)
   | TVar of id (** representation of type variable 'id, needed for polymorphism *)
-  | TList of typ (** representation of typ list *)
   | Arrow of typ * typ (** representation of function types *)
