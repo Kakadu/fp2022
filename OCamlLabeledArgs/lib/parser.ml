@@ -32,21 +32,12 @@ let keywords =
 
 let is_keyword s = List.mem s keywords
 
-let ignored =
-  scan_state `Whitespace (fun state c ->
-    match state with
-    | `Whitespace ->
-      (match c with
-       | '\x20' | '\x09' | '\x0d' | '\x0a' | '\x0c' -> Some `Whitespace
-       | _ -> None))
-  >>| fun _ -> ()
-;;
-
 let is_ignored = function
   | '\x20' | '\x09' | '\x0d' | '\x0a' | '\x0c' -> true
   | _ -> false
 ;;
 
+let ignored = skip_while is_ignored
 let required_ws = take_while1 is_ignored
 
 (* Plain combinators for convenient spaces removal *)
@@ -127,7 +118,7 @@ let gtq = ignored *> string ">=" *> return (fun x y -> Binop (Gtq, x, y))
 (* ----------------- Function arguments ---------------- *)
 
 (* Helper type for representing the function arguments *)
-type argument =
+type fun_argument =
   { label : arg_label
   ; name : id
   ; default_value : expr option
@@ -181,6 +172,17 @@ let desugar_def args exp include_rec =
   if include_rec then a.name, LetRec (a.name, exp, Var a.name) else a.name, exp
 ;;
 
+(* Helper type for representing application arguments, that might be labeled *)
+type app_argument =
+  { label : arg_label
+  ; expr : expr
+  }
+
+let rec desugar_app exp = function
+  | [] -> exp
+  | a :: args -> App (a.label, a.expr, desugar_app exp args)
+;;
+
 (* Dispatch table for mutually recursive parsers *)
 type type_dispatch =
   { expr : type_dispatch -> expr t
@@ -197,9 +199,8 @@ let type_d =
     let const_expr x = Const x in
     lift const_expr (choice [ boolean; integer; unit ]) <?> "const_parser"
   in
-  let argument_parser d =
-    let lab = option ArgNoLabel label_parser in
-    ignored *> lab
+  let fun_argument_parser d =
+    ignored *> option ArgNoLabel label_parser
     >>= fun label ->
     (* If there is no label then parse the argument name *)
     (* If there is a label then parse the argument name or just the label:
@@ -208,8 +209,9 @@ let type_d =
        are equivalent *)
     (* If there is an optional label then parse the argument label, 
        name and the (optional) default value in parentheses:
-        let f ?(arg = expr1) -> expr2
-       where expr1 is the default value *)
+        let f ?arg:(arg = expr1) -> expr2
+       where expr1 is the default value or just 
+        let f ?arg -> expr2 *)
     match label with
     | ArgNoLabel ->
       identifier
@@ -228,7 +230,7 @@ let type_d =
             >>= fun name ->
             ignored *> string "=" *~> d.expr d
             >>= fun e -> return { label; name; default_value = Some e })
-      <?> "argument_parser"
+      <?> "fun_argument_parser"
   in
   let fun_parser d =
     fix
@@ -236,21 +238,28 @@ let type_d =
     choice
       [ parens self
       ; (string "fun" (* TODO: fix keywords parsing (i.e. "funi" parses successfully) *)
-         *~> many_till (argument_parser d) (pstring "->")
+         *~> many_till (fun_argument_parser d) (pstring "->")
         >>= fun fun_args -> d.expr d >>= fun e -> return (desugar_lambda e fun_args))
       ]
     <?> "fun_parser"
   in
-  (* Application of functions with multiple arguments is sketchy *)
   let app_parser d =
-    let app_expr name arg = App (name, arg) in
+    let app_argument_parser =
+      ignored *> option ArgNoLabel label_parser
+      >>= fun label ->
+      ignored *> d.expr d
+      >>= fun expr ->
+      match label with
+      | ArgNoLabel | ArgLabeled _ -> return { label; expr }
+      | ArgOptional _ -> fail "You can not make a funcall with optional argument syntax"
+    in
     fix
     @@ fun self ->
     choice
       [ parens self
-      ; (let name = var_parser in
-         let arg = d.expr d in
-         lift2' app_expr name (ignored *> arg))
+      ; (ignored *> var_parser
+        >>= fun n -> many1 app_argument_parser >>= fun args -> return (desugar_app n args)
+        )
       ]
     <?> "app_parser"
   in
@@ -275,7 +284,7 @@ let type_d =
       [ parens self
       ; (string "let" *~> option "" (string "rec")
         >>= fun _rec ->
-        ignored *> many1 (argument_parser d)
+        ignored *> many1 (fun_argument_parser d)
         >>= fun var_list ->
         ignored *> string "=" *~> d.expr d
         >>= fun exp ->
@@ -295,7 +304,7 @@ let type_d =
       [ parens self
       ; (string "let" *~> option "" (string "rec")
         >>= fun _rec ->
-        ignored *> many1 (argument_parser d)
+        ignored *> many1 (fun_argument_parser d)
         >>= fun var_list ->
         ignored *> string "=" *~> d.expr d
         >>= fun exp ->

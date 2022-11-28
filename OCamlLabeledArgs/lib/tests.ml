@@ -111,7 +111,8 @@ let%test _ =
                   , Binop
                       ( Mult
                       , Var "n"
-                      , App (Var "fact", Binop (Minus, Var "n", Const (Int 1))) ) ) )
+                      , App (ArgNoLabel, Binop (Minus, Var "n", Const (Int 1)), Var "fact")
+                      ) ) )
           , Var "fact" ) )
 ;;
 
@@ -137,9 +138,12 @@ let%test _ =
                           ( Mult
                           , Var "x"
                           , App
-                              ( Var "pow"
-                              , App (Var "x", Binop (Minus, Var "y", Const (Int 1))) ) )
-                      ) ) )
+                              ( ArgNoLabel
+                              , App
+                                  ( ArgNoLabel
+                                  , Binop (Minus, Var "y", Const (Int 1))
+                                  , Var "x" )
+                              , Var "pow" ) ) ) ) )
           , Var "pow" ) )
 ;;
 
@@ -187,7 +191,7 @@ let%test _ =
           ) )
 ;;
 
-(* (6) Optional arguments without default value *)
+(* (7) Optional arguments without default value *)
 let%test _ =
   parse definition_parser "let f ~name1:x ?y = x + y"
   = Ok
@@ -199,7 +203,7 @@ let%test _ =
           , Fun (ArgOptional "y", None, "", Binop (Plus, Var "x", Var "y")) ) )
 ;;
 
-(* (7) More optional arguments *)
+(* (8) More optional arguments *)
 let%test _ =
   parse definition_parser "let test ?x:(x = 0) ?y:(y = 0) () ?z:(z = 0) () = x + y + z"
   = Ok
@@ -226,4 +230,27 @@ let%test _ =
                           , ""
                           , Binop (Plus, Binop (Plus, Var "x", Var "y"), Var "z") ) ) ) )
           ) )
+;;
+
+(* (9) Labeled arguments in function call *)
+let%test _ =
+  parse expr_parser "f ~name2:8 ~name1:9"
+  = Ok
+      (App
+         ( ArgLabeled "name2"
+         , Const (Int 8)
+         , App (ArgLabeled "name1", Const (Int 9), Var "f") ))
+;;
+
+(* The definition of the above *)
+let%test _ =
+  parse definition_parser "let f ~name2 ~name1 = name1 + name2"
+  = Ok
+      ( "f"
+      , Fun
+          ( ArgLabeled "name2"
+          , None
+          , ""
+          , Fun (ArgLabeled "name1", None, "", Binop (Plus, Var "name1", Var "name2")) )
+      )
 ;;

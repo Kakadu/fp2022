@@ -35,7 +35,7 @@ type expr =
   | Var of id
   | Binop of bin_op * expr * expr
   | Fun of arg_label * expr option * id * expr
-  | App of expr * expr
+  | App of arg_label * expr * expr
   | IfThenElse of expr * expr * expr
   | Let of id * expr * expr
   | LetRec of id * expr * expr

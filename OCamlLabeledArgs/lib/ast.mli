@@ -41,7 +41,7 @@ type expr =
   (* For anonymous functions "fun a b -> e" is syntactic sugar, 
      which parser has to resolve to "Fun ("x", Fun ("y", e))" *)
   | Fun of arg_label * expr option * id * expr (** Anonymous functions *)
-  | App of expr * expr (** Function application *)
+  | App of arg_label * expr * expr (** Function application *)
   | IfThenElse of expr * expr * expr (** Conditional operator if-then-else *)
   (* Expressions like "let f x = x" are handled by parser,
      which produces definition Let (Var "f", Fun ("x", Var "x")) *)
