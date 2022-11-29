@@ -399,6 +399,14 @@ let infer =
          let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
          let trez = bool_typ in
          return (final_subst, trez))
+    | EApplication (left_operand, right_operand) ->
+      let* s_left, typ_left = helper env left_operand in
+      let* s_right, typ_right = helper env right_operand in
+      let* tv = fresh_var in
+      let* s2 = unify (TArr (typ_right, tv)) (Subst.apply s_right typ_left) in
+      let trez = Subst.apply s2 tv in
+      let* final_subst = Subst.compose_all [ s2; s_left; s_right ] in
+      return (final_subst, trez)
     | _ -> fail @@ `NoVariable "e"
       return (Subst.empty, arrow int_typ (arrow int_typ int_typ))
     | Parsetree.EVar "=" -> return (Subst.empty, arrow int_typ (arrow int_typ bool_typ))
@@ -501,5 +509,25 @@ let%expect_test _ =
     (EFun ([ "x" ], EBinaryOperation (LT, ELiteral (LString "asdf"), EIdentifier "x")));
   [%expect {|
   string -> bool
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+  @@ EApplication
+       ( EFun ([ "x" ], EBinaryOperation (LT, ELiteral (LString "asdf"), EIdentifier "x"))
+       , ELiteral (LString "asdfg") );
+  [%expect {|
+  bool
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+  @@ EApplication
+       ( EFun ([ "x" ], EBinaryOperation (LT, ELiteral (LString "asdf"), EIdentifier "x"))
+       , ELiteral LUnit );
+  [%expect {|
+  bool
   |}]
 ;;
