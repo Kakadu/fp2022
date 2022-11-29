@@ -50,6 +50,9 @@ let print_typ typ =
   Format.printf "%s\n" s
 ;;
 
+let int_typ = TGround Int
+let bool_typ = TGround Bool
+let arrow l r = TArr (l, r)
 
 type scheme = (type_variable_number, Base.Int.comparator_witness) Base.Set.t * typ
 
@@ -329,22 +332,29 @@ let instantiate : scheme -> typ R.t =
 
 let generalize : TypeEnv.t -> Type.t -> Scheme.t =
  fun env ty ->
-  let free = VarSet.diff (Type.free_vars ty) (TypeEnv.free_vars env) in
-  S (free, ty)
+  let free = Base.Set.diff (Type.free_vars ty) (TypeEnv.free_vars env) in
+  free, ty
 ;;
 
-let lookup_env e xs =
-  match List.Assoc.find_exn xs ~equal:String.equal e with
-  | (exception Caml.Not_found) | (exception Not_found_s _) -> fail (`NoVariable e)
-  | scheme ->
+let lookup_env e map =
+  match Base.Map.find map e with
+  | None -> fail (`NoVariable e)
+  | Some scheme ->
     let* ans = instantiate scheme in
     return (Subst.empty, ans)
 ;;
 
 let infer =
-  let rec (helper : TypeEnv.t -> Parsetree.expr -> (Subst.t * ty) R.t) =
+  let rec (helper : TypeEnv.t -> expression -> (Subst.t * typ) R.t) =
    fun env -> function
-    | Parsetree.EVar "*" | Parsetree.EVar "-" | Parsetree.EVar "+" ->
+    | ELiteral literal ->
+      (match literal with
+       | LInt _ -> return (Subst.empty, TGround Int)
+       | LString _ -> return (Subst.empty, TGround String)
+       | LChar _ -> return (Subst.empty, TGround Char)
+       | LBool _ -> return (Subst.empty, TGround Bool)
+       | LUnit -> return (Subst.empty, TGround Unit))
+    | EIdentifier identifier -> lookup_env identifier env
       return (Subst.empty, arrow int_typ (arrow int_typ int_typ))
     | Parsetree.EVar "=" -> return (Subst.empty, arrow int_typ (arrow int_typ bool_typ))
     | Parsetree.EVar x -> lookup_env x env
