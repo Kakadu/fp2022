@@ -364,6 +364,21 @@ let infer =
          let* s, ty = helper env2 (EFun (tl, body)) in
          let trez = arrow (Subst.apply s tv) ty in
          return (s, trez))
+    | EUnaryOperation (unary_operator, expression) ->
+      (match unary_operator with
+       | Minus ->
+         let* s, t = helper env expression in
+         let* s2 = unify t int_typ in
+         let* final_subst = Subst.compose s2 s in
+         let trez = int_typ in
+         return (final_subst, trez)
+       | Not ->
+         let* s, t = helper env expression in
+         let* s2 = unify t bool_typ in
+         let* final_subst = Subst.compose s2 s in
+         let trez = bool_typ in
+         return (final_subst, trez))
+    | _ -> fail @@ `NoVariable "e"
       return (Subst.empty, arrow int_typ (arrow int_typ int_typ))
     | Parsetree.EVar "=" -> return (Subst.empty, arrow int_typ (arrow int_typ bool_typ))
     | Parsetree.EVar x -> lookup_env x env
