@@ -355,6 +355,15 @@ let infer =
        | LBool _ -> return (Subst.empty, TGround Bool)
        | LUnit -> return (Subst.empty, TGround Unit))
     | EIdentifier identifier -> lookup_env identifier env
+    | EFun (arguments, body) ->
+      (match arguments with
+       | [] -> helper env body
+       | hd :: tl ->
+         let* tv = fresh_var in
+         let env2 = TypeEnv.extend env hd (Base.Set.empty (module Base.Int), tv) in
+         let* s, ty = helper env2 (EFun (tl, body)) in
+         let trez = arrow (Subst.apply s tv) ty in
+         return (s, trez))
       return (Subst.empty, arrow int_typ (arrow int_typ int_typ))
     | Parsetree.EVar "=" -> return (Subst.empty, arrow int_typ (arrow int_typ bool_typ))
     | Parsetree.EVar x -> lookup_env x env
