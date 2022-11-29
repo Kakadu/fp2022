@@ -18,6 +18,39 @@ type typ =
   | TList of typ
   | TGround of ground_type
 
+let rec pp_type fmt typ =
+  let open Format in
+  match typ with
+  | TGround x ->
+    (match x with
+     | Int -> fprintf fmt "int"
+     | String -> fprintf fmt "string"
+     | Char -> fprintf fmt "char"
+     | Bool -> fprintf fmt "bool"
+     | Unit -> fprintf fmt "unit")
+  | TTuple ts ->
+    fprintf
+      fmt
+      "(%a)"
+      (pp_print_list ~pp_sep:(fun _ _ -> printf " * ") (fun fmt ty -> pp_type fmt ty))
+      ts
+  | TList l -> fprintf fmt "%a list" pp_type l
+  | TArr (t1, t2) ->
+    let fmt : _ format =
+      match t1 with
+      | TArr _ -> "(%a) -> %a"
+      | _ -> "%a -> %a"
+    in
+    printf fmt pp_type t1 pp_type t2
+  | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
+;;
+
+let print_typ typ =
+  let s = Format.asprintf "%a" pp_type typ in
+  Format.printf "%s\n" s
+;;
+
+
 type scheme = (type_variable_number, Base.Int.comparator_witness) Base.Set.t * typ
 
 type error =
@@ -25,6 +58,22 @@ type error =
   | `NoVariable of identifier
   | `UnificationFailed of typ * typ
   ]
+
+let rec pp_error fmt (err : error) =
+  let open Format in
+  match err with
+  | `Occurs_check -> fprintf fmt "Occurs check failed.\n"
+  | `NoVariable identifier -> fprintf fmt "%s" identifier
+  | `UnificationFailed (t1, t2) ->
+    pp_type fmt t1;
+    fprintf fmt " ";
+    pp_type fmt t2
+;;
+
+let print_error error =
+  let s = Format.asprintf "%a" pp_error error in
+  Format.printf "%s\n" s
+;;
 
 module R : sig
   type 'a t
@@ -340,8 +389,22 @@ let infer =
       let* s2, t2 = helper TypeEnv.(extend (apply s env) (x, t2)) e2 in
       let* final_subst = Subst.compose s s2 in
       return (final_subst, t2)
+      return (final_subst, t2) *)
   in
   helper
 ;;
 
-let w e = Result.map (run (infer TypeEnv.empty e)) ~f:snd
+let w e = Result.map snd (run (infer TypeEnv.empty e))
+
+let print_result e =
+  match w e with
+  | Ok typ -> print_typ typ
+  | Error x -> print_error x
+;;
+
+let%expect_test _ =
+  print_result (EFun ([ "x" ], EUnaryOperation (Not, EIdentifier "x")));
+  [%expect {|
+    bool -> int
+  |}]
+;;
