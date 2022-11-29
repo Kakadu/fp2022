@@ -378,6 +378,27 @@ let infer =
          let* final_subst = Subst.compose s2 s in
          let trez = bool_typ in
          return (final_subst, trez))
+    | EBinaryOperation (binary_operator, left_operand, right_operand) ->
+      let* s_left, typ_left = helper env left_operand in
+      let* s_right, typ_right = helper env right_operand in
+      (match binary_operator with
+       | Add | Sub | Mul | Div ->
+         let* s2 = unify typ_left int_typ in
+         let* s3 = unify typ_right int_typ in
+         let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
+         let trez = int_typ in
+         return (final_subst, trez)
+       | Eq | NEq | GT | GTE | LT | LTE ->
+         let* s2 = unify typ_left typ_right in
+         let* final_subst = Subst.compose_all [ s2; s_left; s_right ] in
+         let trez = bool_typ in
+         return (final_subst, trez)
+       | AND | OR ->
+         let* s2 = unify typ_left bool_typ in
+         let* s3 = unify typ_right bool_typ in
+         let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
+         let trez = bool_typ in
+         return (final_subst, trez))
     | _ -> fail @@ `NoVariable "e"
       return (Subst.empty, arrow int_typ (arrow int_typ int_typ))
     | Parsetree.EVar "=" -> return (Subst.empty, arrow int_typ (arrow int_typ bool_typ))
@@ -439,6 +460,46 @@ let print_result e =
 let%expect_test _ =
   print_result (EFun ([ "x" ], EUnaryOperation (Not, EIdentifier "x")));
   [%expect {|
-    bool -> int
+    bool -> bool
+  |}]
+;;
+
+let%expect_test _ =
+  print_result (EFun ([ "_" ], EUnaryOperation (Not, ELiteral (LInt 1))));
+  [%expect
+    {|
+  Unification failed: type of the expression is int but expected type was bool
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun ([ "x" ], EBinaryOperation (Add, ELiteral (LInt 2), EIdentifier "x")));
+  [%expect {|
+  int -> int
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun ([ "x"; "y" ], EBinaryOperation (Div, EIdentifier "y", EIdentifier "x")));
+  [%expect {|
+  int -> int -> int
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun ([ "x"; "y" ], EBinaryOperation (LT, EIdentifier "y", EIdentifier "x")));
+  [%expect {|
+  'a -> 'a -> bool
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun ([ "x" ], EBinaryOperation (LT, ELiteral (LString "asdf"), EIdentifier "x")));
+  [%expect {|
+  string -> bool
   |}]
 ;;
