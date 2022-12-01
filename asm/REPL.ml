@@ -24,8 +24,8 @@ let run_str env st code =
       (env, st)
 
 let rec run_repl env st =
-  print_string "~> ";
-  match run_str env st (read_line ()) with env, st -> run_repl env st
+  match run_str env st (Stdio.In_channel.input_all Caml.stdin) with
+  | env, st -> run_repl env st
 
 let () =
   print_endline "Welcome to ASM REPL!";
