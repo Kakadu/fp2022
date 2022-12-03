@@ -48,3 +48,7 @@ type expression =
   | EIf of expression * expression * expression (** if true then 1 else 0 *)
   | EMatchWith of expression * (expression * expression) list (** match x with _ -> x *)
   | EDataConstructor of data_constructor_name * expression list (** Some 5 *)
+  | EEffectDeclaration of id * typ
+  | EEffectUsage of id * expression list
+  | EPerform of expression
+  | EContinue of id * expression
