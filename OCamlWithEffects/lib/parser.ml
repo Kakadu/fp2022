@@ -566,6 +566,41 @@ let parse_list_constructing d =
      lift2 econstruct_list (parse_content <* separator) (self <|> parse_content))
 ;;
 
+let rec parse_type =
+  let open Typing in
+  fix
+  @@ fun self ->
+  (remove_spaces
+  *>
+  let parse_int = string "int" *> return (TGround Int) in
+  let parse_bool = string "bool" *> return (TGround Bool) in
+  let parse_char = string "char" *> return (TGround Char) in
+  let parse_string = string "string" *> return (TGround String) in
+  let parse_unit = string "unit" *> return (TGround Unit) in
+  let parse_ty = choice [ parse_int; parse_bool; parse_char; parse_string; parse_unit ] in
+  let parse_list =
+    parse_ty <* remove_spaces <* string "list" >>= fun typ -> return (TList typ)
+  in
+  let parse_tuple =
+    sep_by (remove_spaces *> string "*" <* remove_spaces) parse_ty
+    >>= fun typ_list ->
+    if Base.List.length typ_list > 1
+    then return (TTuple typ_list)
+    else fail "Parsing error: tuple requires at least two type arguments."
+  in
+  let parse_arrow =
+    fix
+    @@ fun arrow_self ->
+    lift2
+      (fun left right -> TArr (left, right))
+      (choice [ parens arrow_self; parse_list; parse_tuple; parse_ty ])
+      (remove_spaces *> string "->" *> remove_spaces *> self)
+  in
+  choice [ parse_arrow; parse_list; parse_tuple; parse_ty ])
+  <|> parens self
+  <|> fail "Parsing error: failed to parse type annotation."
+;;
+
 (* ------- *)
 
 let parse_expression d =
@@ -1315,4 +1350,47 @@ let%test _ =
                  ; EIdentifier "_", ELiteral (LBool false)
                  ] ) )
        ]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> string");
+  [%expect {|
+int -> string
+  |}]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok
+    @@ parse_string ~consume:Prefix parse_type "(int -> int) -> (bool -> int) -> string");
+  [%expect {|
+  (int -> int) -> (bool -> int) -> string
+  |}]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok
+    @@ parse_string ~consume:Prefix parse_type "int list -> (int -> char) -> char list");
+  [%expect {|
+  int list -> (int -> char) -> char list
+  |}]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> bool -> int * bool");
+  [%expect {|
+  int -> bool -> int * bool
+  |}]
+;;
+
+let%expect_test _ =
+  Format.printf
+    "%s\n"
+    (Result.get_error @@ parse_string ~consume:All parse_type "unknown_type -> int");
+  [%expect {|
+  : Parsing error: failed to parse type annotation.
+  |}]
 ;;

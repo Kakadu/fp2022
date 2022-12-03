@@ -1,3 +1,5 @@
+open Typing
+
 type id = string [@@deriving eq, show { with_path = false }]
 type data_constructor_name = string [@@deriving eq, show { with_path = false }]
 
