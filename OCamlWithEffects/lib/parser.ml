@@ -54,6 +54,15 @@ let edata_constructor constructor_name expressions =
 
 let eunary_operation operation expression = EUnaryOperation (operation, expression)
 let econstruct_list head tail = EConstructList (head, tail)
+
+let eeffect_declaration effect_name effect_type =
+  EEffectDeclaration (effect_name, effect_type)
+;;
+
+(* let eeffect_usage name argument_list = EEffectUsage (name, argument_list) *)
+let eperform expression = EPerform expression
+let econtinue name expression = EContinue (name, expression)
+
 (* -------------------------------------- *)
 
 (* Smart constructors for binary operators *)
@@ -599,6 +608,27 @@ let rec parse_type =
   choice [ parse_arrow; parse_list; parse_tuple; parse_ty ])
   <|> parens self
   <|> fail "Parsing error: failed to parse type annotation."
+;;
+
+let parse_effect_declaration =
+  string "type"
+  *> remove_spaces
+  *> string "_"
+  *> remove_spaces
+  *> string "Effect.t"
+  *> remove_spaces
+  *> string "+="
+  *> remove_spaces
+  *> lift2
+       eeffect_declaration
+       parse_entity
+       (remove_spaces *> string ":" *> remove_spaces *> parse_type)
+;;
+
+let parse_perform = remove_spaces *> string "perform" *> remove_spaces *> parse_identifier
+
+let parse_continue d =
+  remove_spaces *> string "continue" *> remove_spaces *> d.parse_expression d
 ;;
 
 (* ------- *)
