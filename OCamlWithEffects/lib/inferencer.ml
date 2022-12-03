@@ -66,10 +66,11 @@ let rec pp_error fmt (err : error) =
   let open Format in
   match err with
   | `Occurs_check -> fprintf fmt "Occurs check failed.\n"
-  | `NoVariable identifier -> fprintf fmt "%s" identifier
+  | `NoVariable identifier -> fprintf fmt "No such variable: %s" identifier
   | `UnificationFailed (t1, t2) ->
+    fprintf fmt "Unification failed: type of the expression is ";
     pp_type fmt t1;
-    fprintf fmt " ";
+    fprintf fmt " but expected type was ";
     pp_type fmt t2
 ;;
 
