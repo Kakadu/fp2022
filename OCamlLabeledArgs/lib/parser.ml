@@ -180,7 +180,7 @@ type app_argument =
 
 let rec desugar_app exp = function
   | [] -> exp
-  | a :: args -> App (a.label, a.expr, desugar_app exp args)
+  | a :: args -> App (desugar_app exp args, a.label, a.expr)
 ;;
 
 (* Dispatch table for mutually recursive parsers *)

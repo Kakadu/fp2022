@@ -111,12 +111,12 @@ let%test _ =
                   , Binop
                       ( Mult
                       , Var "n"
-                      , App (ArgNoLabel, Binop (Minus, Var "n", Const (Int 1)), Var "fact")
+                      , App (Var "fact", ArgNoLabel, Binop (Minus, Var "n", Const (Int 1)))
                       ) ) )
           , Var "fact" ) )
 ;;
 
-(* (2) X into power of Y *)
+(* (2) X into the power of Y *)
 let%test _ =
   parse definition_parser "let rec pow x y = if y = 0 then 1 else x * pow x (y - 1)"
   = Ok
@@ -138,12 +138,12 @@ let%test _ =
                           ( Mult
                           , Var "x"
                           , App
-                              ( ArgNoLabel
+                              ( Var "pow"
+                              , ArgNoLabel
                               , App
-                                  ( ArgNoLabel
-                                  , Binop (Minus, Var "y", Const (Int 1))
-                                  , Var "x" )
-                              , Var "pow" ) ) ) ) )
+                                  ( Var "x"
+                                  , ArgNoLabel
+                                  , Binop (Minus, Var "y", Const (Int 1)) ) ) ) ) ) )
           , Var "pow" ) )
 ;;
 
@@ -237,12 +237,12 @@ let%test _ =
   parse expr_parser "f ~name2:8 ~name1:9"
   = Ok
       (App
-         ( ArgLabeled "name2"
-         , Const (Int 8)
-         , App (ArgLabeled "name1", Const (Int 9), Var "f") ))
+         ( App (Var "f", ArgLabeled "name1", Const (Int 9))
+         , ArgLabeled "name2"
+         , Const (Int 8) ))
 ;;
 
-(* The definition of the above *)
+(* The definition of the above example *)
 let%test _ =
   parse definition_parser "let f ~name2 ~name1 = name1 + name2"
   = Ok

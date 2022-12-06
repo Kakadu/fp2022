@@ -4,6 +4,8 @@
 
 (** The AST representation of our mini language *)
 
+(* ---------- Parse tree ----------*)
+
 (** Built-in string type for variable names *)
 type id = string
 
@@ -21,7 +23,7 @@ type bin_op =
   | Divide (** / operator *)
   | Mod (** mod (remainder) operator *)
   | Eq (** = operator *)
-  | Neq (** != operator *)
+  | Neq (** <> operator *)
   | Lt (** < operator *)
   | Ltq (** <= operator *)
   | Gt (** > operator *)
@@ -41,7 +43,7 @@ type expr =
   (* For anonymous functions "fun a b -> e" is syntactic sugar, 
      which parser has to resolve to "Fun ("x", Fun ("y", e))" *)
   | Fun of arg_label * expr option * id * expr (** Anonymous functions *)
-  | App of arg_label * expr * expr (** Function application *)
+  | App of expr * arg_label * expr (** Function application *)
   | IfThenElse of expr * expr * expr (** Conditional operator if-then-else *)
   (* Expressions like "let f x = x" are handled by parser,
      which produces definition Let (Var "f", Fun ("x", Var "x")) *)
@@ -51,8 +53,7 @@ type expr =
 (** Type for definitions *)
 type definition = id * expr [@@deriving show { with_path = false }]
 
-(* ---------- Not used for now ----------*)
-(* --------- Will be used in TC ---------*)
+(* ---------- Typed tree ----------*)
 
 (** Mapping from variable names to values *)
 module IdMap : Map.S with type key = id
@@ -63,8 +64,11 @@ type value =
   | VUnit (** internall value for () *)
   | VBool of bool (** represents boolean values *)
   | VInt of int (** represents integer values *)
-  | VClosure of value Pervasives.ref IdMap.t * id * expr
+  | VClosure of value Stdlib.ref IdMap.t * arg_label * expr option * id * expr
       (** represents high-order functions in form of (env, "x", e) *)
+
+(** Mapping from variable names to types *)
+type environment = value Stdlib.ref IdMap.t
 
 (** Representation of types *)
 type typ =

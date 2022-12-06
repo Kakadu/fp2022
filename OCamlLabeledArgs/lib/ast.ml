@@ -35,7 +35,7 @@ type expr =
   | Var of id
   | Binop of bin_op * expr * expr
   | Fun of arg_label * expr option * id * expr
-  | App of arg_label * expr * expr
+  | App of expr * arg_label * expr
   | IfThenElse of expr * expr * expr
   | Let of id * expr * expr
   | LetRec of id * expr * expr
@@ -46,7 +46,7 @@ type definition = id * expr [@@deriving show { with_path = false }]
 module IdMap = Map.Make (struct
   type t = id
 
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
 end)
 
 type value =
@@ -54,7 +54,9 @@ type value =
   | VUnit
   | VBool of bool
   | VInt of int
-  | VClosure of value Pervasives.ref IdMap.t * id * expr
+  | VClosure of value Stdlib.ref IdMap.t * arg_label * expr option * id * expr
+
+type environment = value Stdlib.ref IdMap.t
 
 type typ =
   | TBool
