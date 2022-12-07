@@ -17,6 +17,8 @@ let run_str env st code =
           print_endline @@ show_envr env;
           (env, st)
       | Error msg ->
+          print_endline @@ show_ast ast;
+          List.iter print_endline (List.map (fun (_, v) -> show_var v) st);
           print_endline msg;
           (env, st))
   | Failed msg ->
