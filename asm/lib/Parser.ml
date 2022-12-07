@@ -186,6 +186,10 @@ let%expect_test _ =
   [%expect {|(Reg64 "RAX")|}]
 
 let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr_parser "eax");
+  [%expect {|(Reg32 "EAX")|}]
+
+let%expect_test _ =
   print_string @@ show_expr (pr_opt expr_parser "rAx");
   [%expect {|(Reg64 "RAX")|}]
 
