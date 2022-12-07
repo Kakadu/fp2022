@@ -81,6 +81,35 @@ module Interpret (M : MONADERROR) = struct
   (** insert elements from list to map *)
   let prep = function [] -> MapVar.empty | l -> MapVar.of_seq (List.to_seq l)
 
+  let ch x y =
+    let cmp a b =
+      match (a, b) with
+      | Ast.Var _, _ | _, Ast.Var _ -> true
+      | a, b -> compare_expr a b == 0
+    in
+    let rec helper = function
+      | Ast.Add (l, r) | Ast.Sub (l, r) | Ast.Mul (l, r) | Ast.Div (l, r) ->
+          helper l >>= fun l ->
+          helper r >>= fun r ->
+          if cmp l r then return l else error "Different bitregs op"
+      | Ast.Reg128 _ -> return @@ Ast.Reg128 ""
+      | Ast.Reg64 _ -> return @@ Ast.Reg64 ""
+      | Ast.Reg32 _ -> return @@ Ast.Reg32 ""
+      | Ast.Reg16 _ -> return @@ Ast.Reg16 ""
+      | Ast.Reg8 _ -> return @@ Ast.Reg8 ""
+      | _ -> return @@ Ast.Var ""
+    in
+    helper x >>= fun x ->
+    helper y >>= fun y -> return @@ cmp x y
+
+  let rec t_ch = function
+    | Ast.Command (Ast.Args2 (Ast.Mnemonic cmd, a, b)) :: tl ->
+        ch a b >>= fun cond ->
+        if cond then t_ch tl
+        else error @@ cmd ^ " cant operate with two different types of regs"
+    | _ :: tl -> t_ch tl
+    | [] -> return true
+
   (** calculate a expression, f function that takes values of registers or constans from map or calcuclate integer constants from expression *)
   let rec ev f = function
     | Add (l, r) ->
@@ -148,7 +177,7 @@ module Interpret (M : MONADERROR) = struct
   let inter_two_args_cmd env arg1 arg2 cmd =
     let f = function
       | Ast.Const c -> return @@ of_string c
-      | Ast.Reg reg_name -> find_reg64_cont env reg_name
+      | Ast.Reg64 reg_name -> find_reg64_cont env reg_name
       | _ -> error "Vars not implemented"
     in
     let helper fu = change_reg64 env fu arg1 in
@@ -174,8 +203,8 @@ module Interpret (M : MONADERROR) = struct
   let inter_cmd env st = function
     | Args0 (Mnemonic cmd) ->
         inter_zero_args_cmd env cmd >>= fun env -> return (env, st)
-    | Args1 (Mnemonic cmd, Ast.Reg x) -> inter_one_args_cmd env st x cmd
-    | Args2 (Mnemonic cmd, Ast.Reg x, y) ->
+    | Args1 (Mnemonic cmd, Ast.Reg64 x) -> inter_one_args_cmd env st x cmd
+    | Args2 (Mnemonic cmd, Ast.Reg64 x, y) ->
         inter_two_args_cmd env x y cmd >>= fun env -> return (env, st)
     | _ -> error "Isnt argsn"
 
@@ -223,6 +252,7 @@ module Interpret (M : MONADERROR) = struct
     | h :: tl -> (
         match h with
         | Code code ->
+            t_ch code >>= fun _ ->
             code_sec_inter env st code code >>= fun (env, st) ->
             interpret env st tl
         | _ -> error "Not implemented yet")

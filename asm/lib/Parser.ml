@@ -83,7 +83,11 @@ let expr_parser =
   let reg =
     word >>= fun x ->
     match String.uppercase_ascii x with
-    | w when is_reg w -> return (Reg w)
+    | w when is_8bitreg w -> return (Reg8 w)
+    | w when is_16bitreg w -> return (Reg16 w)
+    | w when is_32bitreg w -> return (Reg32 w)
+    | w when is_64bitreg w -> return (Reg64 w)
+    | w when is_128bitreg w -> return (Reg128 w)
     | _ -> return (Lab (Label x))
   in
   let var = char '%' *> word >>= fun x -> return (Var x) in
@@ -179,11 +183,11 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr_parser "rax");
-  [%expect {|(Reg "RAX")|}]
+  [%expect {|(Reg64 "RAX")|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr_parser "rAx");
-  [%expect {|(Reg "RAX")|}]
+  [%expect {|(Reg64 "RAX")|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr_parser "%var");
@@ -207,7 +211,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr_parser "0 + rax");
-  [%expect {|(Add ((Const "0"), (Reg "RAX")))|}]
+  [%expect {|(Add ((Const "0"), (Reg64 "RAX")))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr_parser "0 + %var");
@@ -260,18 +264,18 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "inc rax");
-  [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))))|}]
+  [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))))|}]
 
 let%expect_test _ =
   print_string
   @@ show_code_section
        (pr_opt code_line_parser "    inc                  rax           ");
-  [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))))|}]
+  [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))))|}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "inc rax + 1");
   [%expect
-    {|(Command (Args1 ((Mnemonic "INC"), (Add ((Reg "RAX"), (Const "1"))))))|}]
+    {|(Command (Args1 ((Mnemonic "INC"), (Add ((Reg64 "RAX"), (Const "1"))))))|}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a: dd 1");
@@ -318,8 +322,8 @@ let%expect_test _ =
   [%expect
     {|
       (Code
-         [(Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))));
-           (Command (Args1 ((Mnemonic "INC"), (Reg "RAX"))))])|}]
+         [(Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))));
+           (Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))))])|}]
 
 let%expect_test _ =
   print_string @@ show_dir (pr_opt sec_parser "section .data a: dd 1");
