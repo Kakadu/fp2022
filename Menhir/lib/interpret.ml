@@ -294,6 +294,9 @@ let try_apply_start_nonterm text input =
 let gen_parser text = try_apply_start_nonterm text
 let gen_tree_parser text = parse_tree text (take_grammar text)
 
+open Lexer
+open Parser
+
 let get_parser_and_tree_parser command =
   try
     let _, text =
@@ -304,7 +307,13 @@ let get_parser_and_tree_parser command =
         (command_list command)
     in
     try Ok (gen_parser text, gen_tree_parser text) with
-    | _ -> failwith "ERROR" (* TODO exception handling *)
+    | InvalidToken s -> Error s (* Error from lexer. *)
+    | Error ->
+      (* Error from parser. *)
+      Error
+        "Parse Error: make sure you write nonterms with lowercase letters only and terms \
+         with uppercase only (don't use any other symbols)"
+    (* Only in this situation we have parse error, in other case there is InvalidToken exception. *)
   with
   | Not_found -> Error "ATTENTION: No path in your command"
   | UnknownCommand s -> Error ("Unknown command, switch or bad path: " ^ s)
