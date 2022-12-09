@@ -362,114 +362,138 @@ let lookup_env e map =
 ;;
 
 let infer =
-  let rec (helper : TypeEnv.t -> expression -> (Subst.t * typ) R.t) =
+  let rec helper : TypeEnv.t -> expression -> (Subst.t * typ) R.t =
    fun env -> function
     | ELiteral literal ->
       (match literal with
-       | LInt _ -> return (Subst.empty, TGround Int)
-       | LString _ -> return (Subst.empty, TGround String)
-       | LChar _ -> return (Subst.empty, TGround Char)
-       | LBool _ -> return (Subst.empty, TGround Bool)
-       | LUnit -> return (Subst.empty, TGround Unit))
-    | EIdentifier identifier -> lookup_env identifier env
+      | LInt _ -> return (Subst.empty, int_typ)
+      | LString _ -> return (Subst.empty, string_typ)
+      | LChar _ -> return (Subst.empty, char_typ)
+      | LBool _ -> return (Subst.empty, bool_typ)
+      | LUnit -> return (Subst.empty, unit_typ))
+    | EIdentifier identifier ->
+      (match identifier with
+      | "_" ->
+        let* fresh_var in
+        return (Subst.empty, fresh_var)
+      | _ -> lookup_env identifier env)
     | EFun (arguments, body) ->
       (match arguments with
-       | [] -> helper env body
-       | hd :: tl ->
-         let* tv = fresh_var in
-         let env2 = TypeEnv.extend env hd (Base.Set.empty (module Base.Int), tv) in
-         let* s, ty = helper env2 (EFun (tl, body)) in
-         let trez = arrow (Subst.apply s tv) ty in
-         return (s, trez))
+      | [] -> helper env body
+      | hd :: tl ->
+        let* tv = fresh_var in
+        let env2 = TypeEnv.extend env hd (Base.Set.empty (module Base.Int), tv) in
+        let* s, ty = helper env2 (EFun (tl, body)) in
+        let trez = t_arrow (Subst.apply s tv) ty in
+        return (s, trez))
     | EUnaryOperation (unary_operator, expression) ->
       (match unary_operator with
-       | Minus ->
-         let* s, t = helper env expression in
-         let* s2 = unify t int_typ in
-         let* final_subst = Subst.compose s2 s in
-         let trez = int_typ in
-         return (final_subst, trez)
-       | Not ->
-         let* s, t = helper env expression in
-         let* s2 = unify t bool_typ in
-         let* final_subst = Subst.compose s2 s in
-         let trez = bool_typ in
-         return (final_subst, trez))
+      | Minus ->
+        let* s, t = helper env expression in
+        let* s2 = unify t int_typ in
+        let* final_subst = Subst.compose s2 s in
+        return (final_subst, int_typ)
+      | Not ->
+        let* s, t = helper env expression in
+        let* s2 = unify t bool_typ in
+        let* final_subst = Subst.compose s2 s in
+        return (final_subst, bool_typ))
     | EBinaryOperation (binary_operator, left_operand, right_operand) ->
       let* s_left, typ_left = helper env left_operand in
       let* s_right, typ_right = helper env right_operand in
       (match binary_operator with
-       | Add | Sub | Mul | Div ->
-         let* s2 = unify typ_left int_typ in
-         let* s3 = unify typ_right int_typ in
-         let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
-         let trez = int_typ in
-         return (final_subst, trez)
-       | Eq | NEq | GT | GTE | LT | LTE ->
-         let* s2 = unify typ_left typ_right in
-         let* final_subst = Subst.compose_all [ s2; s_left; s_right ] in
-         let trez = bool_typ in
-         return (final_subst, trez)
-       | AND | OR ->
-         let* s2 = unify typ_left bool_typ in
-         let* s3 = unify typ_right bool_typ in
-         let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
-         let trez = bool_typ in
-         return (final_subst, trez))
+      | Add | Sub | Mul | Div ->
+        let* s2 = unify typ_left int_typ in
+        let* s3 = unify typ_right int_typ in
+        let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
+        return (final_subst, int_typ)
+      | Eq | NEq | GT | GTE | LT | LTE ->
+        let* s2 = unify typ_left typ_right in
+        let* final_subst = Subst.compose_all [ s2; s_left; s_right ] in
+        return (final_subst, bool_typ)
+      | AND | OR ->
+        let* s2 = unify typ_left bool_typ in
+        let* s3 = unify typ_right bool_typ in
+        let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
+        return (final_subst, bool_typ))
     | EApplication (left_operand, right_operand) ->
-      let* s_left, typ_left = helper env left_operand in
-      let* s_right, typ_right = helper env right_operand in
+      let* subst_left, typ_left = helper env left_operand in
+      let* subst_right, typ_right = helper (TypeEnv.apply subst_left env) right_operand in
       let* tv = fresh_var in
-      let* s2 = unify (TArr (typ_right, tv)) (Subst.apply s_right typ_left) in
-      let trez = Subst.apply s2 tv in
-      let* final_subst = Subst.compose_all [ s2; s_left; s_right ] in
+      let* subst' = unify (t_arrow typ_right tv) (Subst.apply subst_right typ_left) in
+      let trez = Subst.apply subst' tv in
+      let* final_subst = Subst.compose_all [ subst_left; subst_right; subst' ] in
       return (final_subst, trez)
+    | EIf (condition, true_branch, false_branch) ->
+      let* subst_condition, typ_condition = helper env condition in
+      let* subst_true_branch, typ_true_branch = helper env true_branch in
+      let* subst_false_branch, typ_false_branch = helper env false_branch in
+      let* subst' = unify typ_condition bool_typ in
+      let* subst'' = unify typ_true_branch typ_false_branch in
+      let* final_subst =
+        Subst.compose_all
+          [ subst_condition; subst_true_branch; subst_false_branch; subst'; subst'' ]
+      in
+      return (final_subst, Subst.apply final_subst typ_true_branch)
+    | EList list ->
+      (match list with
+      | [] ->
+        let* fresh_var in
+        return (Subst.empty, TList fresh_var)
+      | head :: tail ->
+        let* head_subst, head_typ = helper env head in
+        let rec subst_list subst = function
+          | [] -> return subst
+          | elem :: tail ->
+            let* elem_subst, elem_typ = helper env elem in
+            let* subst' = unify head_typ elem_typ in
+            let* subst'' = Subst.compose_all [ subst; elem_subst; subst' ] in
+            subst_list subst'' tail
+        in
+        let* final_subst = subst_list head_subst tail in
+        return (final_subst, t_list @@ Subst.apply final_subst head_typ))
+    | ETuple list ->
+      let rec subst_tuple subst = function
+        | [] -> return (subst, [])
+        | head :: tail ->
+          let* head_subst, head_typ = helper env head in
+          let* subst' = Subst.compose subst head_subst in
+          let* final_subst, tail_typ = subst_tuple subst' tail in
+          return (final_subst, head_typ :: tail_typ)
+      in
+      let* final_subst, typ_list = subst_tuple Subst.empty list in
+      return (final_subst, t_tuple @@ List.map (Subst.apply final_subst) typ_list)
+    | EConstructList (operand, list) ->
+      let* operand_subst, operand_typ = helper env operand in
+      let* list_subst, list_typ = helper env list in
+      let* subst' = unify list_typ (t_list operand_typ) in
+      let* final_subst = Subst.compose_all [ operand_subst; list_subst; subst' ] in
+      return (final_subst, Subst.apply subst' list_typ)
+    | EDataConstructor (constructor_name, content) ->
+      let* type_name =
+        match constructor_name with
+        | "Ok" | "Error" -> return "Result"
+        | "Some" | "None" -> return "Option"
+        | name -> fail (`NoConstructor name)
+      in
+      let* content_subst, content_typ =
+        match constructor_name, content with
+        | "None", None ->
+          let* fresh_var in
+          return (Subst.empty, fresh_var)
+        | "Some", Some data -> helper env data
+        | "Ok", Some data ->
+          let* subst', typ = helper env data in
+          let* fresh_var in
+          return (subst', t_tuple [ typ; fresh_var ])
+        | "Error", Some data ->
+          let* subst', typ = helper env data in
+          let* fresh_var in
+          return (subst', t_tuple [ fresh_var; typ ])
+        | _ -> fail (`NoConstructor constructor_name)
+      in
+      return (content_subst, t_adt type_name content_typ)
     | _ -> fail @@ `NoVariable "e"
-      return (Subst.empty, arrow int_typ (arrow int_typ int_typ))
-    | Parsetree.EVar "=" -> return (Subst.empty, arrow int_typ (arrow int_typ bool_typ))
-    | Parsetree.EVar x -> lookup_env x env
-    | ELam (PVar x, e1) ->
-      let* tv = fresh_var in
-      let env2 = TypeEnv.extend env (x, S (VarSet.empty, tv)) in
-      let* s, ty = helper env2 e1 in
-      let trez = Arrow (Subst.apply s tv, ty) in
-      return (s, trez)
-    | EApp (e1, e2) ->
-      let* s1, t1 = helper env e1 in
-      let* s2, t2 = helper (TypeEnv.apply s1 env) e2 in
-      let* tv = fresh_var in
-      let* s3 = unify (Subst.apply s2 t1) (Arrow (t2, tv)) in
-      let trez = Subst.apply s3 tv in
-      let* final_subst = Subst.compose_all [ s3; s2; s1 ] in
-      return (final_subst, trez)
-    | EConst _n -> return (Subst.empty, Prim "int")
-    | Parsetree.EIf (c, th, el) ->
-      let* s1, t1 = helper env c in
-      let* s2, t2 = helper env th in
-      let* s3, t3 = helper env el in
-      let* s4 = unify t1 (Prim "bool") in
-      let* s5 = unify t2 t3 in
-      let* final_subst = Subst.compose_all [ s5; s4; s3; s2; s1 ] in
-      R.return (final_subst, Subst.apply s5 t2)
-    | Parsetree.ELet (NonRecursive, PVar x, e1, e2) ->
-      let* s1, t1 = helper env e1 in
-      let env2 = TypeEnv.apply s1 env in
-      let t2 = generalize env2 t1 in
-      let* s2, t3 = helper (TypeEnv.extend env2 (x, t2)) e2 in
-      let* final_subst = Subst.compose s1 s2 in
-      return (Subst.(final_subst), t3)
-    | Parsetree.ELet (Recursive, PVar x, e1, e2) ->
-      let* tv = fresh_var in
-      let env = TypeEnv.extend env (x, S (VarSet.empty, tv)) in
-      let* s1, t1 = helper env e1 in
-      let* s2 = unify (Subst.apply s1 tv) t1 in
-      let* s = Subst.compose s2 s1 in
-      let env = TypeEnv.apply s env in
-      let t2 = generalize env (Subst.apply s tv) in
-      let* s2, t2 = helper TypeEnv.(extend (apply s env) (x, t2)) e2 in
-      let* final_subst = Subst.compose s s2 in
-      return (final_subst, t2)
-      return (final_subst, t2) *)
   in
   helper
 ;;
