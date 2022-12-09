@@ -48,8 +48,8 @@ let eapplication function_expression operand_expression =
   EApplication (function_expression, operand_expression)
 ;;
 
-let edata_constructor constructor_name expressions =
-  EDataConstructor (constructor_name, expressions)
+let edata_constructor constructor_name expression =
+  EDataConstructor (constructor_name, expression)
 ;;
 
 let eunary_operation operation expression = EUnaryOperation (operation, expression)
@@ -494,14 +494,15 @@ let parse_data_constructor d =
   <|> (lift2
          (fun constructor_name expression_list -> constructor_name, expression_list)
          parse_entity
-         (many parse_content)
+         (option None (parse_content >>| fun expression -> Some expression))
       >>= function
-      | constructor_name, expression_list ->
+      | "Ok", None | "Error", None | "Some", None ->
+        fail "Parsing error: constructor expected 1 argument, but got 0."
+      | "None", Some _ ->
+        fail "Parsing error: constructor expected 0 arguments, but got 1."
+      | constructor_name, expression ->
         if List.exists (( = ) constructor_name) data_constructors
-        then
-          if List.length expression_list > 1
-          then fail "Parsing error: data constructor received too many arguments."
-          else return @@ edata_constructor constructor_name expression_list
+        then return @@ edata_constructor constructor_name expression
         else fail "Parsing error: invalid constructor.")
 ;;
 
@@ -1103,8 +1104,8 @@ let%test _ =
            , []
            , EMatchWith
                ( EIdentifier "res"
-               , [ EDataConstructor ("Some", [ EIdentifier "x" ]), EIdentifier "x"
-                 ; EDataConstructor ("None", []), ELiteral (LInt 0)
+               , [ EDataConstructor ("Some", Some (EIdentifier "x")), EIdentifier "x"
+                 ; EDataConstructor ("None", None), ELiteral (LInt 0)
                  ] ) )
        ]
 ;;
@@ -1119,7 +1120,7 @@ let%test _ =
            , EMatchWith
                ( EApplication
                    (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
-               , [ EDataConstructor ("Ok", [ EIdentifier "_" ]), ELiteral (LInt 1)
+               , [ EDataConstructor ("Ok", Some (EIdentifier "_")), ELiteral (LInt 1)
                  ; EIdentifier "_", ELiteral (LInt 0)
                  ] ) )
        ]
@@ -1137,8 +1138,8 @@ let%test _ =
                , EMatchWith
                    ( EIdentifier "list"
                    , [ ( EConstructList (EIdentifier "h", EIdentifier "_")
-                       , EDataConstructor ("Some", [ EIdentifier "h" ]) )
-                     ; EIdentifier "_", EDataConstructor ("None", [])
+                       , EDataConstructor ("Some", Some (EIdentifier "h")) )
+                     ; EIdentifier "_", EDataConstructor ("None", None)
                      ] ) ) )
        ]
 ;;
@@ -1155,8 +1156,8 @@ let%test _ =
                , EMatchWith
                    ( EIdentifier "list"
                    , [ ( EConstructList (EIdentifier "_", EIdentifier "t")
-                       , EDataConstructor ("Some", [ EIdentifier "t" ]) )
-                     ; EIdentifier "_", EDataConstructor ("None", [])
+                       , EDataConstructor ("Some", Some (EIdentifier "t")) )
+                     ; EIdentifier "_", EDataConstructor ("None", None)
                      ] ) ) )
        ]
 ;;
@@ -1269,9 +1270,9 @@ let%test _ =
            , EMatchWith
                ( ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
                , [ ( ETuple
-                       [ EDataConstructor ("Error", [ EIdentifier "x" ])
-                       ; EDataConstructor ("Error", [ EIdentifier "y" ])
-                       ; EDataConstructor ("Error", [ EIdentifier "z" ])
+                       [ EDataConstructor ("Error", Some (EIdentifier "x"))
+                       ; EDataConstructor ("Error", Some (EIdentifier "y"))
+                       ; EDataConstructor ("Error", Some (EIdentifier "z"))
                        ]
                    , ELiteral (LInt 0) )
                  ; ( ETuple [ EIdentifier "_"; EIdentifier "_"; EIdentifier "_" ]
