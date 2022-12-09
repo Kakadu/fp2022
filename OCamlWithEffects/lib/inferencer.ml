@@ -1,8 +1,8 @@
 open Ast
 
 type type_variable_number = int
-type identifier = string
 type adt_type = string
+type identifier = string
 
 type ground_type =
   | Int
@@ -75,6 +75,7 @@ type error =
   | `NoVariable of identifier
   | `NoConstructor of identifier
   | `UnificationFailed of typ * typ
+  | `NotReachable
   ]
 
 let pp_error fmt (err : error) =
@@ -88,6 +89,7 @@ let pp_error fmt (err : error) =
     pp_type fmt t1;
     fprintf fmt " but expected type was ";
     pp_type fmt t2
+  | `NotReachable -> fprintf fmt "Not reachable."
 ;;
 
 let print_error error =
@@ -490,9 +492,28 @@ let infer =
           let* subst', typ = helper env data in
           let* fresh_var in
           return (subst', t_tuple [ fresh_var; typ ])
-        | _ -> fail (`NoConstructor constructor_name)
+        | _ -> fail `NotReachable
       in
       return (content_subst, t_adt type_name content_typ)
+    | ELetIn (bindings_list, expression) ->
+      let rec process_list subst env = function
+        | [] -> return (subst, env)
+        | elem :: tail ->
+          let* elem_subst, elem_typ = helper env elem in
+          let env2 = TypeEnv.apply elem_subst env in
+          let generalized_type = generalize env2 elem_typ in
+          let* identifier =
+            match elem with
+            | EDeclaration (id, _, _) | ERecursiveDeclaration (id, _, _) -> return id
+            | _ -> fail `NotReachable
+          in
+          let* subst'' = Subst.compose subst elem_subst in
+          process_list subst'' (TypeEnv.extend env2 identifier generalized_type) tail
+      in
+      let* subst', env' = process_list Subst.empty env bindings_list in
+      let* subst_expr, typ_expr = helper env' expression in
+      let* final_subst = Subst.compose subst' subst_expr in
+      return (final_subst, typ_expr)
     | _ -> fail @@ `NoVariable "e"
   in
   helper
