@@ -2,6 +2,7 @@ open Ast
 
 type type_variable_number = int
 type identifier = string
+type adt_type = string
 
 type ground_type =
   | Int
@@ -17,22 +18,25 @@ type typ =
   | TTuple of typ list
   | TList of typ
   | TGround of ground_type
+  | TADT of adt_type * typ
 
 let rec pp_type fmt typ =
   let open Format in
   match typ with
   | TGround x ->
     (match x with
-     | Int -> fprintf fmt "int"
-     | String -> fprintf fmt "string"
-     | Char -> fprintf fmt "char"
-     | Bool -> fprintf fmt "bool"
-     | Unit -> fprintf fmt "unit")
+    | Int -> fprintf fmt "int"
+    | String -> fprintf fmt "string"
+    | Char -> fprintf fmt "char"
+    | Bool -> fprintf fmt "bool"
+    | Unit -> fprintf fmt "unit")
   | TTuple ts ->
     fprintf
       fmt
-      "(%a)"
-      (pp_print_list ~pp_sep:(fun _ _ -> printf " * ") (fun fmt ty -> pp_type fmt ty))
+      "%a"
+      (pp_print_list
+         ~pp_sep:(fun _ _ -> fprintf fmt " * ")
+         (fun fmt ty -> pp_type fmt ty))
       ts
   | TList l -> fprintf fmt "%a list" pp_type l
   | TArr (t1, t2) ->
@@ -43,6 +47,9 @@ let rec pp_type fmt typ =
     in
     printf fmt pp_type t1 pp_type t2
   | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
+  | TADT (name, typ) ->
+    pp_type fmt typ;
+    fprintf fmt "%s" name
 ;;
 
 let print_typ typ =
@@ -52,21 +59,30 @@ let print_typ typ =
 
 let int_typ = TGround Int
 let bool_typ = TGround Bool
-let arrow l r = TArr (l, r)
+let string_typ = TGround String
+let unit_typ = TGround Unit
+let char_typ = TGround Char
+let t_arrow l r = TArr (l, r)
+let t_tuple typ_list = TTuple typ_list
+let t_list typ = TList typ
+let t_var n = TVar n
+let t_adt name typ = TADT (name, typ)
 
 type scheme = (type_variable_number, Base.Int.comparator_witness) Base.Set.t * typ
 
 type error =
   [ `Occurs_check
   | `NoVariable of identifier
+  | `NoConstructor of identifier
   | `UnificationFailed of typ * typ
   ]
 
-let rec pp_error fmt (err : error) =
+let pp_error fmt (err : error) =
   let open Format in
   match err with
   | `Occurs_check -> fprintf fmt "Occurs check failed.\n"
   | `NoVariable identifier -> fprintf fmt "No such variable: %s" identifier
+  | `NoConstructor identifier -> fprintf fmt "No such constructor: %s" identifier
   | `UnificationFailed (t1, t2) ->
     fprintf fmt "Unification failed: type of the expression is ";
     pp_type fmt t1;
@@ -154,7 +170,7 @@ module Type = struct
     | TVar b -> b = v
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> Base.List.exists typ_list ~f:(occurs_in v)
-    | TList typ -> occurs_in v typ
+    | TList typ | TADT (_, typ) -> occurs_in v typ
     | TGround _ -> false
   ;;
 
@@ -168,7 +184,7 @@ module Type = struct
           typ_list
           ~f:(fun t s -> Base.Set.union s (helper empty_set t))
           ~init:acc
-      | TList typ -> helper acc typ
+      | TList typ | TADT (_, typ) -> helper acc typ
       | TGround _ -> acc
     in
     helper empty_set
@@ -216,11 +232,11 @@ end = struct
     let rec helper = function
       | TVar b ->
         (match find_exn b s with
-        | exception Base.Not_found_s _ -> TVar b
+        | exception Base.Not_found_s _ -> t_var b
         | x -> x)
-      | TArr (l, r) -> TArr (helper l, helper r)
-      | TTuple typ_list -> TTuple (Base.List.map typ_list ~f:helper)
-      | TList typ -> TList (helper typ)
+      | TArr (l, r) -> t_arrow (helper l) (helper r)
+      | TTuple typ_list -> t_tuple @@ Base.List.map typ_list ~f:helper
+      | TList typ -> t_list @@ helper typ
       | ground -> ground
     in
     helper
@@ -318,7 +334,7 @@ open R
 open R.Syntax
 
 let unify = Subst.unify
-let fresh_var = fresh >>| fun n -> TVar n
+let fresh_var = fresh >>| fun n -> t_var n
 
 let instantiate : scheme -> typ R.t =
  fun (set, t) ->
