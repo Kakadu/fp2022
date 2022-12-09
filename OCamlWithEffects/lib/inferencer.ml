@@ -507,6 +507,97 @@ let print_result e =
 ;;
 
 let%expect_test _ =
+  print_result
+    (EFun
+       ( [ "x" ]
+       , EConstructList
+           ( EFun
+               ( [ "x"; "y"; "z" ]
+               , EIf
+                   ( EBinaryOperation
+                       ( Eq
+                       , EBinaryOperation
+                           ( Add
+                           , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "x")
+                           , EBinaryOperation (Mul, EIdentifier "y", EIdentifier "y") )
+                       , EBinaryOperation (Mul, EIdentifier "z", EIdentifier "z") )
+                   , ELiteral (LBool true)
+                   , ELiteral (LBool false) ) )
+           , EIdentifier "x" ) ));
+  [%expect
+    {|
+    (int -> int -> int -> bool) list -> (int -> int -> int -> bool) list -> 
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun
+       ( [ "x" ]
+       , ETuple
+           [ ELiteral (LString "amount")
+           ; EIdentifier "x"
+           ; EBinaryOperation (Mul, EIdentifier "x", ELiteral (LInt 3))
+           ] ));
+  [%expect {|
+    int -> string * int * int
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun
+       ( [ "x" ]
+       , EList
+           [ EIdentifier "x"
+           ; ELiteral (LInt 5)
+           ; EBinaryOperation (Mul, EIdentifier "x", ELiteral (LInt 3))
+           ] ));
+  [%expect {|
+    int -> int list
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun
+       ( [ "x" ]
+       , EList
+           [ EBinaryOperation (Add, EIdentifier "x", EIdentifier "x")
+           ; EBinaryOperation (Mul, EIdentifier "x", ELiteral (LInt 3))
+           ] ));
+  [%expect {|
+    int -> int list 
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (EFun ([ "x"; "y"; "z" ], EList [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]));
+  [%expect {|
+    'b -> 'b -> 'b -> 'b list
+  |}]
+;;
+
+let%expect_test _ =
+  print_result (EFun ([ "x" ], EIf (EIdentifier "x", EIdentifier "x", EIdentifier "x")));
+  [%expect {|
+    bool -> bool
+  |}]
+;;
+
+let%expect_test _ =
+  print_result
+    (ETuple
+       [ EBinaryOperation (Add, ELiteral (LInt 3), ELiteral (LInt 2))
+       ; EUnaryOperation (Minus, ELiteral (LInt 7))
+       ]);
+  [%expect {|
+    int * int
+  |}]
+;;
+
+let%expect_test _ =
   print_result (EFun ([ "x" ], EUnaryOperation (Not, EIdentifier "x")));
   [%expect {|
     bool -> bool
@@ -568,7 +659,8 @@ let%expect_test _ =
   @@ EApplication
        ( EFun ([ "x" ], EBinaryOperation (LT, ELiteral (LString "asdf"), EIdentifier "x"))
        , ELiteral LUnit );
-  [%expect {|
-  bool
+  [%expect
+    {|
+  Unification failed: type of the expression is unit but expected type was string
   |}]
 ;;
