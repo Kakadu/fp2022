@@ -76,4 +76,4 @@ type typ =
   | TInt (** integer type *)
   | TUnit (** unit type *)
   | TVar of id (** representation of type variable 'id, needed for polymorphism *)
-  | Arrow of typ * typ (** representation of function types *)
+  | Arrow of arg_label * typ * typ (** representation of function types *)

@@ -1,7 +1,7 @@
 (library
  (name ocamllabeledargs_lib)
  (public_name OCamlLabeledArgs.Lib)
- (modules Ast Interpret Parser Tests utils)
+ (modules Ast Errors Interpret Parser Tests utils)
  (libraries base angstrom)
  (preprocess
   (pps ppx_expect ppx_deriving.show))

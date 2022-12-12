@@ -46,7 +46,7 @@ type definition = id * expr [@@deriving show { with_path = false }]
 module IdMap = Map.Make (struct
   type t = id
 
-  let compare = Stdlib.compare
+  let compare = compare
 end)
 
 type value =
@@ -54,13 +54,13 @@ type value =
   | VUnit
   | VBool of bool
   | VInt of int
-  | VClosure of value Stdlib.ref IdMap.t * arg_label * expr option * id * expr
+  | VClosure of value ref IdMap.t * arg_label * expr option * id * expr
 
-type environment = value Stdlib.ref IdMap.t
+type environment = value ref IdMap.t
 
 type typ =
   | TBool
   | TInt
   | TUnit
   | TVar of id
-  | Arrow of typ * typ
+  | Arrow of arg_label * typ * typ
