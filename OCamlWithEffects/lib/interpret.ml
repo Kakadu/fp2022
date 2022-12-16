@@ -293,7 +293,7 @@ end = struct
         | value, EIdentifier id ->
           let new_environment =
             if id <> "_"
-            then Map.update environment id ~f:(fun _ -> value)
+            then Base.Map.update environment id ~f:(fun _ -> value)
             else environment
           in
           eval action new_environment, new_environment, true
@@ -337,16 +337,16 @@ end = struct
   ;;
 
   let run (program : expression list) =
-    let environment = Map.empty (module Base.String) in
+    let environment = Base.Map.empty (module Base.String) in
     let rec helper environment = function
       | [ h ] -> eval h environment
       | h :: t ->
         let* result = eval h environment in
         (match h with
         | EDeclaration (name, _, _) ->
-          helper (Map.update environment name ~f:(fun _ -> result)) t
+          helper (Base.Map.update environment name ~f:(fun _ -> result)) t
         | ERecursiveDeclaration (name, _, _) ->
-          helper (Map.update environment name ~f:(fun _ -> result)) t
+          helper (Base.Map.update environment name ~f:(fun _ -> result)) t
         | _ -> fail "Runtime error: declaration was expected.")
       | _ -> return VUnit
     in
@@ -407,7 +407,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 60)
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 60)
 
 let test_program =
   [ EDeclaration
@@ -421,7 +421,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 2)
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 2)
 
 let test_program =
   [ EDeclaration
@@ -434,8 +434,8 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 15)
-let%test _ = Poly.( = ) (InterpretResult.run []) @@ Result.Ok VUnit
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 15)
+let%test _ = InterpretResult.run [] = Result.Ok VUnit
 
 let test_program =
   [ EDeclaration
@@ -444,8 +444,7 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VList [ VInt 2; VInt 3; VInt (-5) ])
+  InterpretResult.run test_program = Result.Ok (VList [ VInt 2; VInt 3; VInt (-5) ])
 ;;
 
 let test_program =
@@ -460,8 +459,8 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VList [ VList [ VChar 'c'; VChar 'f' ]; VList [ VChar 'h'; VChar 'g' ] ])
+  InterpretResult.run test_program
+  = Result.Ok (VList [ VList [ VChar 'c'; VChar 'f' ]; VList [ VChar 'h'; VChar 'g' ] ])
 ;;
 
 let test_program =
@@ -474,8 +473,7 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VList [ VInt 2; VInt 2; VInt (-10) ])
+  InterpretResult.run test_program = Result.Ok (VList [ VInt 2; VInt 2; VInt (-10) ])
 ;;
 
 let test_program =
@@ -492,13 +490,13 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok
-       (VList
-          [ VADT ("Ok", Some (VBool true))
-          ; VADT ("Ok", Some (VBool false))
-          ; VADT ("Error", Some (VString "failed"))
-          ])
+  InterpretResult.run test_program
+  = Result.Ok
+      (VList
+         [ VADT ("Ok", Some (VBool true))
+         ; VADT ("Ok", Some (VBool false))
+         ; VADT ("Error", Some (VString "failed"))
+         ])
 ;;
 
 let test_program =
@@ -512,10 +510,7 @@ let test_program =
   ]
 ;;
 
-let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VTuple [ VChar 'f'; VInt 0 ])
-;;
+let%test _ = InterpretResult.run test_program = Result.Ok (VTuple [ VChar 'f'; VInt 0 ])
 
 let test_program =
   [ EDeclaration
@@ -527,7 +522,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt (-1))
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt (-1))
 
 let test_program =
   [ EDeclaration
@@ -556,7 +551,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 55)
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 55)
 
 let test_program =
   [ EDeclaration
@@ -568,7 +563,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VBool true)
+let%test _ = InterpretResult.run test_program = Result.Ok (VBool true)
 
 let test_program =
   [ EDeclaration
@@ -582,9 +577,7 @@ let test_program =
   ]
 ;;
 
-let%test _ =
-  Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VList [ VInt 1; VInt 2 ])
-;;
+let%test _ = InterpretResult.run test_program = Result.Ok (VList [ VInt 1; VInt 2 ])
 
 let test_program =
   [ EDeclaration
@@ -606,7 +599,4 @@ let test_program =
   ]
 ;;
 
-let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VADT ("Some", Some (VInt 2)))
-;;
+let%test _ = InterpretResult.run test_program = Result.Ok (VADT ("Some", Some (VInt 2)))
