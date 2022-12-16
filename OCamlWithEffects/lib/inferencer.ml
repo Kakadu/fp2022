@@ -35,14 +35,14 @@ let rec pp_type fmt typ =
       fmt
       "%a"
       (pp_print_list
-         ~pp_sep:(fun _ _ -> printf " * ")
+         ~pp_sep:(fun _ _ -> fprintf fmt " * ")
          (fun _ ty ->
            let format : _ format =
              match ty with
              | TArr _ -> "(%a)"
              | _ -> "%a"
            in
-           printf format pp_type ty))
+           fprintf fmt format pp_type ty))
       ts
   | TList l ->
     let fmt : _ format =

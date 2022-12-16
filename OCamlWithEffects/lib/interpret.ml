@@ -66,16 +66,15 @@ end = struct
             | Some (VBool x), Some (VBool y) -> return @@ (x = y)
             | Some (VChar x), Some (VChar y) -> return @@ (x = y)
             | Some (VList x), Some (VList y) -> return @@ (x = y)
-            | Some (VADT (x_name, x_data)), Some (VADT (y_name, y_data)) ->
-              vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+            | Some (VADT (_, _)), Some (VADT (_, _)) ->
+              vadt_predicate left_operand right_operand
             | _ -> fail "Runtime error: mismatching types.")
         | _ -> fail "Runtime error: this predicate should be only used for VADT types."
       in
       (match operation, left_operand, right_operand with
       (* Operations on ADT *)
-      | Eq, VADT (x_name, x_data), VADT (y_name, y_data) ->
-        vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
-        >>= fun x -> return @@ VBool x
+      | Eq, VADT (_, _), VADT (_, _) ->
+        vadt_predicate left_operand right_operand >>= fun result -> return @@ VBool result
       | NEq, VADT (x_name, x_data), VADT (y_name, y_data) ->
         vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
         >>= fun x -> return @@ VBool (not x)
@@ -88,54 +87,28 @@ end = struct
         if y = 0 then fail "Runtime error: division by zero" else return @@ VInt (x / y)
       | (Add | Sub | Mul | Div), _, _ ->
         fail "Runtime error: operands were expected of type int."
-      (* Equality *)
-      | Eq, VInt x, VInt y -> return @@ VBool (x = y)
-      | Eq, VString x, VString y -> return @@ VBool (x = y)
-      | Eq, VBool x, VBool y -> return @@ VBool (x = y)
-      | Eq, VChar x, VChar y -> return @@ VBool (x = y)
-      | Eq, VList x, VList y -> return @@ VBool (x = y)
-      | Eq, _, _ -> fail "Runtime error: unsupported operation"
-      (* TODO VADT equality comparison *)
-      (* Inequality *)
-      | NEq, VInt x, VInt y -> return @@ VBool (x <> y)
-      | NEq, VString x, VString y -> return @@ VBool (x <> y)
-      | NEq, VBool x, VBool y -> return @@ VBool (x <> y)
-      | NEq, VChar x, VChar y -> return @@ VBool (x <> y)
-      | NEq, VList x, VList y -> return @@ VBool (x <> y)
-      | NEq, _, _ -> fail "Runtime error: unsupported operation"
-      (* TODO VADT inequality comparison *)
-      (* Greater than ( > ) *)
-      | GT, VInt x, VInt y -> return @@ VBool (x > y)
-      | GT, VBool x, VBool y -> return @@ VBool (x > y)
-      | GT, VString x, VString y -> return @@ VBool (x > y)
-      | GT, VChar x, VChar y -> return @@ VBool (x > y)
-      | GT, VList x, VList y -> return @@ VBool (x > y)
-      | GT, _, _ -> fail "Runtime error: unsupported operation"
-      (* Less then ( < ) *)
-      | LT, VInt x, VInt y -> return @@ VBool (x < y)
-      | LT, VBool x, VBool y -> return @@ VBool (x < y)
-      | LT, VString x, VString y -> return @@ VBool (x < y)
-      | LT, VChar x, VChar y -> return @@ VBool (x < y)
-      | LT, VList x, VList y -> return @@ VBool (x < y)
-      | LT, _, _ -> fail "Runtime error: unsupported operation"
-      (* Greater than or equal ( >= ) *)
-      | GTE, VInt x, VInt y -> return @@ VBool (x >= y)
-      | GTE, VBool x, VBool y -> return @@ VBool (x >= y)
-      | GTE, VString x, VString y -> return @@ VBool (x >= y)
-      | GTE, VChar x, VChar y -> return @@ VBool (x >= y)
-      | GTE, VList x, VList y -> return @@ VBool (x >= y)
-      | GTE, _, _ -> fail "Runtime error: unsupported operation"
-      (* Less then or equal ( <= ) *)
-      | LTE, VInt x, VInt y -> return @@ VBool (x <= y)
-      | LTE, VBool x, VBool y -> return @@ VBool (x <= y)
-      | LTE, VString x, VString y -> return @@ VBool (x <= y)
-      | LTE, VChar x, VChar y -> return @@ VBool (x <= y)
-      | LTE, VList x, VList y -> return @@ VBool (x <= y)
-      | LTE, _, _ -> fail "Runtime error: unsupported operation"
       (* And ( && ) *)
       | AND, VBool x, VBool y -> return @@ VBool (x && y)
       | OR, VBool x, VBool y -> return @@ VBool (x || y)
-      | (AND | OR), _, _ -> fail "Runtime error: bool type was expected.")
+      | (AND | OR), _, _ -> fail "Runtime error: bool type was expected."
+      (* Equality *)
+      | op, arg1, arg2 ->
+        let comparison_operation : 'a. 'a -> 'a -> bool =
+          match op with
+          | Eq -> Base.Poly.( = )
+          | NEq -> Base.Poly.( <> )
+          | GT -> Base.Poly.( > )
+          | LT -> Base.Poly.( < )
+          | GTE -> Base.Poly.( >= )
+          | _ -> Base.Poly.( <= )
+        in
+        (match arg1, arg2 with
+        | VInt x, VInt y -> return @@ VBool (comparison_operation x y)
+        | VString x, VString y -> return @@ VBool (comparison_operation x y)
+        | VBool x, VBool y -> return @@ VBool (comparison_operation x y)
+        | VChar x, VChar y -> return @@ VBool (comparison_operation x y)
+        | VList x, VList y -> return @@ VBool (comparison_operation x y)
+        | _, _ -> fail "Runtime error: unsupported operation"))
     | EIdentifier name ->
       if name = "_"
       then fail "Runtime error: used wildcard in right-hand expression."
@@ -214,19 +187,7 @@ end = struct
             let* head = eval head environment in
             let* tail = eval_list tail in
             (match tail with
-            | VList tail ->
-              let next_element = Base.List.hd_exn tail in
-              (match head, next_element with
-              | VInt _, VInt _
-              | VString _, VString _
-              | VBool _, VBool _
-              | VChar _, VChar _
-              | VUnit, VUnit
-              | VList _, VList _
-              | VTuple _, VTuple _
-              | VFun (_, _, _, _), VFun (_, _, _, _)
-              | VADT (_, _), VADT (_, _) -> return @@ VList (head :: tail)
-              | _ -> fail "Runtime error: mismatching types in list.")
+            | VList tail -> return @@ VList (head :: tail)
             | _ -> fail "Runtime error: could not interpret list.")
         in
         eval_list list)
