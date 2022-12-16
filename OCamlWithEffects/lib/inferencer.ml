@@ -35,10 +35,22 @@ let rec pp_type fmt typ =
       fmt
       "%a"
       (pp_print_list
-         ~pp_sep:(fun _ _ -> fprintf fmt " * ")
-         (fun fmt ty -> pp_type fmt ty))
+         ~pp_sep:(fun _ _ -> printf " * ")
+         (fun _ ty ->
+           let format : _ format =
+             match ty with
+             | TArr _ -> "(%a)"
+             | _ -> "%a"
+           in
+           printf format pp_type ty))
       ts
-  | TList l -> fprintf fmt "%a list" pp_type l
+  | TList l ->
+    let fmt : _ format =
+      match l with
+      | TArr _ -> "(%a) list"
+      | _ -> "%a list"
+    in
+    printf fmt pp_type l
   | TArr (t1, t2) ->
     let fmt : _ format =
       match t1 with
@@ -49,7 +61,7 @@ let rec pp_type fmt typ =
   | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
   | TADT (name, typ) ->
     pp_type fmt typ;
-    fprintf fmt "%s" name
+    fprintf fmt " %s" name
 ;;
 
 let print_typ typ =
@@ -266,7 +278,8 @@ end = struct
             compose head_sub subst)
           ~init:(return empty))
     | TList typ1, TList typ2 -> unify typ1 typ2
-    | _ -> fail (`UnificationFailed (l, r))
+    | TADT (id1, typ1), TADT (id2, typ2) when id1 = id2 -> unify typ1 typ2
+    | _ -> fail @@ `UnificationFailed (l, r)
 
   and extend k v s =
     match find k s with
@@ -448,7 +461,7 @@ let infer =
           | [] -> return subst
           | elem :: tail ->
             let* elem_subst, elem_typ = helper env elem in
-            let* subst' = unify head_typ elem_typ in
+            let* subst' = unify elem_typ head_typ in
             let* subst'' = Subst.compose_all [ subst; elem_subst; subst' ] in
             subst_list subst'' tail
         in
@@ -468,7 +481,7 @@ let infer =
     | EConstructList (operand, list) ->
       let* operand_subst, operand_typ = helper env operand in
       let* list_subst, list_typ = helper env list in
-      let* subst' = unify list_typ (t_list operand_typ) in
+      let* subst' = unify (t_list operand_typ) list_typ in
       let* final_subst = Subst.compose_all [ operand_subst; list_subst; subst' ] in
       return (final_subst, Subst.apply subst' list_typ)
     | EDataConstructor (constructor_name, content) ->
@@ -499,14 +512,18 @@ let infer =
       let rec process_list subst env = function
         | [] -> return (subst, env)
         | elem :: tail ->
-          let* elem_subst, elem_typ = helper env elem in
-          let env2 = TypeEnv.apply elem_subst env in
-          let generalized_type = generalize env2 elem_typ in
           let* identifier =
             match elem with
             | EDeclaration (id, _, _) | ERecursiveDeclaration (id, _, _) -> return id
             | _ -> fail `NotReachable
           in
+          let* fresh_var in
+          let env' =
+            TypeEnv.extend env identifier (Base.Set.empty (module Base.Int), fresh_var)
+          in
+          let* elem_subst, elem_typ = helper env' elem in
+          let env2 = TypeEnv.apply elem_subst env' in
+          let generalized_type = generalize env2 elem_typ in
           let* subst'' = Subst.compose subst elem_subst in
           process_list subst'' (TypeEnv.extend env2 identifier generalized_type) tail
       in
@@ -522,10 +539,7 @@ let infer =
         Base.List.fold_right identifiers ~init:(return env) ~f:(fun id acc ->
           let* fresh_var in
           let* acc in
-          let smth =
-            TypeEnv.extend acc id (Base.Set.empty (module Base.Int), fresh_var)
-          in
-          return smth)
+          return @@ TypeEnv.extend acc id (Base.Set.empty (module Base.Int), fresh_var))
       in
       let* env' = bootstrap_env env (fst head) in
       let* _, head_expression_type = helper env' (snd head) in
@@ -535,6 +549,10 @@ let infer =
           let* case_subst, case_type = helper env'' (fst case) in
           let* subst'' = unify case_type matched_type in
           let* computation_subst, computation_type = helper env'' (snd case) in
+          (* print_typ (Subst.find_exn 3 subst);
+          print_typ (Subst.find_exn 1 subst); *)
+          (* Format.printf " ";
+          print_typ head_expression_type; *)
           let* subst''' = unify computation_type head_expression_type in
           let* subst in
           Subst.compose_all [ subst'''; subst''; subst; case_subst; computation_subst ])
@@ -628,7 +646,7 @@ let%expect_test _ =
            , EIdentifier "x" ) ));
   [%expect
     {|
-    (int -> int -> int -> bool) list -> (int -> int -> int -> bool) list -> 
+    (int -> int -> int -> bool) list -> (int -> int -> int -> bool) list
   |}]
 ;;
 
@@ -677,7 +695,7 @@ let%expect_test _ =
   print_result
     (EFun ([ "x"; "y"; "z" ], EList [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]));
   [%expect {|
-    'b -> 'b -> 'b -> 'b list
+    'a -> 'a -> 'a -> 'a list
   |}]
 ;;
 

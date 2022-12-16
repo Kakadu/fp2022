@@ -30,17 +30,20 @@ let rec print result =
   | VADT (name, argument) ->
     printf "%s " name;
     (match argument with
-     | Some argument -> print argument
-     | None -> ())
+    | Some argument -> print argument
+    | None -> ())
   | VFun _ -> printf "Not a value."
 ;;
 
 let print_run code =
   match parse code with
   | Ok ast ->
-    (match run ast with
-     | Ok result -> print result
-     | Error error -> printf "%s" error)
+    (match R.run (check_types ast) with
+    | Ok _ ->
+      (match run ast with
+      | Ok result -> print result
+      | Error error -> printf "%s" error)
+    | Error error -> print_error error)
   | Error error ->
     printf "%s" error;
     printf "\n"
