@@ -582,51 +582,58 @@ let rec parse_type =
   @@ fun self ->
   (remove_spaces
   *>
-  let parse_int = string "int" *> return (TGround Int) in
-  let parse_bool = string "bool" *> return (TGround Bool) in
-  let parse_char = string "char" *> return (TGround Char) in
-  let parse_string = string "string" *> return (TGround String) in
-  let parse_unit = string "unit" *> return (TGround Unit) in
-  let parse_ty = choice [ parse_int; parse_bool; parse_char; parse_string; parse_unit ] in
+  let parse_int = string "int" *> return int_typ in
+  let parse_bool = string "bool" *> return bool_typ in
+  let parse_char = string "char" *> return char_typ in
+  let parse_string = string "string" *> return string_typ in
+  let parse_unit = string "unit" *> return unit_typ in
+  let parse_ground_type =
+    choice [ parse_int; parse_bool; parse_char; parse_string; parse_unit ]
+  in
   let parse_list =
-    parse_ty <* remove_spaces <* string "list" >>= fun typ -> return (TList typ)
+    self
+    <* remove_spaces
+    <* string "list"
+    >>= fun typ ->
+    remove_spaces *> option "" (string "*")
+    >>= function
+    | "" -> return (TList typ)
+    | _ -> fail "Not a list"
   in
   let parse_tuple =
-    sep_by (remove_spaces *> string "*" <* remove_spaces) parse_ty
+    sep_by (remove_spaces *> string "*" <* remove_spaces) self
     >>= fun typ_list ->
-    if Base.List.length typ_list > 1
-    then return (TTuple typ_list)
-    else fail "Parsing error: tuple requires at least two type arguments."
+    remove_spaces *> option "" (string "list")
+    >>= function
+    | "" ->
+      if Base.List.length typ_list > 1
+      then return (TTuple typ_list)
+      else fail "Parsing error: tuple requires at least two type arguments."
+    | _ -> fail "Not a tuple"
   in
   let parse_arrow =
     fix
     @@ fun arrow_self ->
     lift2
       (fun left right -> TArr (left, right))
-      (choice [ parens arrow_self; parse_list; parse_tuple; parse_ty ])
+      (choice [ parens arrow_self; parse_list; parse_tuple; parse_ground_type ])
       (remove_spaces *> string "->" *> remove_spaces *> self)
   in
-  choice [ parse_arrow; parse_list; parse_tuple; parse_ty ])
+  choice [ parse_arrow; parse_tuple; parse_list; parse_ground_type ])
   <|> parens self
   <|> fail "Parsing error: failed to parse type annotation."
 ;;
 
 let parse_effect_declaration =
-  string "type"
+  string "Effect"
   *> remove_spaces
-  *> string "_"
-  *> remove_spaces
-  *> string "Effect.t"
-  *> remove_spaces
-  *> string "+="
-  *> remove_spaces
-  *> lift2
-       eeffect_declaration
-       parse_entity
-       (remove_spaces *> string ":" *> remove_spaces *> parse_type)
+  *> lift2 eeffect_declaration parse_entity (remove_spaces *> string ":" *> parse_type)
 ;;
 
-let parse_perform = remove_spaces *> string "perform" *> remove_spaces *> parse_identifier
+(* TODO: call before parse_application *)
+let parse_perform =
+  remove_spaces *> string "Effect.perform" *> remove_spaces *> parse_identifier
+;;
 
 let parse_continue d =
   remove_spaces *> string "continue" *> remove_spaces *> d.parse_expression d
