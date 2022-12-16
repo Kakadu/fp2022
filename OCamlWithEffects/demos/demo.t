@@ -65,7 +65,7 @@
   > 
   > let main = head [97; 81; 0; 54; 13]
   > EOF
-  Some 97 
+  Some 97
   $ ./demo.exe <<- EOF
   > let head list =
   >   match list with
@@ -83,7 +83,7 @@
   > 
   > let main = tail [97; 81; 0; 54; 13]
   > EOF
-  Some [81; 0; 54; 13] 
+  Some [81; 0; 54; 13]
   $ ./demo.exe <<- EOF
   > let tail list =
   >   match list with
@@ -184,7 +184,7 @@
   > 
   > let main = check_password "qwerty"
   > EOF
-  Error "FAIL" 
+  Error "FAIL"
   $ ./demo.exe <<- EOF
   > let check_password password = 
   >   match password with
@@ -193,7 +193,7 @@
   > 
   > let main = check_password "qwerty123"
   > EOF
-  Ok "success" 
+  Ok "success"
   $ ./demo.exe <<- EOF
   > let check_password password = 
   >   match password with

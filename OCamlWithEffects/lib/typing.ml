@@ -1,4 +1,5 @@
 type type_variable_number = int
+type adt_type = string
 type identifier = string
 
 type ground_type =
@@ -10,15 +11,23 @@ type ground_type =
 [@@deriving eq, show { with_path = false }]
 
 type typ =
-  | TVar of int
+  | TVar of type_variable_number
   | TArr of typ * typ
   | TTuple of typ list
   | TList of typ
   | TGround of ground_type
+  | TADT of adt_type * typ
 
 let int_typ = TGround Int
 let bool_typ = TGround Bool
-let arrow l r = TArr (l, r)
+let string_typ = TGround String
+let unit_typ = TGround Unit
+let char_typ = TGround Char
+let t_arrow l r = TArr (l, r)
+let t_tuple typ_list = TTuple typ_list
+let t_list typ = TList typ
+let t_var n = TVar n
+let t_adt name typ = TADT (name, typ)
 
 let rec pp_type fmt typ =
   let open Format in
@@ -47,6 +56,9 @@ let rec pp_type fmt typ =
     in
     printf fmt pp_type t1 pp_type t2
   | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
+  | TADT (name, typ) ->
+    pp_type fmt typ;
+    fprintf fmt "%s" name
 ;;
 
 let print_typ typ =
@@ -59,19 +71,23 @@ type scheme = (type_variable_number, Base.Int.comparator_witness) Base.Set.t * t
 type error =
   [ `Occurs_check
   | `NoVariable of identifier
+  | `NoConstructor of identifier
   | `UnificationFailed of typ * typ
+  | `NotReachable
   ]
 
-let rec pp_error fmt (err : error) =
+let pp_error fmt (err : error) =
   let open Format in
   match err with
   | `Occurs_check -> fprintf fmt "Occurs check failed.\n"
   | `NoVariable identifier -> fprintf fmt "No such variable: %s" identifier
+  | `NoConstructor identifier -> fprintf fmt "No such constructor: %s" identifier
   | `UnificationFailed (t1, t2) ->
     fprintf fmt "Unification failed: type of the expression is ";
     pp_type fmt t1;
     fprintf fmt " but expected type was ";
     pp_type fmt t2
+  | `NotReachable -> fprintf fmt "Not reachable."
 ;;
 
 let print_error error =
