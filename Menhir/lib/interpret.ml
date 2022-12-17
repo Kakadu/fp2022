@@ -4,11 +4,17 @@
 
 open Ast
 
+exception NoSeparator of string (* %% *)
+
 let start_position_of_mly_tokens = 0
 
 (* Position where %% *)
 let end_position_of_mly_tokens text =
-  Str.search_forward (Str.regexp "%%") text start_position_of_mly_tokens
+  try Str.search_forward (Str.regexp "%%") text start_position_of_mly_tokens with
+  | Not_found ->
+    raise
+      (NoSeparator
+         "Error: There is no separator in text (make sure you don't forget \"%%\")")
 ;;
 
 (* the text where %token and %start only available. *)
@@ -322,6 +328,7 @@ let get_parser_and_tree_parser command =
   with
   | Not_found -> Error "ATTENTION: No path in your command"
   | UnknownCommand s -> Error ("Unknown command, switch or bad path: " ^ s)
+  | NoSeparator s -> Error s
 ;;
 
 (* TESTS *)
@@ -407,7 +414,7 @@ let%test _ =
     let _, _ = gen_parser test_text [ "PLUS" ] in
     false
   with
-  | Not_found -> true (* Not found %% *)
+  | NoSeparator _ -> true (* Not found %% *)
   | _ -> false
 ;;
 
@@ -418,5 +425,5 @@ let%test _ =
     let _, _ = gen_parser test_text [ "PLUS" ] in
     false
   with
-  | InvalidToken (_, s) -> String.equal s "#!@#!KLS"
+  | InvalidToken (_, s) -> String.equal s "#!@#!KLS" (* Lexer error *)
 ;;
