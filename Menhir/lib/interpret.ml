@@ -73,29 +73,33 @@ let split_string_and_delete_spaces command =
 ;;
 
 let command_list command =
-  let command_args = split_string_and_delete_spaces command in
-  match command_args with
-  | h :: tl when h = "menhir" ->
-    if tl = []
-    then (
-      let () = print_endline "ATTENTION: No flags in your command" in
-      [])
-    else (
-      let rec interpret_flags flags =
-        match flags with
-        | h' :: tl' ->
-          (match h' with
-           | "--interpret" -> ("switch", "--interpret") :: interpret_flags tl'
-           | s ->
-             (try
-                ("text", try_read_file_text (Unix.openfile s [] 0)) :: interpret_flags tl'
-              with
-              | _ -> raise (UnknownCommand s)))
-        | _ -> []
-      in
-      interpret_flags tl)
-  | [ s ] -> raise (UnknownCommand s)
-  | _ -> raise (UnknownCommand "")
+  if String.equal command "exit"
+  then exit 0
+  else (
+    let command_args = split_string_and_delete_spaces command in
+    match command_args with
+    | h :: tl when h = "menhir" ->
+      if tl = []
+      then (
+        let () = print_endline "ATTENTION: No flags in your command" in
+        [])
+      else (
+        let rec interpret_flags flags =
+          match flags with
+          | h' :: tl' ->
+            (match h' with
+             | "--interpret" -> ("switch", "--interpret") :: interpret_flags tl'
+             | s ->
+               (try
+                  ("text", try_read_file_text (Unix.openfile s [] 0))
+                  :: interpret_flags tl'
+                with
+                | _ -> raise (UnknownCommand s)))
+          | _ -> []
+        in
+        interpret_flags tl)
+    | h :: _ -> raise (UnknownCommand h)
+    | _ -> raise (UnknownCommand ""))
 ;;
 
 exception NoFile of string
