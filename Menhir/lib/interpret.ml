@@ -370,13 +370,13 @@ let%test _ =
 let%test _ =
   let parser = gen_parser test_text in
   let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
-  res = false (* OVERSHOOT *)
+  not res (* OVERSHOOT *)
 ;;
 
 let%test _ =
   let parser = gen_parser test_text in
   let res, _ = parser [ "HELLOWORLD" ] in
-  res = false (* REJECT *)
+  not res (* REJECT *)
 ;;
 
 let%test _ =
@@ -390,4 +390,33 @@ let%test _ =
   tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
   = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   [ \
      expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, return_code =
+    parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
+  in
+  (not res) && return_code = 0 (* REJECT *)
+;;
+
+let test_text = "%token PLU#!@#!KLS"
+
+let%test _ =
+  try
+    let _, _ = gen_parser test_text [ "PLUS" ] in
+    false
+  with
+  | Not_found -> true (* Not found %% *)
+  | _ -> false
+;;
+
+let test_text = "%token PLU#!@#!KLS %%"
+
+let%test _ =
+  try
+    let _, _ = gen_parser test_text [ "PLUS" ] in
+    false
+  with
+  | InvalidToken (_, s) -> String.equal s "#!@#!KLS"
 ;;

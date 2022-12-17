@@ -39,18 +39,19 @@ let rec repl_command ret =
 ;;
 
 let () =
-  print_endline "\t Menhir Interpreter REPL";
+  print_endline "\n\t Menhir Interpreter REPL";
+  print_endline "\tAuthor: @lastdesire";
+  print_endline "\tTutor: @Kakadu";
   print_endline
     "> To upload your grammar type 'menhir --interpret \
      <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
-     \t> Then you can write sentences and parser will try to interprete it;";
+     > Then you can write sentences and parser will try to interprete it:";
+  print_endline " * ACCEPT: your sentence was successfully parsed;";
   print_endline
-    "> If you want to get a parser, which one can parse this grammar, type 'menhir \
-     --parser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>' and press Enter;\n\
-     \t> Note that this parser will return true or false depending on whether it can \
-     parse your sentence or not;\n\
-     \t> If you want to get a parser which will return parse_tree then type menhir \
-     --treeParser <PATH-TO-YOUR-MLY-FILE-WHICH-CONTAINS-GRAMMAR>;";
+    " * OVERSHOOT: the end of your sentence was reached before it could be accepted";
+  print_endline " * REJECT: the sentence was not accepted;";
+  print_endline
+    "Menhir Reference Manual: https://gallium.inria.fr/~fpottier/menhir/manual.html";
   print_endline "> To exit you can type 'exit'.";
   repl_command 0
 ;;
