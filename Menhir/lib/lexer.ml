@@ -5,9 +5,13 @@
 open Sedlexing.Utf8
 open Parser
 
-exception InvalidToken of string
+(* line * str *)
+exception InvalidToken of string * string
 
-let whitespace = [%sedlex.regexp? Plus (' ' | '\n' | '\t')]
+let whitespace = [%sedlex.regexp? Plus (' ' | '\t')]
+let whitespace' = [%sedlex.regexp? Plus (' ' | '\n' | '\t')]
+let any_char = [%sedlex.regexp? any]
+let new_line = [%sedlex.regexp? '\n']
 let token_char = [%sedlex.regexp? 'A' .. 'Z']
 let token = [%sedlex.regexp? Plus token_char]
 let nonterm_char = [%sedlex.regexp? 'a' .. 'z']
@@ -15,9 +19,38 @@ let nonterm = [%sedlex.regexp? Plus nonterm_char]
 let rule_comp_char = [%sedlex.regexp? 'A' .. 'Z' | 'a' .. 'z']
 let rule_comp = [%sedlex.regexp? Plus rule_comp_char]
 
-let rec tokenizer buf =
+let invalid_token_char =
+  [%sedlex.regexp? 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '!' .. '=']
+;;
+
+let invalid_token = [%sedlex.regexp? Plus invalid_token_char]
+
+type error_lexeme_type =
+  { mutable line_pos : int
+  ; mutable str : string
+  }
+
+let error_lexeme : error_lexeme_type = { line_pos = 1; str = "" }
+
+let rec take_while_no_whitespace (buf : Sedlexing.lexbuf) =
   match%sedlex buf with
-  | whitespace -> tokenizer buf
+  | whitespace' -> ()
+  | any_char ->
+    error_lexeme.str <- error_lexeme.str ^ lexeme buf;
+    take_while_no_whitespace buf
+  | _ -> ()
+;;
+
+let rec tokenizer
+  (buf : Sedlexing.lexbuf)
+  (start : Lexing.position)
+  (stop : Lexing.position)
+  =
+  match%sedlex buf with
+  | whitespace -> tokenizer buf start stop
+  | new_line ->
+    error_lexeme.line_pos <- error_lexeme.line_pos + 1;
+    tokenizer buf start stop
   | "%token", whitespace, token ->
     TOKEN (Str.replace_first (Str.regexp "%token[\n\t ]+") "" (lexeme buf))
   | "%start", whitespace, nonterm ->
@@ -28,12 +61,18 @@ let rec tokenizer buf =
   | rule_comp -> RULECOMPONENT (lexeme buf)
   | ';' -> SEMICOLON
   | eof -> EOF
-  | _ -> assert false
+  | _ ->
+    let line = error_lexeme.line_pos in
+    error_lexeme.line_pos <- 1;
+    let () = take_while_no_whitespace buf in
+    let str = error_lexeme.str in
+    error_lexeme.str <- "";
+    raise (InvalidToken (string_of_int line, str))
 ;;
 
 let provider buf () =
-  let token = tokenizer buf in
   let start, stop = Sedlexing.lexing_positions buf in
+  let token = tokenizer buf start stop in
   token, start, stop
 ;;
 

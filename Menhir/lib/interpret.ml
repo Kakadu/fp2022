@@ -307,7 +307,8 @@ let get_parser_and_tree_parser command =
         (command_list command)
     in
     try Ok (gen_parser text, gen_tree_parser text) with
-    | InvalidToken s -> Error s (* Error from lexer. *)
+    | InvalidToken (l, s) -> Error ("Lexer Error: " ^ "line " ^ l ^ " at: " ^ s)
+    (* Error from lexer. *)
     | Error ->
       (* Error from parser. *)
       Error
