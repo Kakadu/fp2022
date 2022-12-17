@@ -13,13 +13,16 @@ let rec repl_tokens_list parser tree_parser =
   let () =
     print_string "> ";
     let command = read_command () in
-    let input = Interpret.split_string_and_delete_spaces command in
-    let res, ret = parser input in
-    if res
-    then print_endline ("ACCEPT\n" ^ tree_parser input)
-    else if ret = 0
-    then print_endline "REJECT"
-    else print_endline "OVERSHOOT"
+    if String.equal command "exit"
+    then exit 0
+    else (
+      let input = Interpret.split_string_and_delete_spaces command in
+      let res, ret = parser input in
+      if res
+      then print_endline ("ACCEPT\n" ^ tree_parser input)
+      else if ret = 0
+      then print_endline "REJECT"
+      else print_endline "OVERSHOOT")
   in
   repl_tokens_list parser tree_parser
 ;;
