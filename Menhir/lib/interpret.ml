@@ -123,8 +123,7 @@ let rec start_rule_components text = function
   | [] -> []
 ;;
 
-let rec string_list_contains symbol l =
-  match l with
+let rec string_list_contains symbol = function
   | h :: _ when String.equal h symbol -> true
   | _ :: tl -> string_list_contains symbol tl
   | [] -> false
@@ -187,8 +186,7 @@ let rec apply_rule text rule input =
     if not (string_list_contains h (nonterminals text))
     then Term h :: apply_rule text (lhs, tl) (List.tl input)
     else (
-      let rec x newRules =
-        match newRules with
+      let rec apply = function
         | (lh', rh') :: tl' ->
           let is_applicable, remaining_input_len = try_apply_rule text (lh', rh') input in
           if is_applicable
@@ -198,20 +196,19 @@ let rec apply_rule text rule input =
                  text
                  (lhs, tl)
                  (get_last_elements_from_list remaining_input_len input)
-          else x tl'
+          else apply tl'
         | _ ->
           failwith
             "Should never happen because we checked it earlier in try_apply_rule \
              function."
       in
-      x (get_all_nonterms h text))
+      apply (get_all_nonterms h text))
   | [] -> []
 ;;
 
 let parse text (g : grammar) (input : string list) =
   let _, allRules = g in
-  let rec rulesApplier input rules =
-    match rules with
+  let rec rulesApplier input = function
     | h :: tl ->
       if let is_applicable, applied_rule_len = try_apply_rule text h input in
          is_applicable && applied_rule_len = 0
@@ -225,8 +222,7 @@ let parse text (g : grammar) (input : string list) =
 let parse_tree text (g : grammar) (input : string list) =
   let tree_list = parse text g input in
   let main_tree = Nonterm (start_rule text, tree_list) in
-  let rec print_tree tree =
-    match tree with
+  let rec print_tree = function
     | Term s -> String.concat s [ " "; " " ]
     | Nonterm (s, parse_tree_list) ->
       String.concat
