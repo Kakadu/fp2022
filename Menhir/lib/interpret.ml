@@ -170,8 +170,8 @@ let rec start_rule_components text = function
 
 let rec string_list_contains symbol l =
   match l with
-  | h :: tl ->
-    if not (String.equal h symbol) then string_list_contains symbol tl else true
+  | h :: _ when String.equal h symbol -> true
+  | _ :: tl -> string_list_contains symbol tl
   | [] -> false
 ;;
 
