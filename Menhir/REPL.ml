@@ -16,7 +16,7 @@ let rec repl_tokens_list parser tree_parser =
     if String.equal command "exit"
     then exit 0
     else (
-      let input = Interpret.split_string_and_delete_spaces command in
+      let input = Interpret.split_string_on_spaces command in
       let res, ret = parser input in
       if res
       then print_endline ("ACCEPT\n" ^ tree_parser input)
@@ -44,12 +44,42 @@ let anon_fun x = input_file := x
 let check_errors () =
   if Array.length Sys.argv <> 3
   then
-    raise (Arg.Bad "Bad number of arguments: use 'ocaml REPL.ml --help' for information.")
+    raise
+      (Arg.Bad
+         "Bad number of arguments; usage: 'dune exec ./REPL.exe menhir-interpret \
+          <path-to-file>'")
   else ();
   let first_arg = Sys.argv.(1) in
   if String.equal "menhir-interpret" first_arg
   then ()
   else raise (Arg.Bad ("Bad arg (first arg should be 'menhir-interpret'): " ^ first_arg))
+;;
+
+let print_help () =
+  if (not (Array.length Sys.argv = 2)) || not (String.equal Sys.argv.(1) "help")
+  then ()
+  else (
+    print_endline
+      "USAGE: dune exec ./REPL.exe menhir-interpret <path-to-file>\n\n\
+       YOUR FILE SHOULD HAVE A SYNTAX SIMILAR TO THE FOLLOWING EXAMPLE:\n\
+       \t /* USE ONLY UPPERCASE LETTERS IN NONTERM NAMES */\n\
+       \t /* USE ONLY LOWERCASE LETTERS IN TERM NAMES */\n\
+       \t /* FOLLOW THIS EXAMPLE */\n\
+       \t %token TOKEN_1\n\
+       \t ...\n\
+       \t %token TOKEN_n\n\
+       \t %start starttoken\n\n\
+       \t %%\n\n\
+       \t starttoken: /* nonterm_1 */\n\
+       \t | <TOKEN_i/nonterm_j>; ...; <TOKEN_i/nonterm_j>\n\
+       \t ...\n\
+       \t | ...\n\n\
+       \t ...\n\n\
+       \t nonterm_k:\n\
+       \t | ...\n\
+       \t ...\n\
+       \t | ...\n";
+    exit 1)
 ;;
 
 exception OpenFileError of string
@@ -60,6 +90,7 @@ let () =
   print_endline
     "\n>>>>>>>>>>>>>>>>>>>>>>>>>Menhir interpreter REPL<<<<<<<<<<<<<<<<<<<<<<<<<";
   Arg.parse speclist anon_fun usage;
+  print_help ();
   check_errors ();
   try
     let text = Interpret.read_all_file_text (Unix.openfile !input_file [] 0) in

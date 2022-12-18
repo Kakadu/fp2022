@@ -59,7 +59,7 @@ let read_all_file_text file_path =
   Stdio.In_channel.input_all (Unix.in_channel_of_descr file_path)
 ;;
 
-let split_string_and_delete_spaces command =
+let split_string_on_spaces command =
   List.filter
     (fun x -> not (String.equal x " " || String.equal x ""))
     (String.split_on_char ' ' command)
@@ -264,13 +264,22 @@ open Parser
 
 let get_parser_and_tree_parser text =
   try Ok (gen_parser text, gen_tree_parser text) with
-  | InvalidToken (l, s) -> Error ("Lexer Error: " ^ "line " ^ l ^ " at: " ^ s)
+  | InvalidToken (l, s) ->
+    Error
+      ("Lexer Error: "
+      ^ "line "
+      ^ l
+      ^ " at: "
+      ^ s
+      ^ ". You can use command 'dune exec ./REPL.exe help' for get more information \
+         about required syntax.")
   (* Error from lexer. *)
   | Error ->
     (* Error from parser. *)
     Error
       "Parse Error: make sure you write nonterms with lowercase letters only and terms \
-       with uppercase only (don't use any other symbols)"
+       with uppercase only (don't use any other symbols). You can use command 'dune exec \
+       ./REPL.exe help' for get more information about required syntax."
     (* Only in this situation we have parse error, in other case there is InvalidToken exception. *)
   | NoSeparator s -> Error s
 ;;
