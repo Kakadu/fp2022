@@ -179,6 +179,8 @@ let rec try_apply_rule text rule input =
   | [] -> true, List.length input (* remaining input len *)
 ;;
 
+exception NeverHappenError
+
 let rec apply_rule text rule input =
   let lhs, rhs = rule in
   match rhs with
@@ -197,9 +199,8 @@ let rec apply_rule text rule input =
                  (lhs, tl)
                  (get_last_elements_from_list remaining_input_len input)
           else apply tl'
-        | _ ->
-          failwith
-            "Never happen because we checked it earlier in try_apply_rule function."
+        | _ -> raise NeverHappenError
+        (* Never happen because we checked it earlier in try_apply_rule function. *)
       in
       apply (get_all_nonterms h text))
   | [] -> []
@@ -213,8 +214,8 @@ let parse text (g : grammar) (input : string list) =
          is_applicable && applied_rule_len = 0
       then apply_rule text h input
       else apply input tl
-    | [] ->
-      failwith "Never happen because we checked it earlier in try_apply_rule function."
+    | [] -> raise NeverHappenError
+    (* Never happen because we checked it earlier. *)
   in
   apply input (start_rule_components text all_rules)
 ;;
