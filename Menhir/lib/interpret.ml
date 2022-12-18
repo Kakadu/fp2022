@@ -199,24 +199,24 @@ let rec apply_rule text rule input =
           else apply tl'
         | _ ->
           failwith
-            "Should never happen because we checked it earlier in try_apply_rule \
-             function."
+            "Never happen because we checked it earlier in try_apply_rule function."
       in
       apply (get_all_nonterms h text))
   | [] -> []
 ;;
 
 let parse text (g : grammar) (input : string list) =
-  let _, allRules = g in
-  let rec rulesApplier input = function
+  let _, all_rules = g in
+  let rec apply input = function
     | h :: tl ->
       if let is_applicable, applied_rule_len = try_apply_rule text h input in
          is_applicable && applied_rule_len = 0
       then apply_rule text h input
-      else rulesApplier input tl
-    | [] -> failwith "No such rule for your input"
+      else apply input tl
+    | [] ->
+      failwith "Never happen because we checked it earlier in try_apply_rule function."
   in
-  rulesApplier input (start_rule_components text allRules)
+  apply input (start_rule_components text all_rules)
 ;;
 
 let parse_tree text (g : grammar) (input : string list) =
@@ -263,8 +263,9 @@ let get_parser_and_tree_parser text =
   | InvalidToken (l, s) ->
     Error
       (String.concat
-         "Lexer Error: line"
-         [ l
+         ""
+         [ "Lexer Error: line "
+         ; l
          ; " at: "
          ; s
          ; ". You can use command 'dune exec ./REPL.exe help' for get more information \
