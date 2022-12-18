@@ -13,8 +13,7 @@ let end_position_of_mly_tokens text =
   try Str.search_forward (Str.regexp "%%") text start_position_of_mly_tokens with
   | Not_found ->
     raise
-      (NoSeparator
-         "Error: There is no separator in text (make sure you don't forget \"%%\")")
+      (NoSeparator "There is no separator in text (make sure you don't forget symbols %%)")
 ;;
 
 (* the text where %token and %start only available. *)
@@ -56,20 +55,8 @@ let start_rule text =
   s_r
 ;;
 
-exception UnknownCommand of string
-
 let read_all_file_text file_path =
   Stdio.In_channel.input_all (Unix.in_channel_of_descr file_path)
-;;
-
-let try_read_file_text file_path =
-  try read_all_file_text file_path with
-  | Unix.Unix_error (Unix.EBADF, "read", "") -> ""
-;;
-
-let read_command () =
-  try read_line () with
-  | End_of_file -> ""
 ;;
 
 let split_string_and_delete_spaces command =
@@ -77,38 +64,6 @@ let split_string_and_delete_spaces command =
     (fun x -> not (String.equal x " " || String.equal x ""))
     (String.split_on_char ' ' command)
 ;;
-
-let command_list command =
-  if String.equal command "exit"
-  then exit 0
-  else (
-    let command_args = split_string_and_delete_spaces command in
-    match command_args with
-    | h :: tl when h = "menhir" ->
-      if tl = []
-      then (
-        let () = print_endline "ATTENTION: No flags in your command" in
-        [])
-      else (
-        let rec interpret_flags flags =
-          match flags with
-          | h' :: tl' ->
-            (match h' with
-             | "--interpret" -> ("switch", "--interpret") :: interpret_flags tl'
-             | s ->
-               (try
-                  ("text", try_read_file_text (Unix.openfile s [] 0))
-                  :: interpret_flags tl'
-                with
-                | _ -> raise (UnknownCommand s)))
-          | _ -> []
-        in
-        interpret_flags tl)
-    | h :: _ -> raise (UnknownCommand h)
-    | _ -> raise (UnknownCommand ""))
-;;
-
-exception NoFile of string
 
 open Stdlib
 
@@ -307,27 +262,16 @@ let gen_tree_parser text = parse_tree text (take_grammar text)
 open Lexer
 open Parser
 
-let get_parser_and_tree_parser command =
-  try
-    let _, text =
-      List.find
-        (fun x ->
-          let l, _ = x in
-          String.equal l "text")
-        (command_list command)
-    in
-    try Ok (gen_parser text, gen_tree_parser text) with
-    | InvalidToken (l, s) -> Error ("Lexer Error: " ^ "line " ^ l ^ " at: " ^ s)
-    (* Error from lexer. *)
-    | Error ->
-      (* Error from parser. *)
-      Error
-        "Parse Error: make sure you write nonterms with lowercase letters only and terms \
-         with uppercase only (don't use any other symbols)"
+let get_parser_and_tree_parser text =
+  try Ok (gen_parser text, gen_tree_parser text) with
+  | InvalidToken (l, s) -> Error ("Lexer Error: " ^ "line " ^ l ^ " at: " ^ s)
+  (* Error from lexer. *)
+  | Error ->
+    (* Error from parser. *)
+    Error
+      "Parse Error: make sure you write nonterms with lowercase letters only and terms \
+       with uppercase only (don't use any other symbols)"
     (* Only in this situation we have parse error, in other case there is InvalidToken exception. *)
-  with
-  | Not_found -> Error "ATTENTION: No path in your command"
-  | UnknownCommand s -> Error ("Unknown command, switch or bad path: " ^ s)
   | NoSeparator s -> Error s
 ;;
 
