@@ -379,3 +379,98 @@ let%test _ =
   with
   | InvalidToken (_, s) -> String.equal s "#!@#!KLS" (* Lexer error *)
 ;;
+
+let test_text =
+  "%token WINNIE\n\
+   %token PIGLET\n\
+   %token TIGER\n\
+   %token RABBIT\n\
+   %token DONKEY\n\
+   %token KANGAROO\n\n\
+   %token MOOMINTROLL\n\
+   %token MOOMINMAMMA\n\
+   %token MOOMINPAPPA\n\
+   %token SNIFF\n\
+   %token SNUFKIN\n\
+   %token LITTLE_MY\n\
+   %token SNORK_MAIDEN\n\
+   %token SNORK \n\
+   %token EOL\n\
+   %start accepted_if_cartoons_same\n\n\
+   %%\n\n\
+   accepted_if_cartoons_same:\n\
+   \t| winnie; EOL\n\
+   \t| moomintroll; EOL\n\
+   winnie:\n\
+   | WINNIE; winnie\n\
+   | WINNIE\n\
+   | PIGLET; winnie\n\
+   | PIGLET\n\
+   | TIGER; winnie\n\
+   | TIGER \n\
+   | RABBIT; winnie\n\
+   | RABBIT\n\
+   | DONKEY; winnie\n\
+   | DONKEY\n\
+   | KANGAROO; winnie\n\
+   | KANGAROO\n\n\
+   moomintroll:\n\
+   | MOOMINTROLL; moomintroll\n\
+   | MOOMINTROLL\n\
+   | MOOMINMAMMA; moomintroll\n\
+   | MOOMINMAMMA\n\
+   | MOOMINPAPPA; moomintroll\n\
+   | MOOMINPAPPA\n\
+   | SNIFF; moomintroll\n\
+   | SNIFF\n\
+   | SNUFKIN; moomintroll\n\
+   | SNUFKIN\n\
+   | LITTLE_MY; moomintroll\n\
+   | LITTLE_MY\n\
+   | SNORK_MAIDEN; moomintroll\n\
+   | SNORK_MAIDEN\n\
+   | SNORK; moomintroll\n\
+   | SNORK"
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ] in
+  res (* ACCEPT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] in
+  (not res) && ret = -1 (* OVERSHOOT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] in
+  (not res) && ret = 0 (* REJECT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, ret = parser [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
+;;
+
+let%test _ =
+  let parser = gen_parser test_text in
+  let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
+  res (* ACCEPT *)
+;;

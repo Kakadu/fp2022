@@ -12,18 +12,12 @@ let whitespace = [%sedlex.regexp? Plus (' ' | '\t')]
 let whitespace' = [%sedlex.regexp? Plus (' ' | '\n' | '\t')]
 let any_char = [%sedlex.regexp? any]
 let new_line = [%sedlex.regexp? '\n']
-let token_char = [%sedlex.regexp? 'A' .. 'Z']
+let token_char = [%sedlex.regexp? 'A' .. 'Z' | '_']
 let token = [%sedlex.regexp? Plus token_char]
-let nonterm_char = [%sedlex.regexp? 'a' .. 'z']
+let nonterm_char = [%sedlex.regexp? 'a' .. 'z' | '_']
 let nonterm = [%sedlex.regexp? Plus nonterm_char]
-let rule_comp_char = [%sedlex.regexp? 'A' .. 'Z' | 'a' .. 'z']
+let rule_comp_char = [%sedlex.regexp? 'A' .. 'Z' | 'a' .. 'z' | '_']
 let rule_comp = [%sedlex.regexp? Plus rule_comp_char]
-
-let invalid_token_char =
-  [%sedlex.regexp? 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '!' .. '=']
-;;
-
-let invalid_token = [%sedlex.regexp? Plus invalid_token_char]
 
 type error_lexeme_type =
   { mutable line_pos : int
