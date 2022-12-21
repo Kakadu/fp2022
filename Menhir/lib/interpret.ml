@@ -123,10 +123,9 @@ let rec start_rule_components text = function
   | [] -> []
 ;;
 
-let rec string_list_contains symbol = function
-  | h :: _ when String.equal h symbol -> true
-  | _ :: tl -> string_list_contains symbol tl
-  | [] -> false
+let string_list_contains symbol list =
+  let open Base in
+  List.mem list symbol ~equal:(fun x y -> String.equal x y)
 ;;
 
 (* Берет все правила, которые имеют имя rule_name *)
@@ -381,56 +380,56 @@ let%test _ =
 ;;
 
 let test_text =
-  "%token WINNIE\n\
-   %token PIGLET\n\
-   %token TIGER\n\
-   %token RABBIT\n\
-   %token DONKEY\n\
-   %token KANGAROO\n\n\
-   %token MOOMINTROLL\n\
-   %token MOOMINMAMMA\n\
-   %token MOOMINPAPPA\n\
-   %token SNIFF\n\
-   %token SNUFKIN\n\
-   %token LITTLE_MY\n\
-   %token SNORK_MAIDEN\n\
-   %token SNORK \n\
-   %token EOL\n\
-   %start accepted_if_cartoons_same\n\n\
-   %%\n\n\
-   accepted_if_cartoons_same:\n\
-   \t| winnie; EOL\n\
-   \t| moomintroll; EOL\n\
-   winnie:\n\
-   | WINNIE; winnie\n\
-   | WINNIE\n\
-   | PIGLET; winnie\n\
-   | PIGLET\n\
-   | TIGER; winnie\n\
-   | TIGER \n\
-   | RABBIT; winnie\n\
-   | RABBIT\n\
-   | DONKEY; winnie\n\
-   | DONKEY\n\
-   | KANGAROO; winnie\n\
-   | KANGAROO\n\n\
-   moomintroll:\n\
-   | MOOMINTROLL; moomintroll\n\
-   | MOOMINTROLL\n\
-   | MOOMINMAMMA; moomintroll\n\
-   | MOOMINMAMMA\n\
-   | MOOMINPAPPA; moomintroll\n\
-   | MOOMINPAPPA\n\
-   | SNIFF; moomintroll\n\
-   | SNIFF\n\
-   | SNUFKIN; moomintroll\n\
-   | SNUFKIN\n\
-   | LITTLE_MY; moomintroll\n\
-   | LITTLE_MY\n\
-   | SNORK_MAIDEN; moomintroll\n\
-   | SNORK_MAIDEN\n\
-   | SNORK; moomintroll\n\
-   | SNORK"
+  {|%token WINNIE
+   %token PIGLET
+   %token TIGER
+   %token RABBIT
+   %token DONKEY
+   %token KANGAROO
+   %token MOOMINTROLL
+   %token MOOMINMAMMA
+   %token MOOMINPAPPA
+   %token SNIFF
+   %token SNUFKIN
+   %token LITTLE_MY
+   %token SNORK_MAIDEN
+   %token SNORK
+   %token EOL
+   %start accepted_if_cartoons_same
+   %%
+   accepted_if_cartoons_same:
+   | winnie; EOL
+   | moomintroll; EOL
+   winnie:
+   | WINNIE; winnie
+   | WINNIE
+   | PIGLET; winnie
+   | PIGLET
+   | TIGER; winnie
+   | TIGER
+   | RABBIT; winnie
+   | RABBIT
+   | DONKEY; winnie
+   | DONKEY
+   | KANGAROO; winnie
+   | KANGAROO
+   moomintroll:
+   | MOOMINTROLL; moomintroll
+   | MOOMINTROLL
+   | MOOMINMAMMA; moomintroll
+   | MOOMINMAMMA
+   | MOOMINPAPPA; moomintroll
+   | MOOMINPAPPA
+   | SNIFF; moomintroll
+   | SNIFF
+   | SNUFKIN; moomintroll
+   | SNUFKIN
+   | LITTLE_MY; moomintroll
+   | LITTLE_MY
+   | SNORK_MAIDEN; moomintroll
+   | SNORK_MAIDEN
+   | SNORK; moomintroll
+   | SNORK|}
 ;;
 
 let%test _ =
