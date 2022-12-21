@@ -29,7 +29,7 @@ let file_text_where_only_rules text =
 ;;
 
 (* tokens, start_rule, grammar *)
-let parse text =
+let parse' text : string list * string * grammar =
   let parse_tokens_and_start_rule = Lexer.from_string Parser.token_and_start in
   let tokens_and_start_rule =
     parse_tokens_and_start_rule (file_text_where_only_tokens_names text)
@@ -37,22 +37,7 @@ let parse text =
   let parse_rules = Lexer.from_string Parser.grammar in
   let grammar = parse_rules (file_text_where_only_rules text) in
   let tokens, start_rule = tokens_and_start_rule in
-  tokens, start_rule, grammar
-;;
-
-let take_grammar text : grammar =
-  let _, s_r, g = parse text in
-  s_r, g
-;;
-
-let get_tokens text =
-  let t_l, _, _ = parse text in
-  t_l
-;;
-
-let start_rule text =
-  let _, s_r, _ = parse text in
-  s_r
+  tokens, start_rule, (start_rule, grammar)
 ;;
 
 let read_all_file_text file_path =
@@ -112,14 +97,11 @@ let get_nonterminals (g : grammar) =
   List.map (fun (nonterm, _) -> nonterm) rules
 ;;
 
-let nonterminals text = get_nonterminals (take_grammar text)
-let terminals text = get_tokens text
-
-let rec start_rule_components text = function
+let rec start_rule_components text start_rule = function
   | (lhs, rhs) :: tl ->
-    if String.equal (start_rule text) lhs
-    then (lhs, rhs) :: start_rule_components text tl
-    else start_rule_components text tl
+    if String.equal start_rule lhs
+    then (lhs, rhs) :: start_rule_components text start_rule tl
+    else start_rule_components text start_rule tl
   | [] -> []
 ;;
 
@@ -129,8 +111,8 @@ let string_list_contains symbol list =
 ;;
 
 (* Берет все правила, которые имеют имя rule_name *)
-let get_all_nonterms rule_name text =
-  let _, rules = take_grammar text in
+let get_all_nonterms rule_name grammar =
+  let _, rules = grammar in
   List.filter
     (fun rule ->
       let nonterm, _ = rule in
@@ -143,26 +125,29 @@ let list_empty = function
   | _ -> false
 ;;
 
-let rec try_apply_rule text rule input =
+let rec try_apply_rule text rule input parse_res =
+  let terminals, _, grammar = parse_res in
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
     if list_empty input (* OVERSHOOT RIGHT HERE. *)
     then false, -1
-    else if string_list_contains h (terminals text) (* TERM SYMBOL *)
+    else if string_list_contains h terminals (* TERM SYMBOL *)
     then
       if String.equal (List.hd input) h
       then
-        try_apply_rule text (lhs, tl) (List.tl input)
+        try_apply_rule text (lhs, tl) (List.tl input) parse_res
         (* If equal TERM symbols in text and rule then continue checking *)
       else false, 0 (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
-    else if string_list_contains h (nonterminals text) (* NONTERM SYMBOL *)
+    else if string_list_contains h (get_nonterminals grammar) (* NONTERM SYMBOL *)
     then (
       (* Get new input if nonterm rule is fits right here. *)
       let rec get_new_input all_nonterms ret =
         match all_nonterms with
         | h' :: tl' ->
-          let is_applicable, remaining_input_len = try_apply_rule text h' input in
+          let is_applicable, remaining_input_len =
+            try_apply_rule text h' input parse_res
+          in
           if is_applicable
           then get_last_elements_from_list remaining_input_len input, ret
           else (
@@ -170,58 +155,64 @@ let rec try_apply_rule text rule input =
             get_new_input tl' ret')
         | [] -> input, ret
       in
-      let new_input, ret = get_new_input (get_all_nonterms h text) 0 in
+      let new_input, ret = get_new_input (get_all_nonterms h grammar) 0 in
       if List.compare_lengths new_input input = 0
       then false, ret
-      else try_apply_rule text (lhs, tl) new_input)
+      else try_apply_rule text (lhs, tl) new_input parse_res)
     else false, 0 (* REJECT *)
   | [] -> true, List.length input (* remaining input len *)
 ;;
 
 exception NeverHappenError
 
-let rec apply_rule text rule input =
+let rec apply_rule text rule input parse_res =
+  let _, _, grammar = parse_res in
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
-    if not (string_list_contains h (nonterminals text))
-    then Term h :: apply_rule text (lhs, tl) (List.tl input)
+    if not (string_list_contains h (get_nonterminals grammar))
+    then Term h :: apply_rule text (lhs, tl) (List.tl input) parse_res
     else (
       let rec apply = function
         | (lh', rh') :: tl' ->
-          let is_applicable, remaining_input_len = try_apply_rule text (lh', rh') input in
+          let is_applicable, remaining_input_len =
+            try_apply_rule text (lh', rh') input parse_res
+          in
           if is_applicable
           then
-            Nonterm (h, apply_rule text (lh', rh') input)
+            Nonterm (h, apply_rule text (lh', rh') input parse_res)
             :: apply_rule
                  text
                  (lhs, tl)
                  (get_last_elements_from_list remaining_input_len input)
+                 parse_res
           else apply tl'
         | _ -> raise NeverHappenError
         (* Never happen because we checked it earlier in try_apply_rule function. *)
       in
-      apply (get_all_nonterms h text))
+      apply (get_all_nonterms h grammar))
   | [] -> []
 ;;
 
-let parse text (g : grammar) (input : string list) =
+let parse text parse_res (input : string list) =
+  let _, start_rule, g = parse_res in
   let _, all_rules = g in
   let rec apply input = function
     | h :: tl ->
-      if let is_applicable, applied_rule_len = try_apply_rule text h input in
+      if let is_applicable, applied_rule_len = try_apply_rule text h input parse_res in
          is_applicable && applied_rule_len = 0
-      then apply_rule text h input
+      then apply_rule text h input parse_res
       else apply input tl
     | [] -> raise NeverHappenError
     (* Never happen because we checked it earlier. *)
   in
-  apply input (start_rule_components text all_rules)
+  apply input (start_rule_components text start_rule all_rules)
 ;;
 
-let parse_tree text (g : grammar) (input : string list) =
-  let tree_list = parse text g input in
-  let main_tree = Nonterm (start_rule text, tree_list) in
+let parse_tree text parse_res (input : string list) =
+  let _, start_rule, _ = parse_res in
+  let tree_list = parse text parse_res input in
+  let main_tree = Nonterm (start_rule, tree_list) in
   let rec print_tree = function
     | Term s -> String.concat s [ " "; " " ]
     | Nonterm (s, parse_tree_list) ->
@@ -237,11 +228,12 @@ let parse_tree text (g : grammar) (input : string list) =
   print_tree main_tree
 ;;
 
-let try_apply_start_nonterm text input =
+let try_apply_start_nonterm text parse_res input =
+  let _, start_rule, grammar = parse_res in
   let rec applier start_nonterms return_code =
     match start_nonterms with
     | h :: tl ->
-      let cond, ret = try_apply_rule text h input in
+      let cond, ret = try_apply_rule text h input parse_res in
       if cond
       then if ret = 0 then true, ret else applier tl ret
       else if return_code = -1
@@ -249,17 +241,19 @@ let try_apply_start_nonterm text input =
       else applier tl ret
     | [] -> false, return_code
   in
-  applier (get_all_nonterms (start_rule text) text) 0
+  applier (get_all_nonterms start_rule grammar) 0
 ;;
 
-let gen_parser text = try_apply_start_nonterm text
-let gen_tree_parser text = parse_tree text (take_grammar text)
+let gen_parser text parse_res = try_apply_start_nonterm text parse_res
+let gen_tree_parser text parse_res = parse_tree text parse_res
 
 open Lexer
 open Parser
 
 let get_parser_and_tree_parser text =
-  try Ok (gen_parser text, gen_tree_parser text) with
+  (* tokens, start rule, grammar *)
+  let parse_result = parse' text in
+  try Ok (gen_parser text parse_result, gen_tree_parser text parse_result) with
   | InvalidToken (l, s) ->
     Error
       (String.concat
@@ -303,67 +297,87 @@ let test_text =
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "PLUS"; "INT"; "INT"; "EOL" ] in
-  res
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "PLUS"; "INT"; "INT"; "EOL" ] in
+    res
+  | _ -> false
 ;;
 
 let%test _ =
-  let tree_parser = gen_tree_parser test_text in
-  tree_parser [ "PLUS"; "INT"; "INT"; "EOL" ]
-  = " [ main :  [ expr :  PLUS   [ expr :  INT  ]   [ expr :  INT  ]  ]   EOL  ] "
+  match get_parser_and_tree_parser test_text with
+  | Ok (_, tree_parser) ->
+    tree_parser [ "PLUS"; "INT"; "INT"; "EOL" ]
+    = " [ main :  [ expr :  PLUS   [ expr :  INT  ]   [ expr :  INT  ]  ]   EOL  ] "
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "EOL" ] in
-  res
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "EOL" ] in
+    res
+  | _ -> false
 ;;
 
 let%test _ =
-  let tree_parser = gen_tree_parser test_text in
-  tree_parser [ "EOL" ] = " [ main :  EOL  ] "
+  match get_parser_and_tree_parser test_text with
+  | Ok (_, tree_parser) -> tree_parser [ "EOL" ] = " [ main :  EOL  ] "
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
-  not res (* OVERSHOOT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
+    not res (* OVERSHOOT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "HELLOWORLD" ] in
-  not res (* REJECT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "HELLOWORLD" ] in
+    not res (* REJECT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ] in
-  res
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ =
+      parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
+    in
+    res
+  | _ -> false
 ;;
 
 let%test _ =
-  let tree_parser = gen_tree_parser test_text in
-  tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
-  = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   [ \
-     expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
+  match get_parser_and_tree_parser test_text with
+  | Ok (_, tree_parser) ->
+    tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
+    = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   \
+       [ expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, return_code =
-    parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
-  in
-  (not res) && return_code = 0 (* REJECT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, return_code =
+      parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
+    in
+    (not res) && return_code = 0 (* REJECT *)
+  | _ -> false
 ;;
 
 let test_text = "%token PLU#!@#!KLS"
 
 let%test _ =
   try
-    let _, _ = gen_parser test_text [ "PLUS" ] in
-    false
+    match get_parser_and_tree_parser test_text with
+    | Ok (_, _) -> false
+    | _ -> false
   with
   | NoSeparator _ -> true (* Not found %% *)
   | _ -> false
@@ -373,11 +387,14 @@ let test_text = "%token PLU#!@#!KLS %%"
 
 let%test _ =
   try
-    let _, _ = gen_parser test_text [ "PLUS" ] in
-    false
+    match get_parser_and_tree_parser test_text with
+    | Ok (_, _) -> false
+    | _ -> false
   with
-  | InvalidToken (_, s) -> String.equal s "#!@#!KLS" (* Lexer error *)
+  | InvalidToken (_, s) -> String.equal s "#!@#!KLS"
 ;;
+
+(* Lexer error *)
 
 let test_text =
   {|%token WINNIE
@@ -433,43 +450,57 @@ let test_text =
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ] in
-  res (* ACCEPT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] in
-  (not res) && ret = -1 (* OVERSHOOT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] in
+    (not res) && ret = -1 (* OVERSHOOT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] in
+    (not res) && ret = 0 (* REJECT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] in
-  (not res) && ret = 0 (* REJECT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] in
+    (not res) && ret = 0 (* REJECT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] in
+    (not res) && ret = 0 (* REJECT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, ret = parser [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
+    (not res) && ret = 0 (* REJECT *)
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser = gen_parser test_text in
-  let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
-  res (* ACCEPT *)
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
 ;;
