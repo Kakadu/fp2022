@@ -284,22 +284,22 @@ let get_parser_and_tree_parser text =
 
 (* TESTS *)
 let test_text =
-  "%token INT\n\
-   %token PLUS\n\
-   %token MUL\n\
-   %token LBRACE\n\
-   %token RBRACE\n\
-   %token EOL\n\
-   %start main\n\
-   %%\n\
-   main:\n\
-   | expr; EOL\n\
-   | EOL\n\
-   expr:\n\
-   | LBRACE; expr; RBRACE\n\
-   | PLUS; expr; expr\n\
-   | MUL; expr; expr\n\
-   | INT"
+  {|%token INT
+   %token PLUS
+   %token MUL
+   %token LBRACE
+   %token RBRACE
+   %token EOL
+   %start main
+   %%
+   main:
+   | expr; EOL
+   | EOL
+   expr:
+   | LBRACE; expr; RBRACE
+   | PLUS; expr; expr
+   | MUL; expr; expr
+   | INT|}
 ;;
 
 let%test _ =
