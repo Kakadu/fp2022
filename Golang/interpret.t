@@ -5,3 +5,5 @@
   0 2 55 610 4181
   $ ./INTERPRET.exe ../../../../examples/rec_same_var.go
   012345678910
+  $ ./INTERPRET.exe ../../../../examples/arr_assign.go
+  [42][[1], [337]][10][101][0]

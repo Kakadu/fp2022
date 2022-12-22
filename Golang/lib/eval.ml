@@ -7,6 +7,10 @@ open Ast
 open Ident
 open Pass
 
+exception RuntimeExn of string
+
+let runtime_exn msg = raise (RuntimeExn msg)
+
 type vfunc = ident signature * ident block
 
 type value =
@@ -230,7 +234,27 @@ and eval_assign l r =
   let* r = eval_expr r in
   match l with
   | Ident id -> set_var id r
+  | ArrIndex (arr, i) -> eval_arr_index_assign arr i r
   | _ -> failwith "Illegal assignment"
+
+and eval_arr_index_assign receiver i x =
+  (* Evaluates receiver[i] = x *)
+  let list_set_i list i x =
+    if 0 <= i && i < List.length list
+    then List.mapi list ~f:(fun j el -> if i = j then x else el)
+    else runtime_exn "Array index out of bounds"
+  in
+  let* i = eval_expr i in
+    let* list = eval_expr receiver in
+    let new_list =
+      match list, i with
+      | VArr list, VInt i -> VArr (list_set_i list i x)
+      | _ -> failwith "Internal error: typing"
+    in
+    match receiver with
+    | Ident id -> set_var id new_list
+    | ArrIndex (receiver, new_i) -> eval_arr_index_assign receiver new_i new_list
+    | _ -> return ()
 
 and eval_vardecl (id, expr) =
   let* value = eval_expr expr in
@@ -260,6 +284,10 @@ let eval_file file =
 ;;
 
 let eval file =
-  let _ = run_pass (eval_file file) ~init:{ env = {parent = None; tbl = empty_tbl}; returned = None } in
+  let _ =
+    run_pass
+      (eval_file file)
+      ~init:{ env = { parent = None; tbl = empty_tbl }; returned = None }
+  in
   ()
 ;;

@@ -183,7 +183,7 @@ let type_dis =
       ArrayLength := integer constant.
       ElementType := Type. *)
   let array_type d =
-    let* length = in_brackets integer in
+    let* length = in_brackets integer <* ws in
     let* el_type = d.typ d in
     return (length, el_type)
   in
@@ -277,7 +277,7 @@ let eds =
      ArrayLit := ArrayType "{" ExprList "}".
   *)
   let array_lit d =
-    (let* t = array_typ in
+    (let* t = array_typ <* ws in
      let* elements = in_braces (d.expr_list d) in
      return (ArrLit (t, elements)))
     <?> "ArrayLit"
@@ -731,6 +731,11 @@ let%test _ = Ok (VarDecl ("x", Const (Int 1))) = parse stmt "var x = 1;"
 let%test _ =
   Ok (VarDecl ("abc", ArrLit ((1, IntTyp), [ Const (Int 2) ])))
   = parse stmt "var abc = [1]int{2};"
+;;
+
+let%test _ =
+  Ok (VarDecl ("abc", ArrLit ((1, IntTyp), [ Const (Int 2) ])))
+  = parse stmt "var abc = [1] int   {2};"
 ;;
 
 (* expression statements *)
