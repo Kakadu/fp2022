@@ -19,7 +19,7 @@ type value =
   | VFunc of vfunc
   | VVoid
 
-and vfunc = ident signature * ident block
+and vfunc = env * ident signature * ident block
 
 and env =
   { parent : env option
@@ -37,6 +37,15 @@ end)
 
 open P
 
+let set_env env = 
+  let* s = access in
+  let* _  = put { s with env } in
+  return s.env
+
+let get_env =
+  let* s = access in
+  return s.env
+
 let push_fn =
   let* s = access in
   let env = { parent = Some s.env; tbl = empty_tbl } in
@@ -53,6 +62,16 @@ let pop_fn =
   put { s with env }
 ;;
 
+let enter_func_call closure_env =
+  let* cur_env = set_env closure_env in
+  let* _ = push_fn in
+  return cur_env
+
+let exit_func_call env =
+  let* _ = pop_fn in
+  let* _ = set_env env in
+  return ()
+
 let new_var id value =
   let* s = access in
   match s with
@@ -68,7 +87,7 @@ let set_var id value =
     match parent, var with
     | _, Some var -> var := value
     | Some env, None -> set_ref env
-    | None, None -> failwith "Variable not found!"
+    | None, None -> failwith (Printf.sprintf "Variable %s not found!" (Ident.name id))
   in
   let* s = access in
   set_ref s.env;
@@ -82,7 +101,7 @@ let get_var id =
     match parent, var with
     | _, Some var -> !var
     | Some env, None -> get_ref_val env
-    | None, None -> failwith "Variable not found!"
+    | None, None -> failwith (Printf.sprintf "Variable %s not found!" (Ident.name id))
   in
   let* s = access in
   return (get_ref_val s.env)
@@ -112,7 +131,7 @@ let rec value_to_string = function
   | VArr arr ->
     let els = List.map arr ~f:value_to_string in
     "[" ^ String.concat ~sep:", " els ^ "]"
-  | VFunc (sign, _) ->
+  | VFunc (_, sign, _) ->
     "func" ^ show_typ (FunTyp (ident_sign_to_string_sign sign)) ^ "{ ... }"
   | VVoid -> "void"
 ;;
@@ -159,18 +178,20 @@ and eval_call f args =
       failwith "Internal error: illegal number of args"
   in
   match f with
-  | VFunc ({ args = fargs; _ }, b) ->
-    let* _ = push_fn in
+  | VFunc (closure_env, { args = fargs; _ }, b) ->
+    let* env = enter_func_call closure_env in
     let* _ = set_args fargs args in
     let* _ = eval_block b in
-    let* _ = pop_fn in
+    let* _ = exit_func_call env in
     let* r = remove_returned in
     (match r with
      | Some r -> return r
      | None -> return VVoid)
   | _ -> failwith "Internal error: illegal types"
 
-and eval_func_lit sign block = return (VFunc (sign, block))
+and eval_func_lit sign block = 
+  let* env = get_env in
+  return (VFunc (env, sign, block))
 
 and eval_unop op e =
   let* e = eval_expr e in
@@ -285,8 +306,9 @@ let eval_file file =
       | _ -> None)
   in
   let eval_func_decl (id, sign, b) =
+    let* _ = new_var id VVoid in (* For recursive functions *)
     let* v = eval_func_lit sign b in
-      new_var id v
+    set_var id v
   in 
   let* _ = fold_state funcs ~f:eval_func_decl in
   (* Eval main() *)

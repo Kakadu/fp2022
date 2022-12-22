@@ -1,4 +1,6 @@
 
+  $ ./INTERPRET.exe ../../../../examples/id.go
+  10
   $ ./INTERPRET.exe ../../../../examples/fact_rec.go
   1 2 120 3628800
   $ ./INTERPRET.exe ../../../../examples/fibonacci_rec.go
@@ -9,3 +11,7 @@
   [42][[1], [337]][10][101][0]
   $ ./INTERPRET.exe ../../../../examples/global_var_order.go
   1
+  $ ./INTERPRET.exe ../../../../examples/closure_counter.go
+  01234567
+  $ ./INTERPRET.exe ../../../../examples/closure_forloop.go
+  4900
