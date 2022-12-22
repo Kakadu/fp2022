@@ -174,7 +174,11 @@ let type_dis =
   (* ===== TypeName ===== *)
   let type_name =
     let* name = ident_str in
-    if name = "int" then return IntTyp else fail "Unknown type"
+    match name with
+      | "int" -> return IntTyp
+      | "string" -> return StrTyp
+      | "bool" -> return BoolTyp
+      | _ -> fail "Unknown type"
   in
   (* ===================== *)
   (* ===== ArrayType ===== *)

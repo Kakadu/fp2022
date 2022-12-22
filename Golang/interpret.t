@@ -15,3 +15,5 @@
   01234567
   $ ./INTERPRET.exe ../../../../examples/closure_forloop.go
   4900
+  $ ./INTERPRET.exe ../../../../examples/primes.go
+  2  3  5  7  11  13  17  19  23  29  31  37  41  43  47  53  59  61  67  71  73  79  83  89  97  Finished
