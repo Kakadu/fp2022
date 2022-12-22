@@ -17,8 +17,13 @@ type value =
   | VFunc of vfunc
   | VVoid
 
+type env =
+  { parent : env option
+  ; tbl : value ref tbl
+  }
+
 type eval_state =
-  { tbl : value tbl
+  { env : env
   ; returned : value option
   }
 
@@ -28,16 +33,55 @@ end)
 
 open P
 
-let set id value =
+let push_fn =
   let* s = access in
-  put { s with tbl = Ident.set s.tbl ~key:id ~data:value }
+  let env = { parent = Some s.env; tbl = empty_tbl } in
+  put { s with env }
 ;;
 
-let get id =
+let pop_fn =
   let* s = access in
-  match Ident.find s.tbl id with
-  | Some value -> return value
-  | None -> failwith "Value not found!"
+  let env =
+    match s.env with
+    | { parent = None; _ } -> failwith "Cannot pop global scope"
+    | { parent = Some env; _ } -> env
+  in
+  put { s with env }
+;;
+
+let new_var id value =
+  let* s = access in
+  match s with
+  | { env = { parent; tbl }; returned } ->
+    let tbl = Ident.set tbl ~key:id ~data:(ref value) in
+    put { env = { parent; tbl }; returned }
+;;
+
+let set_var id value =
+  let rec set_ref env =
+    let { parent; tbl } = env in
+    let var = Ident.find tbl id in
+    match parent, var with
+    | _, Some var -> var := value
+    | Some env, None -> set_ref env
+    | None, None -> failwith "Variable not found!"
+  in
+  let* s = access in
+  set_ref s.env;
+  put s
+;;
+
+let get_var id =
+  let rec get_ref_val env =
+    let { parent; tbl } = env in
+    let var = Ident.find tbl id in
+    match parent, var with
+    | _, Some var -> !var
+    | Some env, None -> get_ref_val env
+    | None, None -> failwith "Variable not found!"
+  in
+  let* s = access in
+  return (get_ref_val s.env)
 ;;
 
 let set_returned value =
@@ -75,7 +119,7 @@ let rec eval_expr = function
   | Const (Int x) -> return (VInt x)
   | Const (Str x) -> return (VStr x)
   | Const (Bool x) -> return (VBool x)
-  | Ident id -> get id
+  | Ident id -> get_var id
   | ArrLit (_, els) -> eval_arr_lit els
   | ArrIndex (arr, i) -> eval_arr_index arr i
   | Call (f, args) ->
@@ -106,14 +150,16 @@ and eval_call f args =
     let formal_args = List.map formal_args ~f:(fun (id, _) -> id) in
     match List.zip formal_args args with
     | List.Or_unequal_lengths.Ok lst ->
-      fold_state lst ~f:(fun (farg, arg) -> set farg arg)
+      fold_state lst ~f:(fun (farg, arg) -> new_var farg arg)
     | List.Or_unequal_lengths.Unequal_lengths ->
       failwith "Internal error: illegal number of args"
   in
   match f with
   | VFunc ({ args = fargs; _ }, b) ->
+    let* _ = push_fn in
     let* _ = set_args fargs args in
     let* _ = eval_block b in
+    let* _ = pop_fn in
     let* r = remove_returned in
     (match r with
      | Some r -> return r
@@ -183,12 +229,12 @@ and eval_block b = fold_state b ~f:eval_stmt
 and eval_assign l r =
   let* r = eval_expr r in
   match l with
-  | Ident id -> set id r
+  | Ident id -> set_var id r
   | _ -> failwith "Illegal assignment"
 
 and eval_vardecl (id, expr) =
   let* value = eval_expr expr in
-  set id value
+  new_var id value
 
 and eval_if cond bthen belse =
   let* cond = eval_expr cond in
@@ -203,7 +249,7 @@ let eval_file file =
     | GlobalVarDecl v -> eval_vardecl v
     | FuncDecl (id, sign, b) ->
       let* v = eval_func_lit sign b in
-      set id v
+      new_var id v
   in
   let eval_main = function
     | FuncDecl (id, _, b) when String.equal (name id) "main" -> eval_block b
@@ -214,6 +260,6 @@ let eval_file file =
 ;;
 
 let eval file =
-  let _ = run_pass (eval_file file) ~init:{ tbl = empty_tbl; returned = None } in
+  let _ = run_pass (eval_file file) ~init:{ env = {parent = None; tbl = empty_tbl}; returned = None } in
   ()
 ;;
