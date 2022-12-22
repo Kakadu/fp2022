@@ -180,6 +180,7 @@ and check_stmt = function
   | RetStmt expr -> check_ret expr
   | IfStmt (cond, b1, b2) ->
     require_expr_typ BoolTyp cond *> check_block b1 *> check_block b2
+  | ForStmt (cond, b) -> require_expr_typ BoolTyp cond *> check_block b
 
 and check_assign l r =
   match l with

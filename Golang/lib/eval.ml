@@ -37,14 +37,16 @@ end)
 
 open P
 
-let set_env env = 
+let set_env env =
   let* s = access in
-  let* _  = put { s with env } in
+  let* _ = put { s with env } in
   return s.env
+;;
 
 let get_env =
   let* s = access in
   return s.env
+;;
 
 let push_fn =
   let* s = access in
@@ -66,11 +68,13 @@ let enter_func_call closure_env =
   let* cur_env = set_env closure_env in
   let* _ = push_fn in
   return cur_env
+;;
 
 let exit_func_call env =
   let* _ = pop_fn in
   let* _ = set_env env in
   return ()
+;;
 
 let new_var id value =
   let* s = access in
@@ -189,7 +193,7 @@ and eval_call f args =
      | None -> return VVoid)
   | _ -> failwith "Internal error: illegal types"
 
-and eval_func_lit sign block = 
+and eval_func_lit sign block =
   let* env = get_env in
   return (VFunc (env, sign, block))
 
@@ -247,6 +251,7 @@ and eval_stmt stmt =
        set_returned v
      | RetStmt None -> set_returned VVoid
      | IfStmt (cond, b1, b2) -> eval_if cond b1 b2
+     | ForStmt (cond, b) -> eval_for cond b
      | _ -> assert false)
 
 and eval_block b = fold_state b ~f:eval_stmt
@@ -287,6 +292,13 @@ and eval_if cond bthen belse =
   | VBool true -> eval_block bthen
   | VBool false -> eval_block belse
   | _ -> failwith "Internal error: illegal types"
+
+and eval_for cond body =
+  let* value = eval_expr cond in
+  match value with
+  | VBool true -> eval_block body *> eval_stmt (ForStmt (cond, body)) (* reuse "return" logic*)
+  | VBool false -> return ()
+  | _ -> failwith "Internal error"
 ;;
 
 let eval_file file =
@@ -306,10 +318,11 @@ let eval_file file =
       | _ -> None)
   in
   let eval_func_decl (id, sign, b) =
-    let* _ = new_var id VVoid in (* For recursive functions *)
+    let* _ = new_var id VVoid in
+    (* For recursive functions *)
     let* v = eval_func_lit sign b in
     set_var id v
-  in 
+  in
   let* _ = fold_state funcs ~f:eval_func_decl in
   (* Eval main() *)
   let eval_main = function

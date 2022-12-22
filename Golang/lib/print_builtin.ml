@@ -30,6 +30,7 @@ and pass_stmt = function
   | GoStmt e -> GoStmt (pass_expr e)
   | RetStmt e -> RetStmt (Option.map e ~f:pass_expr)
   | IfStmt (cond, b1, b2) -> IfStmt (pass_expr cond, pass_block b1, pass_block b2)
+  | ForStmt (cond, b) -> ForStmt ( pass_expr cond, pass_block b)
 
 and pass_block stmts = List.map stmts ~f:pass_stmt
 

@@ -85,6 +85,7 @@ and 'id stmt =
   | GoStmt of 'id expr (* go f(); *)
   | RetStmt of 'id expr option (* return expr; *)
   | IfStmt of 'id expr * 'id block * 'id block (* if expr { } else { } *)
+  | ForStmt of 'id expr * 'id block (* for expr { } *)
 [@@deriving show, ord]
 
 type 'id source_file = 'id top_level_decl list [@@deriving show]

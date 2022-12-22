@@ -183,6 +183,10 @@ and lookup_stmt = function
     let* b1 = lookup_block b1 in
     let* b2 = lookup_block b2 in
     return (IfStmt (cond, b1, b2))
+  | ForStmt (cond, b) ->
+    let* cond = lookup_expr cond in
+    let* b = lookup_block b in
+    return (ForStmt (cond, b))
 
 and lookup_vardecl name expr =
   let* expr = lookup_expr expr in

@@ -475,6 +475,12 @@ let eds =
      else return (IfStmt (cond, then_block, [])))
     <?> "IfStatement"
   in
+  let for_stmt d =
+    let* _ = keyword "for" *> ws1 in
+    let* expr = d.expr d <* ws in
+    let* b = block d in
+    return (ForStmt (expr, b))
+  in
   let stmt d =
     fix
     @@ fun _ ->
@@ -483,6 +489,7 @@ let eds =
     <|> ret_stmt d
     <|> block_stmt d
     <|> if_stmt d
+    <|> for_stmt d
     <|> simple_stmt d
     <?> "Statement"
   in

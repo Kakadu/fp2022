@@ -60,6 +60,9 @@ and findin_stmt = function
     let* _ = findin_expr cond in
     let* _ = findin_block b1 in
     findin_block b2
+  | ForStmt (cond, b) ->
+    let* _ = findin_expr cond in
+    findin_block b
 ;;
 
 let findin_toplevel = function
