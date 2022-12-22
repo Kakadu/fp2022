@@ -7,3 +7,5 @@
   012345678910
   $ ./INTERPRET.exe ../../../../examples/arr_assign.go
   [42][[1], [337]][10][101][0]
+  $ ./INTERPRET.exe ../../../../examples/global_var_order.go
+  1

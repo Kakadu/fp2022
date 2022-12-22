@@ -211,8 +211,13 @@ and check_ret e =
   | Some Void, None -> return ()
 ;;
 
+let check_global_var e =
+  match e with
+  | Const _ -> check_expr e *> return ()
+  | _ -> add_err "At top level global variables can only have constant initializers"
+
 let check_toplevel = function
-  | GlobalVarDecl (_, e) -> check_expr e *> return ()
+  | GlobalVarDecl (_, e) -> check_global_var e
   | FuncDecl (_, s, b) -> check_func_lit s b *> return ()
 ;;
 

@@ -11,8 +11,6 @@ exception RuntimeExn of string
 
 let runtime_exn msg = raise (RuntimeExn msg)
 
-type vfunc = ident signature * ident block
-
 type value =
   | VInt of int
   | VBool of bool
@@ -21,7 +19,9 @@ type value =
   | VFunc of vfunc
   | VVoid
 
-type env =
+and vfunc = ident signature * ident block
+
+and env =
   { parent : env option
   ; tbl : value ref tbl
   }
@@ -245,16 +245,16 @@ and eval_arr_index_assign receiver i x =
     else runtime_exn "Array index out of bounds"
   in
   let* i = eval_expr i in
-    let* list = eval_expr receiver in
-    let new_list =
-      match list, i with
-      | VArr list, VInt i -> VArr (list_set_i list i x)
-      | _ -> failwith "Internal error: typing"
-    in
-    match receiver with
-    | Ident id -> set_var id new_list
-    | ArrIndex (receiver, new_i) -> eval_arr_index_assign receiver new_i new_list
-    | _ -> return ()
+  let* list = eval_expr receiver in
+  let new_list =
+    match list, i with
+    | VArr list, VInt i -> VArr (list_set_i list i x)
+    | _ -> failwith "Internal error: typing"
+  in
+  match receiver with
+  | Ident id -> set_var id new_list
+  | ArrIndex (receiver, new_i) -> eval_arr_index_assign receiver new_i new_list
+  | _ -> return ()
 
 and eval_vardecl (id, expr) =
   let* value = eval_expr expr in
@@ -269,17 +269,31 @@ and eval_if cond bthen belse =
 ;;
 
 let eval_file file =
-  let assign_toplevel = function
-    | GlobalVarDecl v -> eval_vardecl v
-    | FuncDecl (id, sign, b) ->
-      let* v = eval_func_lit sign b in
-      new_var id v
+  (* Define globals *)
+  let vars =
+    List.filter_map file ~f:(fun x ->
+      match x with
+      | GlobalVarDecl v -> Some v
+      | _ -> None)
   in
+  let* _ = fold_state vars ~f:eval_vardecl in
+  (* Define functions *)
+  let funcs =
+    List.filter_map file ~f:(fun x ->
+      match x with
+      | FuncDecl f -> Some f
+      | _ -> None)
+  in
+  let eval_func_decl (id, sign, b) =
+    let* v = eval_func_lit sign b in
+      new_var id v
+  in 
+  let* _ = fold_state funcs ~f:eval_func_decl in
+  (* Eval main() *)
   let eval_main = function
     | FuncDecl (id, _, b) when String.equal (name id) "main" -> eval_block b
     | _ -> return ()
   in
-  let* _ = fold_state file ~f:assign_toplevel in
   fold_state file ~f:eval_main
 ;;
 
