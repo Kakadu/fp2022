@@ -95,16 +95,7 @@ and check_expr = function
   | Print _ -> finish_with_err "Cannot use print built-in's return value"
 
 and check_arr_lit array_typ els =
-  let len, el_typ = array_typ in
-  let* _ =
-    if List.length els = len
-    then return ()
-    else (
-      let msg =
-        Printf.sprintf "Expected %d array elements but received %d" len (List.length els)
-      in
-      add_err msg)
-  in
+  let { el = el_typ } = array_typ in
   let* _ = fold_state els ~f:(require_expr_typ el_typ) in
   return (Some (ArrayTyp array_typ))
 
@@ -112,7 +103,7 @@ and check_arr_index arr i =
   let* arr_typ = check_expr arr in
   let* _ = require_expr_typ IntTyp i in
   match arr_typ with
-  | Some (ArrayTyp (_, el_typ)) -> return (Some el_typ)
+  | Some (ArrayTyp { el = el_typ }) -> return (Some el_typ)
   | Some _ -> finish_with_err "Can only index arrays"
   | None -> return None
 
@@ -215,6 +206,7 @@ let check_global_var e =
   match e with
   | Const _ -> check_expr e *> return ()
   | _ -> add_err "At top level global variables can only have constant initializers"
+;;
 
 let check_toplevel = function
   | GlobalVarDecl (_, e) -> check_global_var e

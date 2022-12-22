@@ -8,7 +8,7 @@ let rec show_typ = function
   | IntTyp -> "int"
   | StrTyp -> "string"
   | BoolTyp -> "bool"
-  | ArrayTyp (len, eltyp) -> Printf.sprintf "[%d]%s" len (show_typ eltyp)
+  | ArrayTyp { el = eltyp } -> Printf.sprintf "[]%s" (show_typ eltyp)
   | FunTyp { args; ret } ->
     let args = List.map (fun (_, typ) -> show_typ typ) args in
     let ret =

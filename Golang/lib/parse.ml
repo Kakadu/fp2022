@@ -175,10 +175,10 @@ let type_dis =
   let type_name =
     let* name = ident_str in
     match name with
-      | "int" -> return IntTyp
-      | "string" -> return StrTyp
-      | "bool" -> return BoolTyp
-      | _ -> fail "Unknown type"
+    | "int" -> return IntTyp
+    | "string" -> return StrTyp
+    | "bool" -> return BoolTyp
+    | _ -> fail "Unknown type"
   in
   (* ===================== *)
   (* ===== ArrayType ===== *)
@@ -187,9 +187,9 @@ let type_dis =
       ArrayLength := integer constant.
       ElementType := Type. *)
   let array_type d =
-    let* length = in_brackets integer <* ws in
+    let* _ = in_brackets ws <* ws in
     let* el_type = d.typ d in
-    return (length, el_type)
+    return { el = el_type }
   in
   let array_type_wrapped d =
     let* t = array_type d in
@@ -560,8 +560,8 @@ let%test _ = Result.is_error (parse int_const "abc")
    ~~~~~~~~~~              Types                    ~~~~~~~~~~~
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ *)
 let%test _ = Ok IntTyp = parse typ "int"
-let%test _ = Ok (ArrayTyp (10, IntTyp)) = parse typ "[10]int"
-let%test _ = Ok (ArrayTyp (10, ArrayTyp (20, IntTyp))) = parse typ "[10][20]int"
+let%test _ = Ok (ArrayTyp { el = IntTyp }) = parse typ "[]int"
+let%test _ = Ok (ArrayTyp { el = ArrayTyp { el = IntTyp } }) = parse typ "[][]int"
 (* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    ~~~~~~~~           Expressions Tests                ~~~~~~~~
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ *)
@@ -574,11 +574,11 @@ let%test _ = Ok (Const (Str "string")) = parse expr {|("string")|}
 let%test _ = Ok (Ident "abc") = parse expr "abc"
 let%test _ = Ok (Ident "abc") = parse expr "(abc)"
 (* Array Literals *)
-let%test _ = Ok (ArrLit ((0, IntTyp), [])) = parse expr "[0]int{}"
+let%test _ = Ok (ArrLit ({ el = IntTyp }, [])) = parse expr "[]int{}"
 
 let%test _ =
-  Ok (ArrLit ((3, IntTyp), [ Const (Int 1); Ident "true"; Const (Str "yes") ]))
-  = parse expr {|[3]int{1,true,"yes"}|}
+  Ok (ArrLit ({ el = IntTyp }, [ Const (Int 1); Ident "true"; Const (Str "yes") ]))
+  = parse expr {|[]int{1,true,"yes"}|}
 ;;
 
 (* Index Expressions *)
@@ -634,16 +634,16 @@ let%test _ =
 
 let%test _ =
   Ok
-    (FuncLit ({ args = [ "x", IntTyp; "y", ArrayTyp (10, IntTyp) ]; ret = One IntTyp }, []))
-  = parse expr "func(x int, y [10]int,) int {}"
+    (FuncLit ({ args = [ "x", IntTyp; "y", ArrayTyp { el = IntTyp } ]; ret = One IntTyp }, []))
+  = parse expr "func(x int, y []int,) int {}"
 ;;
 
 let%test _ =
   Ok
     (FuncLit
-       ( { args = [ "x", ArrayTyp (10, IntTyp) ]; ret = One (ArrayTyp (10, IntTyp)) }
+       ( { args = [ "x", ArrayTyp { el = IntTyp } ]; ret = One (ArrayTyp { el = IntTyp }) }
        , [ RetStmt (Some (Ident "x")) ] ))
-  = parse expr "func(x [10]int,) [10]int { return x; }"
+  = parse expr "func(x []int,) []int { return x; }"
 ;;
 
 (* Binary operators *)
@@ -733,13 +733,13 @@ let%test _ =
 let%test _ = Ok (VarDecl ("x", Const (Int 1))) = parse stmt "var x = 1;"
 
 let%test _ =
-  Ok (VarDecl ("abc", ArrLit ((1, IntTyp), [ Const (Int 2) ])))
-  = parse stmt "var abc = [1]int{2};"
+  Ok (VarDecl ("abc", ArrLit ({ el = IntTyp }, [ Const (Int 2) ])))
+  = parse stmt "var abc = []int{2};"
 ;;
 
 let%test _ =
-  Ok (VarDecl ("abc", ArrLit ((1, IntTyp), [ Const (Int 2) ])))
-  = parse stmt "var abc = [1] int   {2};"
+  Ok (VarDecl ("abc", ArrLit ({ el = IntTyp }, [ Const (Int 2) ])))
+  = parse stmt "var abc = [] int   {2};"
 ;;
 
 (* expression statements *)
@@ -747,8 +747,8 @@ let%test _ = Ok (ExprStmt (Const (Int 1))) = parse stmt "1;"
 let%test _ = Ok (ExprStmt (Ident "foo")) = parse stmt "foo;"
 
 let%test _ =
-  Ok (ExprStmt (Call (Ident "f", [ ArrLit ((1, IntTyp), [ Const (Str "123") ]) ])))
-  = parse stmt {|f([1]int{"123"});|}
+  Ok (ExprStmt (Call (Ident "f", [ ArrLit ({ el = IntTyp }, [ Const (Str "123") ]) ])))
+  = parse stmt {|f([]int{"123"});|}
 ;;
 
 (* assignments *)
