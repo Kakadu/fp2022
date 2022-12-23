@@ -157,6 +157,7 @@ let rec eval_expr = function
   | UnOp (op, e) -> eval_unop op e
   | BinOp (l, op, r) -> eval_binop l op r
   | Print args -> eval_print args
+  | Len e -> eval_len e
 
 and eval_arr_lit els =
   let* els = many els ~f:eval_expr in
@@ -234,6 +235,12 @@ and eval_print args =
   Caml.print_string str;
   return VVoid
 
+and eval_len e =
+  let* arr = eval_expr e in
+  match arr with
+  | VArr list -> return (VInt (List.length list))
+  | _ -> failwith "Internal error"
+
 (* Statements *)
 
 and eval_stmt stmt =
@@ -296,7 +303,8 @@ and eval_if cond bthen belse =
 and eval_for cond body =
   let* value = eval_expr cond in
   match value with
-  | VBool true -> eval_block body *> eval_stmt (ForStmt (cond, body)) (* reuse "return" logic*)
+  | VBool true ->
+    eval_block body *> eval_stmt (ForStmt (cond, body)) (* reuse "return" logic*)
   | VBool false -> return ()
   | _ -> failwith "Internal error"
 ;;

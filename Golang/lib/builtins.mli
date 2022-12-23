@@ -2,4 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-val pass_file : Ident.ident Ast.source_file -> Ident.ident Ast.source_file
+open Ast
+open Ident
+
+val pass : ident source_file -> (ident source_file, string list) result

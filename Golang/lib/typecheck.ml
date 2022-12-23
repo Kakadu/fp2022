@@ -93,6 +93,7 @@ and check_expr = function
   | UnOp (op, expr) -> check_unop op expr
   | BinOp (l, op, r) -> check_binop l op r
   | Print _ -> finish_with_err "Cannot use print built-in's return value"
+  | Len e -> check_len e
 
 and check_arr_lit array_typ els =
   let { el = el_typ } = array_typ in
@@ -168,6 +169,13 @@ and check_binop l op r =
      | Some _, Some _ ->
        finish_with_err "Operator + is defined only for (int, int) and (string, string)"
      | _ -> return None)
+
+and check_len e =
+  let* t = check_expr e in
+  match t with
+  | Some (ArrayTyp _) -> return (Some IntTyp)
+  | Some _ -> finish_with_err "len() built-in accepts only arrays"
+  | None -> return None
 
 and check_block b = fold_state b ~f:check_stmt
 

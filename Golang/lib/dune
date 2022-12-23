@@ -10,7 +10,7 @@
   Pass
   Lookup
   Find_decl
-  Print_builtin
+  Builtins
   Typecheck
   Termination_check
   Eval

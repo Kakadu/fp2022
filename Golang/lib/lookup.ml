@@ -135,6 +135,9 @@ let rec lookup_expr = function
   | Print e ->
     let* e = lookup_exprs e in
     return (Print e)
+  | Len e ->
+    let* e = lookup_expr e in
+    return (Len e)
 
 and lookup_func sign b =
   let* enclosing_scope = enter_scope in
