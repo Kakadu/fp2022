@@ -16,7 +16,12 @@ type rec_flag =
   | Recursive
   | NonRecursive
 
-type environment = (id, value, Base.String.comparator_witness) Base.Map.t
+type environment =
+  { ids : (id, value, Base.String.comparator_witness) Base.Map.t
+  ; effects : (capitalized_id, Base.String.comparator_witness) Base.Set.t
+  ; effect_handlers :
+      (capitalized_id, expression, Base.String.comparator_witness) Base.Map.t
+  }
 
 and value =
   | VInt of int
@@ -28,13 +33,50 @@ and value =
   | VTuple of value list
   | VFun of id list * expression * environment * rec_flag
   | VADT of data_constructor_name * value option
+  | VEffectNoArg of id
+  | VEffectArg of id * expression
+  | VEffectDeclaration of id
+  | VEffectPattern of expression
 
 module Interpret (M : MONAD_FAIL) : sig
   val run : expression list -> (value, error_message) M.t
 end = struct
   open M
 
-  let rec eval expression environment =
+  let find map key =
+    match Map.find map key with
+    | Some v -> return v
+    | None -> fail (String.concat [ "Runtime error: unbound value "; key; "." ])
+  ;;
+
+  let find_effect set effect_name =
+    match Set.exists set ~f:(Poly.( = ) effect_name) with
+    | true -> return true
+    | false -> fail (String.concat [ "Runtime error: unbound effect "; effect_name; "." ])
+  ;;
+
+  let update_ids environment key value =
+    { environment with ids = Map.update environment.ids key ~f:(fun _ -> value) }
+  ;;
+
+  let update_effects environment effect_name =
+    { environment with effects = Set.add environment.effects effect_name }
+  ;;
+
+  let update_effect_handlers environment key value =
+    { environment with
+      effect_handlers = Map.update environment.effect_handlers key ~f:(fun _ -> value)
+    }
+  ;;
+
+  let empty =
+    { ids = Map.empty (module String)
+    ; effects = Set.empty (module String)
+    ; effect_handlers = Map.empty (module String)
+    }
+  ;;
+
+  let rec eval (expression : expression) (environment : environment) =
     let rec foldr f ini = function
       | [] -> return ini
       | h :: t ->
@@ -146,19 +188,13 @@ end = struct
     | EIdentifier name ->
       if name = "_"
       then fail "Runtime error: used wildcard in right-hand expression."
-      else (
-        match Map.find environment name with
-        | Some v ->
-          (match v with
-          | VFun (id_list, function_body, environment, Recursive) ->
-            return
-            @@ VFun
-                 ( id_list
-                 , function_body
-                 , Map.update environment name ~f:(fun _ -> v)
-                 , Recursive )
-          | _ -> return v)
-        | None -> fail (String.concat [ "Runtime error: unbound value "; name; "." ]))
+      else
+        let* v = find environment.ids name in
+        (match v with
+         | VFun (id_list, function_body, environment, Recursive) ->
+           return
+           @@ VFun (id_list, function_body, update_ids environment name v, Recursive)
+         | _ -> return v)
     | EApplication (function_expr, argument_expr) ->
       let* eval_argument = eval argument_expr environment in
       let* eval_function = eval function_expr environment in
@@ -174,9 +210,7 @@ end = struct
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
       let environment =
-        if id <> "_"
-        then Map.update environment id ~f:(fun _ -> eval_argument)
-        else environment
+        if id <> "_" then update_ids environment id eval_argument else environment
       in
       if id_list = []
       then eval function_body environment
@@ -259,15 +293,40 @@ end = struct
         | h :: t ->
           let* result = eval h environment in
           (match h with
-          | EDeclaration (name, _, _) ->
-            eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
-          | ERecursiveDeclaration (name, _, _) ->
-            eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
-          | _ -> fail "Runtime error: declaration was expected.")
+           | EDeclaration (name, _, _) ->
+             eval_bindings (update_ids environment name result) t
+           | ERecursiveDeclaration (name, _, _) ->
+             eval_bindings (update_ids environment name result) t
+           | _ -> fail "Runtime error: declaration was expected.")
         | _ -> eval expression environment
       in
       eval_bindings environment bindings_list
     | EMatchWith (matched_expression, case_list) ->
+      let* environment =
+        List.fold_right
+          case_list
+          ~f:(fun (case, action) environment ->
+            let* environment = environment in
+            match case with
+            | EEffectPattern effect ->
+              (match effect with
+               | EEffectNoArg name ->
+                 let* _ = find_effect environment.effects name in
+                 return @@ update_effect_handlers environment name (EFun ([], action))
+               | EEffectArg (name, expression) ->
+                 let* _ = find_effect environment.effects name in
+                 return
+                 @@ update_effect_handlers
+                      environment
+                      name
+                      (EFun
+                         ( [ "eFFectValuE" ]
+                         , EMatchWith (EIdentifier "eFFectValuE", [ expression, action ])
+                         ))
+               | _ -> fail "Runtime error: not an effect.")
+            | _ -> return environment)
+          ~init:(return environment)
+      in
       let rec compare_patterns matched_expression case action environment =
         let rec helper environment = function
           | matched_head :: matched_tail, head :: tail ->
@@ -299,9 +358,7 @@ end = struct
           eval action environment, environment, true
         | value, EIdentifier id ->
           let new_environment =
-            if id <> "_"
-            then Map.update environment id ~f:(fun _ -> value)
-            else environment
+            if id <> "_" then update_ids environment id value else environment
           in
           eval action new_environment, new_environment, true
         | VList matched_list, EList list -> helper environment (matched_list, list)
@@ -340,21 +397,42 @@ end = struct
           if success then result else helper tail
         | [] -> fail "Runtime error: pattern-matching is not exhaustive."
       in
-      helper case_list
+      helper
+        (List.filter case_list ~f:(function
+          | EEffectPattern _, _ -> false
+          | _ -> true))
+    | EEffectDeclaration (name, _) -> return (VEffectDeclaration name)
+    | EEffectNoArg name -> return (VEffectNoArg name)
+    | EEffectArg (name, expression) -> return @@ VEffectArg (name, expression)
+    | EPerform expression ->
+      let* eval_expression = eval expression environment in
+      (match eval_expression with
+       | VEffectNoArg effect_name ->
+         let* handler = find environment.effect_handlers effect_name in
+         eval handler environment
+       | VEffectArg (effect_name, argument) ->
+         let* handler = find environment.effect_handlers effect_name in
+         eval (EApplication (handler, argument)) environment
+       | _ -> fail "Runtime error: not an effect.")
+    | EContinue expression -> eval expression environment
+    | EEffectPattern expression ->
+      let* eval_expression = eval expression environment in
+      return eval_expression
+    | _ -> fail "AHAHAHA"
   ;;
 
   let run (program : expression list) =
-    let environment = Map.empty (module Base.String) in
+    let environment = empty in
     let rec helper environment = function
       | [ h ] -> eval h environment
       | h :: t ->
         let* result = eval h environment in
         (match h with
-        | EDeclaration (name, _, _) ->
-          helper (Map.update environment name ~f:(fun _ -> result)) t
-        | ERecursiveDeclaration (name, _, _) ->
-          helper (Map.update environment name ~f:(fun _ -> result)) t
-        | _ -> fail "Runtime error: declaration was expected.")
+         | EDeclaration (name, _, _) -> helper (update_ids environment name result) t
+         | ERecursiveDeclaration (name, _, _) ->
+           helper (update_ids environment name result) t
+         | EEffectDeclaration (name, _) -> helper (update_effects environment name) t
+         | _ -> fail "Runtime error: declaration was expected.")
       | _ -> return VUnit
     in
     helper environment program

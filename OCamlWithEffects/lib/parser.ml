@@ -61,7 +61,7 @@ let eeffect_declaration effect_name effect_type =
 
 (* let eeffect_usage name argument_list = EEffectUsage (name, argument_list) *)
 let eperform expression = EPerform expression
-let econtinue name expression = EContinue (name, expression)
+let econtinue expression = EContinue expression
 
 (* -------------------------------------- *)
 
