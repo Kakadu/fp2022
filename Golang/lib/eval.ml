@@ -158,6 +158,9 @@ let rec eval_expr = function
   | BinOp (l, op, r) -> eval_binop l op r
   | Print args -> eval_print args
   | Len e -> eval_len e
+  | Append (arr, vs) -> eval_append arr vs
+
+and eval_exprs exprs = many exprs ~f:eval_expr
 
 and eval_arr_lit els =
   let* els = many els ~f:eval_expr in
@@ -240,6 +243,13 @@ and eval_len e =
   match arr with
   | VArr list -> return (VInt (List.length list))
   | _ -> failwith "Internal error"
+
+and eval_append arr vs =
+  let* arr = eval_expr arr in
+  let* vs = eval_exprs vs in
+  match arr with
+  | VArr list -> return (VArr (List.append list vs))
+  | _ -> failwith "internal err"
 
 (* Statements *)
 

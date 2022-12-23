@@ -40,13 +40,11 @@ let keyword kw = string kw
 
 let ident_str =
   let is_ident_start = function
-    | 'a' .. 'z' -> true
-    | '_' -> true
+    | 'a' .. 'z' | 'A' .. 'Z' | '_' -> true
     | _ -> false
   in
   let is_ident_mid = function
-    | 'a' .. 'z' -> true
-    | '0' .. '9' | '_' -> true
+    | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true
     | _ -> false
   in
   let* first = satisfy is_ident_start in
@@ -641,7 +639,8 @@ let%test _ =
 
 let%test _ =
   Ok
-    (FuncLit ({ args = [ "x", IntTyp; "y", ArrayTyp { el = IntTyp } ]; ret = One IntTyp }, []))
+    (FuncLit
+       ({ args = [ "x", IntTyp; "y", ArrayTyp { el = IntTyp } ]; ret = One IntTyp }, []))
   = parse expr "func(x int, y []int,) int {}"
 ;;
 

@@ -42,6 +42,7 @@ and findin_expr = function
   | FuncLit (s, b) -> findin_sign s *> findin_block b
   | Print xs -> findin_exprs xs
   | Len x -> findin_expr x
+  | Append (arr, vs) -> findin_expr arr *> findin_exprs vs
 
 and findin_sign { args; _ } =
   let findin_arg arg = check_decl (Arg arg) in

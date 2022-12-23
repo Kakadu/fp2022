@@ -66,6 +66,7 @@ type 'id expr =
   | BinOp of ('id expr * binop * 'id expr) (* expr binop expr *)
   | Print of 'id expr list (* print(arg1, arg2, ... argn) *)
   | Len of 'id expr (* len(arr) *)
+  | Append of 'id expr * 'id expr list (* append(arr, x, y, z, ...) *)
 [@@deriving show]
 
 and 'id var_decl = 'id * 'id expr

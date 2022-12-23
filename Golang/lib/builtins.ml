@@ -22,7 +22,7 @@ let add_err msg =
 let rec pass_expr e =
   match e with
   | Call (Ident id, args) -> pass_id_call id args
-  | ArrLit (t, els) -> 
+  | ArrLit (t, els) ->
     let* exprs = pass_exprs els in
     return (ArrLit (t, exprs))
   | ArrIndex (a, i) ->
@@ -61,6 +61,10 @@ and map_builtin name args =
   let* args = pass_exprs args in
   match name with
   | "print" -> return (Some (Print args))
+  | "append" ->
+    (match args with
+     | arr :: first :: rest -> return (Some (Append (arr, first :: rest)))
+     | _ -> add_err "append() takes at least 2 arguments" *> return None)
   | "len" ->
     (match args with
      | [ x ] -> return (Some (Len x))
@@ -114,7 +118,8 @@ let pass_toplevel = function
 let pass_file (f : ident source_file) = many f ~f:pass_toplevel
 
 let pass f =
-  let (s, f) = run_pass (pass_file f) ~init:[] in
+  let s, f = run_pass (pass_file f) ~init:[] in
   match s with
   | [] -> Ok f
   | errs -> Error errs
+;;
