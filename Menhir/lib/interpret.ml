@@ -125,36 +125,35 @@ let rec try_apply_rule text rule input parse_res =
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
-    if list_empty input (* OVERSHOOT RIGHT HERE. *)
-    then false, -1
-    else if string_list_contains h terminals (* TERM SYMBOL *)
-    then
-      if String.equal (List.hd input) h
-      then
-        try_apply_rule text (lhs, tl) (List.tl input) parse_res
-        (* If equal TERM symbols in text and rule then continue checking *)
-      else false, 0 (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
-    else if string_list_contains h (get_nonterminals grammar) (* NONTERM SYMBOL *)
-    then (
-      (* Get new input if nonterm rule is fits right here. *)
-      let rec get_new_input all_nonterms ret =
-        match all_nonterms with
-        | h' :: tl' ->
-          let is_applicable, remaining_input_len =
-            try_apply_rule text h' input parse_res
-          in
-          if is_applicable
-          then get_last_elements_from_list remaining_input_len input, ret
-          else (
-            let ret' = if ret = -1 then ret else remaining_input_len in
-            get_new_input tl' ret')
-        | [] -> input, ret
-      in
-      let new_input, ret = get_new_input (get_all_nonterms h grammar) 0 in
-      if List.compare_lengths new_input input = 0
-      then false, ret
-      else try_apply_rule text (lhs, tl) new_input parse_res)
-    else false, 0 (* REJECT *)
+    (match input with
+     | [] -> false, -1 (* OVERSHOOT RIGHT HERE. *)
+     | h' :: tl' when string_list_contains h terminals (* TERM SYMBOL *) ->
+       if String.equal h' h
+       then
+         try_apply_rule text (lhs, tl) tl' parse_res
+         (* If equal TERM symbols in text and rule then continue checking *)
+       else false, 0 (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
+     | _ :: _ when string_list_contains h (get_nonterminals grammar) (* NONTERM SYMBOL *)
+       ->
+       (* Get new input if nonterm rule is fits right here. *)
+       let rec get_new_input all_nonterms ret =
+         match all_nonterms with
+         | h' :: tl' ->
+           let is_applicable, remaining_input_len =
+             try_apply_rule text h' input parse_res
+           in
+           if is_applicable
+           then get_last_elements_from_list remaining_input_len input, ret
+           else (
+             let ret' = if ret = -1 then ret else remaining_input_len in
+             get_new_input tl' ret')
+         | [] -> input, ret
+       in
+       let new_input, ret = get_new_input (get_all_nonterms h grammar) 0 in
+       if List.compare_lengths new_input input = 0
+       then false, ret
+       else try_apply_rule text (lhs, tl) new_input parse_res
+     | _ -> false, 0 (* REJECT *))
   | [] -> true, List.length input (* remaining input len *)
 ;;
 
