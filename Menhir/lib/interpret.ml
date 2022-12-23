@@ -88,10 +88,6 @@ let get_last_elements_from_list (n : int) l =
     deleter l (len - n))
 ;;
 
-let getRhs = function
-  | _, rhs -> rhs
-;;
-
 let get_nonterminals (g : grammar) =
   let _, rules = g in
   List.map (fun (nonterm, _) -> nonterm) rules
@@ -106,8 +102,7 @@ let rec start_rule_components text start_rule = function
 ;;
 
 let string_list_contains symbol list =
-  let open Base in
-  List.mem list symbol ~equal:(fun x y -> String.equal x y)
+  Base.List.mem list symbol ~equal:(fun x y -> String.equal x y)
 ;;
 
 (* Берет все правила, которые имеют имя rule_name *)
