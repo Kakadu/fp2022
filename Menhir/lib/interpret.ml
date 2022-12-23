@@ -72,22 +72,6 @@ open Stdlib
   Note that operator goes first in addition and multiplication in this example: PLUS INT INT and MUL INT INT.
 *)
 
-let get_last_elements_from_list (n : int) l =
-  let len = List.length l in
-  if len <= n
-  then l
-  else (
-    let rec deleter l counter =
-      if counter > 0
-      then (
-        match l with
-        | _ :: tl -> deleter tl (counter - 1)
-        | _ -> [])
-      else l
-    in
-    deleter l (len - n))
-;;
-
 let get_nonterminals (g : grammar) =
   let _, rules = g in
   List.map (fun (nonterm, _) -> nonterm) rules
@@ -120,30 +104,35 @@ let list_empty = function
   | _ -> false
 ;;
 
+(* 
+  returns true or false depending on whether we can apply the rule, 
+  remaining input len if true and error code if false, remaining input 
+  if true and empty list if false
+*)
 let rec try_apply_rule text rule input parse_res =
   let terminals, _, grammar = parse_res in
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
     (match input with
-     | [] -> false, -1 (* OVERSHOOT RIGHT HERE. *)
+     | [] -> false, -1, [] (* OVERSHOOT RIGHT HERE. *)
      | h' :: tl' when string_list_contains h terminals (* TERM SYMBOL *) ->
        if String.equal h' h
        then
          try_apply_rule text (lhs, tl) tl' parse_res
          (* If equal TERM symbols in text and rule then continue checking *)
-       else false, 0 (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
+       else false, 0, [] (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
      | _ :: _ when string_list_contains h (get_nonterminals grammar) (* NONTERM SYMBOL *)
        ->
        (* Get new input if nonterm rule is fits right here. *)
        let rec get_new_input all_nonterms ret =
          match all_nonterms with
          | h' :: tl' ->
-           let is_applicable, remaining_input_len =
+           let is_applicable, remaining_input_len, remaining_input =
              try_apply_rule text h' input parse_res
            in
            if is_applicable
-           then get_last_elements_from_list remaining_input_len input, ret
+           then remaining_input, ret
            else (
              let ret' = if ret = -1 then ret else remaining_input_len in
              get_new_input tl' ret')
@@ -151,10 +140,10 @@ let rec try_apply_rule text rule input parse_res =
        in
        let new_input, ret = get_new_input (get_all_nonterms h grammar) 0 in
        if List.compare_lengths new_input input = 0
-       then false, ret
+       then false, ret, []
        else try_apply_rule text (lhs, tl) new_input parse_res
-     | _ -> false, 0 (* REJECT *))
-  | [] -> true, List.length input (* remaining input len *)
+     | _ -> false, 0, [] (* REJECT *))
+  | [] -> true, List.length input, input (* remaining input len *)
 ;;
 
 exception NeverHappenError
@@ -169,17 +158,13 @@ let rec apply_rule text rule input parse_res =
     else (
       let rec apply = function
         | (lh', rh') :: tl' ->
-          let is_applicable, remaining_input_len =
+          let is_applicable, _, remaining_input =
             try_apply_rule text (lh', rh') input parse_res
           in
           if is_applicable
           then
             Nonterm (h, apply_rule text (lh', rh') input parse_res)
-            :: apply_rule
-                 text
-                 (lhs, tl)
-                 (get_last_elements_from_list remaining_input_len input)
-                 parse_res
+            :: apply_rule text (lhs, tl) remaining_input parse_res
           else apply tl'
         | _ -> raise NeverHappenError
         (* Never happen because we checked it earlier in try_apply_rule function. *)
@@ -193,7 +178,7 @@ let parse text parse_res (input : string list) =
   let _, all_rules = g in
   let rec apply input = function
     | h :: tl ->
-      if let is_applicable, applied_rule_len = try_apply_rule text h input parse_res in
+      if let is_applicable, applied_rule_len, _ = try_apply_rule text h input parse_res in
          is_applicable && applied_rule_len = 0
       then apply_rule text h input parse_res
       else apply input tl
@@ -227,7 +212,7 @@ let try_apply_start_nonterm text parse_res input =
   let rec applier start_nonterms return_code =
     match start_nonterms with
     | h :: tl ->
-      let cond, ret = try_apply_rule text h input parse_res in
+      let cond, ret, _ = try_apply_rule text h input parse_res in
       if cond
       then if ret = 0 then true, ret else applier tl ret
       else if return_code = -1
