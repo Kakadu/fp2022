@@ -17,6 +17,7 @@ type typ =
   | TList of typ
   | TGround of ground_type
   | TADT of adt_type * typ
+  | TEffect of typ
 
 let int_typ = TGround Int
 let bool_typ = TGround Bool

@@ -47,8 +47,9 @@ type expression =
   | ELetIn of expression list * expression (** let x = 1 and y = 2 in x + y *)
   | EIf of expression * expression * expression (** if true then 1 else 0 *)
   | EMatchWith of expression * (expression * expression) list (** match x with _ -> x *)
+  | EEffectDeclaration of id * typ (** effect E : int -> string effect *)
+  | EEffectPattern of expression
+  | EEffect of id * expression option (** E 1 *)
+  | EPerform of expression (** perform (E 1) *)
+  | EContinue of id * expression (** continue k 3 *)
   | EDataConstructor of data_constructor_name * expression option (** Some 5 *)
-  | EEffectDeclaration of id * typ
-  (* | EEffectUsage of id * expression list *)
-  | EPerform of expression
-  | EContinue of id * expression
