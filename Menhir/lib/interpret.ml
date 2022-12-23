@@ -251,15 +251,11 @@ let get_parser_and_tree_parser text =
   try Ok (gen_parser text parse_result, gen_tree_parser text parse_result) with
   | InvalidToken (l, s) ->
     Error
-      (String.concat
-         ""
-         [ "Lexer Error: line "
-         ; l
-         ; " at: "
-         ; s
-         ; ". You can use command 'dune exec ./REPL.exe help' for get more information \
-            about required syntax."
-         ])
+      (Format.sprintf
+         "Lexer Error: line %s at: %s. You can use command 'dune exec ./REPL.exe help' \
+          for get more information about required syntax."
+         l
+         s)
   (* Error from lexer. *)
   | Error ->
     (* Error from parser. *)
