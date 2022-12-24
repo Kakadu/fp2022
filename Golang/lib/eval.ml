@@ -209,6 +209,7 @@ and eval_unop op e =
   match op, e with
   | Minus, VInt i -> return (VInt (-i)) (* Todo this is dumb *)
   | Not, VBool b -> return (VBool (Bool.equal b false))
+  | Receive, VChan c -> return (Channel.receive c)
   | _ -> failwith "Internal error: Illegal type"
 
 and eval_binop l op r =
@@ -280,7 +281,8 @@ and eval_stmt stmt =
      | RetStmt None -> set_returned VVoid
      | IfStmt (cond, b1, b2) -> eval_if cond b1 b2
      | ForStmt (cond, b) -> eval_for cond b
-     | GoStmt e -> eval_go e)
+     | GoStmt e -> eval_go e
+     | SendStmt (chan, x) -> eval_send chan x)
 
 and eval_block b = fold_state b ~f:eval_stmt
 
@@ -333,6 +335,15 @@ and eval_for cond body =
   | VBool true ->
     eval_block body *> eval_stmt (ForStmt (cond, body)) (* reuse "return" logic*)
   | VBool false -> return ()
+  | _ -> failwith "Internal error"
+
+and eval_send chan x =
+  let* chan = eval_expr chan in
+  let* x = eval_expr x in
+  match chan with
+  | VChan chan ->
+    Channel.send chan x;
+    return ()
   | _ -> failwith "Internal error"
 ;;
 

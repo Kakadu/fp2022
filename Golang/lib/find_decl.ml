@@ -51,7 +51,7 @@ and findin_sign { args; _ } =
 and findin_block b = fold_state b ~f:findin_stmt
 
 and findin_stmt = function
-  | AssignStmt (l, r) -> findin_exprs [ l; r ]
+  | AssignStmt (l, r) | SendStmt (l, r) -> findin_exprs [ l; r ]
   | VarDecl v -> check_decl (Var v)
   | BlockStmt b -> findin_block b
   | GoStmt e | ExprStmt e -> findin_expr e

@@ -147,6 +147,12 @@ and check_unop op e =
   match op with
   | Minus -> require_expr_typ IntTyp e *> return (Some IntTyp)
   | Not -> require_expr_typ BoolTyp e *> return (Some BoolTyp)
+  | Receive ->
+    let* t = check_expr e in
+    (match t with
+     | Some (ChanTyp el) -> return (Some el)
+     | Some _ -> finish_with_err "Can only receive (<-) from a channel"
+     | None -> return None)
 
 and check_binop l op r =
   let not_overloaded_op ~op ~ret =
@@ -208,6 +214,7 @@ and check_stmt = function
     require_expr_typ BoolTyp cond *> check_block b1 *> check_block b2
   | ForStmt (cond, b) -> require_expr_typ BoolTyp cond *> check_block b
   | GoStmt _ -> add_err "go statement must be followed by a function call"
+  | SendStmt (chan, x) -> check_send chan x
 
 and check_assign l r =
   match l with
@@ -217,6 +224,14 @@ and check_assign l r =
      | Some lt -> require_expr_typ lt r
      | None -> return ())
   | _ -> add_err "Can only assign to variables and array elements"
+
+and check_send chan x =
+  let* chant = check_expr chan in
+  match chant with
+  | Some (ChanTyp eltyp) -> 
+    require_expr_typ eltyp x
+  | Some _ -> add_err "Can only send (<-) into a channel"
+  | None -> return ()
 
 and check_ret e =
   let* s = access in

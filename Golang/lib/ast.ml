@@ -29,6 +29,7 @@ and return_typ =
 type unaryop =
   | Minus (* -expr *)
   | Not (* !expr *)
+  | Receive (* <- chan *)
 [@@deriving show]
 
 type binop =
@@ -90,6 +91,7 @@ and 'id stmt =
   | RetStmt of 'id expr option (* return expr; *)
   | IfStmt of 'id expr * 'id block * 'id block (* if expr { } else { } *)
   | ForStmt of 'id expr * 'id block (* for expr { } *)
+  | SendStmt of 'id expr * 'id expr (* chan <- x *)
 [@@deriving show, ord]
 
 type 'id source_file = 'id top_level_decl list [@@deriving show]

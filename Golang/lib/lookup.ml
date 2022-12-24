@@ -195,6 +195,10 @@ and lookup_stmt = function
     let* cond = lookup_expr cond in
     let* b = lookup_block b in
     return (ForStmt (cond, b))
+  | SendStmt (chan, x) ->
+    let* chan = lookup_expr chan in
+    let* x = lookup_expr x in
+    return (SendStmt (chan, x))
 
 and lookup_vardecl name expr =
   let* expr = lookup_expr expr in

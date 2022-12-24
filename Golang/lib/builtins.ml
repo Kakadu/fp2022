@@ -103,6 +103,10 @@ and pass_stmt = function
     let* cond = pass_expr cond in
     let* b = pass_block b in
     return (ForStmt (cond, b))
+  | SendStmt (chan, x) ->
+    let* chan = pass_expr chan in
+    let* x = pass_expr x in
+    return (SendStmt (chan, x))
 
 and pass_block stmts = many stmts ~f:pass_stmt
 

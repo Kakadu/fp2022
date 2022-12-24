@@ -25,3 +25,7 @@
   [1, 2, 3, 4, 5, 6, 7][2, 4, 6]
   $ ./INTERPRET.exe ../../../../examples/var_default.go
   0false[]chan
+  $ ./INTERPRET.exe ../../../../examples/goroutines_channels.go
+  yes
+  $ ./INTERPRET.exe ../../../../examples/goroutines_sum.go
+  9900

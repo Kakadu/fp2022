@@ -34,12 +34,18 @@ let add_true_false ast =
   _true :: _false :: ast
 ;;
 
+let show_ast f =
+  Ast.show_source_file (fun fmt id ->
+    Ppx_deriving_runtime.Format.pp_print_string fmt (Ident.name id)) f
+;;
+
 let normalize ast =
   let ( let* ) = Result.bind in
   let result =
     let ast = add_true_false ast in
     let* ast = Lookup.lookup [ "print"; "len"; "append" ] ast in
     let* ast = Builtins.pass ast in
+    (* print_string (show_ast ast); *)
     let* _ = Typecheck.check ast in
     let* _ = Termination_check.check_file ast in
     Eval.eval ast;

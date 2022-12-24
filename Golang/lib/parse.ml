@@ -342,7 +342,7 @@ let eds =
     let* _ = ws *> string s <* ws in
     return (fun x -> UnOp (op, x))
   in
-  let unary_ops = unary_op Not "!" <|> unary_op Minus "-" in
+  let unary_ops = unary_op Not "!" <|> unary_op Minus "-" <|> unary_op Receive "<-" in
   let unary_expr d =
     (fix
     @@ fun unary_expr ->
@@ -452,7 +452,13 @@ let eds =
     let* right = d.expr d <* ws <* semi in
     return (AssignStmt (left, right))
   in
-  let simple_stmt d = expr_stmt d <|> assign d in
+  let send_stmt d =
+    let* chan = ident in
+    let* _ = ws <* string "<-" <* ws in
+    let* x = d.expr d <* ws <* semi in
+    return (SendStmt (chan, x))
+  in
+  let simple_stmt d = send_stmt d <|> expr_stmt d <|> assign d  in
   let go_stmt d =
     (let* expr = keyword "go" *> ws1 *> d.expr d <* ws <* semi in
      return (GoStmt expr))
@@ -721,7 +727,7 @@ let%test _ =
 (* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    ~~~~~~~~           Declarations Tests               ~~~~~~~~
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ *)
-let%test _ = Ok ("x", Make (IntTyp)) = parse var_decl "var x int;"
+let%test _ = Ok ("x", Make IntTyp) = parse var_decl "var x int;"
 let%test _ = Ok ("y", Const (Int 1)) = parse var_decl "var y=1;"
 let%test _ = Ok ("y", Ident "x") = parse var_decl "var y=x;"
 let%test _ = Ok ("f", { args = []; ret = Void }, []) = parse func_decl "func f() {}"
@@ -773,6 +779,8 @@ let%test _ =
 
 (* assignments *)
 let%test _ = Ok (AssignStmt (Ident "a", Call (Ident "ff", []))) = parse stmt "a = ff();"
+(* channel send *)
+let%test _ = Ok (SendStmt (Ident "c", Ident "a")) = parse stmt "c <- a;"
 (* statements that start with a keyword *)
 let%test _ = Ok (GoStmt (Call (Ident "mygoroutine", []))) = parse stmt "go mygoroutine();"
 (* block *)
@@ -825,7 +833,7 @@ let%test _ =
       ; ExprStmt (Call (Ident "print", [ Ident "a"; Const (Int 2) ]))
       ; BlockStmt
           [ VarDecl ("b", Const (Int 10))
-          ; VarDecl ("c", Make (StrTyp))
+          ; VarDecl ("c", Make StrTyp)
           ; ExprStmt (Call (Ident "f", [ Ident "b" ]))
           ]
       ; RetStmt (Some (Ident "a"))
