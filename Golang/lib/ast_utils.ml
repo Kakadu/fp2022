@@ -16,7 +16,8 @@ let rec show_typ = function
       | Void -> ""
       | One t -> " " ^ show_typ t
     in
-    Printf.sprintf "fn(%s)%s" (String.concat ", " args) ret
+    Printf.sprintf "func(%s)%s" (String.concat ", " args) ret
+  | ChanTyp t -> Printf.sprintf "chan %s" (show_typ t)
 ;;
 
 let eq_typ t1 t2 = compare_typ t1 t2 = 0

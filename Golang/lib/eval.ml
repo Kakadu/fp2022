@@ -17,6 +17,7 @@ type value =
   | VStr of string
   | VArr of value list
   | VFunc of vfunc
+  | VChan of value Channel.t
   | VVoid
 
 and vfunc = env * ident signature * ident block
@@ -138,6 +139,7 @@ let rec value_to_string = function
   | VFunc (_, sign, _) ->
     "func" ^ show_typ (FunTyp (ident_sign_to_string_sign sign)) ^ "{ ... }"
   | VVoid -> "void"
+  | VChan _ -> "chan"
 ;;
 
 (* Expressions *)
@@ -159,6 +161,7 @@ let rec eval_expr = function
   | Print args -> eval_print args
   | Len e -> eval_len e
   | Append (arr, vs) -> eval_append arr vs
+  | Make t -> eval_make t
 
 and eval_exprs exprs = many exprs ~f:eval_expr
 
@@ -251,6 +254,14 @@ and eval_append arr vs =
   | VArr list -> return (VArr (List.append list vs))
   | _ -> failwith "internal err"
 
+and eval_make = function
+  | IntTyp -> return (VInt 0)
+  | StrTyp -> return (VStr "")
+  | BoolTyp -> return (VBool false)
+  | ArrayTyp _ -> return (VArr [])
+  | ChanTyp _ -> return (VChan (Channel.create ()))
+  | _ -> failwith "Internal err"
+
 (* Statements *)
 
 and eval_stmt stmt =
@@ -269,7 +280,7 @@ and eval_stmt stmt =
      | RetStmt None -> set_returned VVoid
      | IfStmt (cond, b1, b2) -> eval_if cond b1 b2
      | ForStmt (cond, b) -> eval_for cond b
-     | _ -> assert false)
+     | GoStmt e -> eval_go e)
 
 and eval_block b = fold_state b ~f:eval_stmt
 
@@ -302,6 +313,12 @@ and eval_arr_index_assign receiver i x =
 and eval_vardecl (id, expr) =
   let* value = eval_expr expr in
   new_var id value
+
+and eval_go expr =
+  let* s = access in
+  let run _ = run_pass (eval_expr expr) ~init:s in
+  let _ = Thread.create run () in
+  return ()
 
 and eval_if cond bthen belse =
   let* cond = eval_expr cond in

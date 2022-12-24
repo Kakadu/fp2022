@@ -34,7 +34,7 @@ let check_decl d =
 let rec findin_exprs exprs = fold_state exprs ~f:findin_expr
 
 and findin_expr = function
-  | Const _ | Ident _ -> return ()
+  | Const _ | Ident _ | Make _ -> return ()
   | ArrLit (_, exprs) | Print exprs -> findin_exprs exprs
   | ArrIndex (l, r) | BinOp (l, _, r) -> findin_exprs [ l; r ]
   | Call (f, args) -> findin_exprs (f :: args)

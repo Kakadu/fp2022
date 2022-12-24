@@ -6,6 +6,7 @@ type typ =
   | IntTyp (* integer type *)
   | ArrayTyp of array_typ (* array type *)
   | FunTyp of string signature (* function type *)
+  | ChanTyp of typ (* chan T *)
   | StrTyp (* string type *)
   | BoolTyp (* boolean type *)
 [@@deriving show, ord]
@@ -67,6 +68,7 @@ type 'id expr =
   | Print of 'id expr list (* print(arg1, arg2, ... argn) *)
   | Len of 'id expr (* len(arr) *)
   | Append of 'id expr * 'id expr list (* append(arr, x, y, z, ...) *)
+  | Make of typ
 [@@deriving show]
 
 and 'id var_decl = 'id * 'id expr

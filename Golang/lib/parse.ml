@@ -229,7 +229,13 @@ let type_dis =
     let* sign = keyword "func" *> ws *> signature d in
     return (FunTyp sign)
   in
-  let type_lit d = function_type d <|> array_type_wrapped d <?> "TypeLit" in
+  let chan_type d =
+    let* el = string "chan" *> ws1 *> d.typ d in
+    return (ChanTyp el)
+  in
+  let type_lit d =
+    function_type d <|> array_type_wrapped d <|> chan_type d <?> "TypeLit"
+  in
   let typ d = fix @@ fun typ -> type_name <|> type_lit d <|> in_brackets typ <?> "Type" in
   { signature; typ; array_typ = array_type }
 ;;
@@ -385,16 +391,24 @@ let eds =
      ============================================================ *)
 
   (* TODO: simplified
+     There are two types of supported var declarations:
+     1. var x = expr;
+     2. var x type;
 
-     VarDecl := "var" ident Initializer? ";" .
-     Initializer := "=" expr . *)
+     VarDecl := "var" Ident Initializer ";" .
+     Initializer := "=" expr | type .
+  *)
   let initializer_ d =
-    let* e = char '=' *> ws *> d.expr d in
-    return e
+    let with_expr = char '=' *> ws *> d.expr d in
+    let with_type =
+      let* t = typ in
+      return (Make t)
+    in
+    with_expr <|> with_type
   in
   let var_decl d =
     let* name = keyword "var" *> ws1 *> ident_str <* ws in
-    let* value = option (Const (Int 0)) (initializer_ d) <* semi in
+    let* value = initializer_ d <* ws <* semi in
     return (name, value)
   in
   let func_decl d =
@@ -707,7 +721,7 @@ let%test _ =
 (* ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    ~~~~~~~~           Declarations Tests               ~~~~~~~~
    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ *)
-let%test _ = Ok ("x", Const (Int 0)) = parse var_decl "var x;"
+let%test _ = Ok ("x", Make (IntTyp)) = parse var_decl "var x int;"
 let%test _ = Ok ("y", Const (Int 1)) = parse var_decl "var y=1;"
 let%test _ = Ok ("y", Ident "x") = parse var_decl "var y=x;"
 let%test _ = Ok ("f", { args = []; ret = Void }, []) = parse func_decl "func f() {}"
@@ -811,7 +825,7 @@ let%test _ =
       ; ExprStmt (Call (Ident "print", [ Ident "a"; Const (Int 2) ]))
       ; BlockStmt
           [ VarDecl ("b", Const (Int 10))
-          ; VarDecl ("c", Const (Int 0))
+          ; VarDecl ("c", Make (StrTyp))
           ; ExprStmt (Call (Ident "f", [ Ident "b" ]))
           ]
       ; RetStmt (Some (Ident "a"))
@@ -821,7 +835,7 @@ let%test _ =
       {|func f(xx int, yy int) int { 
             var a = 1;
             print(a, 2);
-            { var b = 10; var c; f(b); }
+            { var b = 10; var c string; f(b); }
             return a;
           }|}
 ;;

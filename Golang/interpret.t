@@ -23,3 +23,5 @@
   [1, 2, 3, 4, 5, 6, 7][1, 8, 27, 64, 125, 216, 343]
   $ ./INTERPRET.exe ../../../../examples/array_filter.go
   [1, 2, 3, 4, 5, 6, 7][2, 4, 6]
+  $ ./INTERPRET.exe ../../../../examples/var_default.go
+  0false[]chan

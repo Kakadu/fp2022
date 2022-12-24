@@ -138,10 +138,11 @@ let rec lookup_expr = function
   | Len e ->
     let* e = lookup_expr e in
     return (Len e)
-  | Append (arr, vs) -> 
+  | Append (arr, vs) ->
     let* arr = lookup_expr arr in
     let* vs = lookup_exprs vs in
     return (Append (arr, vs))
+  | Make x -> return (Make x)
 
 and lookup_func sign b =
   let* enclosing_scope = enter_scope in

@@ -95,6 +95,7 @@ and check_expr = function
   | Print _ -> finish_with_err "Cannot use print built-in's return value"
   | Len e -> check_len e
   | Append (arr, vs) -> check_append arr vs
+  | Make t -> check_make t
 
 and check_arr_lit array_typ els =
   let { el = el_typ } = array_typ in
@@ -182,23 +183,31 @@ and check_append arr vs =
   let* t = check_expr arr in
   match t with
   | None -> return None
-  | Some (ArrayTyp { el }) -> 
+  | Some (ArrayTyp { el }) ->
     let* _ = fold_state vs ~f:(require_expr_typ el) in
     return (Some (ArrayTyp { el }))
   | Some _ -> finish_with_err "First argument of append() must be an array"
+
+and check_make = function
+  | FunTyp t ->
+    finish_with_err
+      (Printf.sprintf "Type '%s' does not have a default value" (show_typ (FunTyp t)))
+  | t -> return (Some t)
 
 and check_block b = fold_state b ~f:check_stmt
 
 and check_stmt = function
   | BlockStmt b -> check_block b
   | ExprStmt (Print args) -> check_exprs args
-  | ExprStmt (Call (f, args)) -> check_call f args ~used:Ignored *> return ()
-  | ExprStmt expr | GoStmt expr | VarDecl (_, expr) -> check_expr expr *> return ()
+  | GoStmt (Call (f, args)) | ExprStmt (Call (f, args)) ->
+    check_call f args ~used:Ignored *> return ()
+  | ExprStmt expr | VarDecl (_, expr) -> check_expr expr *> return ()
   | AssignStmt (l, r) -> check_assign l r
   | RetStmt expr -> check_ret expr
   | IfStmt (cond, b1, b2) ->
     require_expr_typ BoolTyp cond *> check_block b1 *> check_block b2
   | ForStmt (cond, b) -> require_expr_typ BoolTyp cond *> check_block b
+  | GoStmt _ -> add_err "go statement must be followed by a function call"
 
 and check_assign l r =
   match l with
