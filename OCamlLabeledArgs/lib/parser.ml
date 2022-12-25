@@ -70,6 +70,11 @@ let is_number_char = function
 
 let number_chars = take_while1 is_number_char
 
+let keyword s =
+  ignored *> string s *> peek_char_fail
+  >>= fun c -> if is_identifier_char c then fail "Error parsing keyword" else return s
+;;
+
 (* ----------------- Variable names ------------------ *)
 let identifier =
   let is_valid_first_char = function
@@ -237,8 +242,7 @@ let type_d =
     @@ fun self ->
     choice
       [ parens self
-      ; (string "fun" (* TODO: fix keywords parsing (i.e. "funi" parses successfully) *)
-         *~> many_till (fun_argument_parser d) (pstring "->")
+      ; (keyword "fun" *~> many_till (fun_argument_parser d) (pstring "->")
         >>= fun fun_args -> d.expr d >>= fun e -> return (desugar_lambda e fun_args))
       ]
     <?> "fun_parser"
@@ -269,9 +273,9 @@ let type_d =
     @@ fun self ->
     choice
       [ parens self
-      ; (let cond = string "if" *~> d.expr d in
-         let tbody = string "then" *~> d.expr d in
-         let fbody = option (Const Unit) (string "else" *~> d.expr d) in
+      ; (let cond = keyword "if" *~> d.expr d in
+         let tbody = keyword "then" *~> d.expr d in
+         let fbody = option (Const Unit) (keyword "else" *~> d.expr d) in
          lift3' if_expr cond tbody fbody)
       ]
     <?> "if_the_else_parser"
@@ -282,13 +286,13 @@ let type_d =
     @@ fun self ->
     choice
       [ parens self
-      ; (string "let" *~> option "" (string "rec")
+      ; (keyword "let" *~> option "" (keyword "rec")
         >>= fun _rec ->
         ignored *> many1 (fun_argument_parser d)
         >>= fun var_list ->
         ignored *> string "=" *~> d.expr d
         >>= fun exp ->
-        ignored *> string "in" *~> d.expr d
+        ignored *> keyword "in" *~> d.expr d
         >>= fun in_exp ->
         match _rec with
         | "" -> return (desugar_let exp in_exp var_list false)
@@ -302,7 +306,7 @@ let type_d =
     @@ fun self ->
     choice
       [ parens self
-      ; (string "let" *~> option "" (string "rec")
+      ; (keyword "let" *~> option "" (keyword "rec")
         >>= fun _rec ->
         ignored *> many1 (fun_argument_parser d)
         >>= fun var_list ->
