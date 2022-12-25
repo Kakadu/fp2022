@@ -69,6 +69,10 @@ end = struct
     }
   ;;
 
+  let extend_effect_handlers environment_with_effects environment =
+    { environment with effect_handlers = environment_with_effects.effect_handlers }
+  ;;
+
   let empty =
     { ids = Map.empty (module String)
     ; effects = Set.empty (module String)
@@ -93,11 +97,11 @@ end = struct
     match expression with
     | ELiteral literal ->
       (match literal with
-      | LInt x -> return @@ VInt x
-      | LString x -> return @@ VString x
-      | LBool x -> return @@ VBool x
-      | LChar x -> return @@ VChar x
-      | LUnit -> return VUnit)
+       | LInt x -> return @@ VInt x
+       | LString x -> return @@ VString x
+       | LBool x -> return @@ VBool x
+       | LChar x -> return @@ VChar x
+       | LUnit -> return VUnit)
     | EBinaryOperation (operation, left_operand, right_operand) ->
       let* left_operand = eval left_operand environment in
       let* right_operand = eval right_operand environment in
@@ -198,12 +202,13 @@ end = struct
     | EApplication (function_expr, argument_expr) ->
       let* eval_argument = eval argument_expr environment in
       let* eval_function = eval function_expr environment in
-      let* id_list, function_body, environment, recursive =
+      let* id_list, function_body, local_environment, recursive =
         match eval_function with
         | VFun (id_list, function_body, environment, recursive) ->
           return (id_list, function_body, environment, recursive)
         | _ -> fail "Runtime error: not a function, cannot be applied."
       in
+      let environment = extend_effect_handlers environment local_environment in
       let* id, id_list =
         match id_list with
         | head :: tail -> return (head, tail)
@@ -389,7 +394,8 @@ end = struct
         | _ -> fail "Runtime error: pattern-matching failed.", environment, false
       in
       let* eval_matched_expression = eval matched_expression environment in
-      let rec helper = function
+      let rec helper lst =
+        match lst with
         | case :: tail ->
           let result, _, success =
             compare_patterns eval_matched_expression (fst case) (snd case) environment
@@ -418,7 +424,6 @@ end = struct
     | EEffectPattern expression ->
       let* eval_expression = eval expression environment in
       return eval_expression
-    | _ -> fail "AHAHAHA"
   ;;
 
   let run (program : expression list) =
@@ -694,4 +699,105 @@ let test_program =
 let%test _ =
   Poly.( = ) (InterpretResult.run test_program)
   @@ Result.Ok (VADT ("Some", Some (VInt 2)))
+;;
+
+let rec print result =
+  let open Format in
+  let rec print_list delimiter = function
+    | [ head ] -> print head
+    | head :: tail ->
+      print head;
+      printf "%c " delimiter;
+      print_list delimiter tail
+    | [] -> ()
+  in
+  match result with
+  | VInt value -> printf "%d" value
+  | VChar value -> printf "%C" value
+  | VBool value -> printf "%B" value
+  | VString value -> printf "%S" value
+  | VUnit -> printf "()"
+  | VList list ->
+    printf "[";
+    print_list ';' list;
+    printf "]"
+  | VTuple tuple ->
+    printf "(";
+    print_list ',' tuple;
+    printf ")"
+  | VADT (name, argument) ->
+    printf "%s " name;
+    (match argument with
+     | Some argument -> print argument
+     | None -> ())
+  | VFun _ -> printf "Not a value."
+;;
+
+let test_program =
+  [ EEffectDeclaration ("EmptyListEffect", TEffect (TList (TVar 0)))
+  ; EDeclaration
+      ( "safe_head"
+      , []
+      , EFun
+          ( [ "list" ]
+          , EMatchWith
+              ( EIdentifier "list"
+              , [ EConstructList (EIdentifier "h", EIdentifier "_"), EIdentifier "h"
+                ; EIdentifier "_", EPerform (EEffectNoArg "EmptyListEffect")
+                ] ) ) )
+  ; EDeclaration
+      ( "main"
+      , []
+      , EMatchWith
+          ( EApplication
+              (EIdentifier "safe_head", EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
+          , [ EEffectPattern (EEffectNoArg "EmptyListEffect"), EList []
+            ; EIdentifier "hd", EIdentifier "hd"
+            ] ) )
+  ]
+;;
+
+let%expect_test _ =
+  let result = InterpretResult.run test_program in
+  match result with
+  | Ok result -> print result
+  | Error err ->
+    Format.printf "%s\n" err;
+    [%expect {|
+  2
+  |}]
+;;
+
+let test_program =
+  [ EEffectDeclaration ("EmptyListEffect", TEffect (TList (TVar 0)))
+  ; EDeclaration
+      ( "safe_head"
+      , []
+      , EFun
+          ( [ "list" ]
+          , EMatchWith
+              ( EIdentifier "list"
+              , [ EConstructList (EIdentifier "h", EIdentifier "_"), EIdentifier "h"
+                ; EIdentifier "_", EPerform (EEffectNoArg "EmptyListEffect")
+                ] ) ) )
+  ; EDeclaration
+      ( "main"
+      , []
+      , EMatchWith
+          ( EApplication (EIdentifier "safe_head", EList [])
+          , [ EEffectPattern (EEffectNoArg "EmptyListEffect"), EList []
+            ; EIdentifier "hd", EIdentifier "hd"
+            ] ) )
+  ]
+;;
+
+let%expect_test _ =
+  let result = InterpretResult.run test_program in
+  match result with
+  | Ok result -> print result
+  | Error err ->
+    Format.printf "%s\n" err;
+    [%expect {|
+  []
+  |}]
 ;;
