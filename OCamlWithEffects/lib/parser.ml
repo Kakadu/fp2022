@@ -192,12 +192,12 @@ let parse_identifier =
 
 let parse_effect_noarg = lift eeffect_noarg parse_capitalized_entity
 
-let parse_effect_pattern parse_content =
+let parse_effect_pattern effect_parser =
   fix
   @@ fun self ->
   remove_spaces
   *> (parens self
-     <|> lift eeffect_pattern (string "effect" *> remove_spaces *> parse_content))
+     <|> lift eeffect_pattern (string "effect" *> remove_spaces *> effect_parser))
 ;;
 
 let parse_tuple d =
@@ -406,7 +406,18 @@ let parse_matching d =
   @@ fun self ->
   remove_spaces
   *>
-  let parse_content =
+  let parse_content_left =
+    choice
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
+      ; d.parse_unary_operation d
+      ; d.parse_list d
+      ; d.parse_data_constructor d
+      ; parse_literal
+      ; parse_identifier
+      ]
+  in
+  let parse_content_right =
     choice
       [ d.parse_tuple d
       ; d.parse_list_constructing d
@@ -428,12 +439,16 @@ let parse_matching d =
   <|> string "match"
       *> lift2
            ematchwith
-           parse_content
+           parse_content_right
            (let parse_case =
               lift2
                 (fun case action -> case, action)
-                (parse_content <|> parse_effect_pattern parse_content)
-                (remove_spaces *> string "->" *> (parse_content <|> d.parse_continue d))
+                (parse_effect_pattern
+                   (d.parse_effect_arg d <|> parse_effect_noarg <|> parse_identifier)
+                <|> parse_content_left)
+                (remove_spaces
+                *> string "->"
+                *> (d.parse_continue d <|> parse_content_right))
             and separator = remove_spaces *> string "|" in
             remove_spaces
             *> string "with"
@@ -676,8 +691,12 @@ let parse_list_type td =
        >>= fun typ ->
        remove_spaces *> option "" (string "list")
        >>= function
-       | "" -> fail "Not a ground type."
-       | _ -> return typ
+       | "" -> return (tvar (-1))
+       | _ ->
+         remove_spaces *> many (string ")") *> remove_spaces *> option "" (string "list")
+         >>= (function
+         | "" -> return typ
+         | _ -> fail "Not a ground type.")
      in
      choice
        [ parens @@ td.parse_arrow td <* remove_spaces <* string "list"
@@ -688,7 +707,10 @@ let parse_list_type td =
      >>= fun typ ->
      remove_spaces *> option "" (string "*")
      >>= function
-     | "" -> return (tlist typ)
+     | "" ->
+       (match typ with
+       | TVar -1 -> fail "Not a list."
+       | _ -> return (tlist typ))
      | _ -> fail "Not a list.")
 ;;
 
@@ -1608,4 +1630,11 @@ let%test _ =
 let%test _ =
   parse "effect EmptyListEffect: int list effect"
   = Result.ok @@ [ EEffectDeclaration ("EmptyListEffect", TEffect (TList (TGround Int))) ]
+;;
+
+(* 37 *)
+let%test _ =
+  parse "effect SmallDiscount : int -> int effect"
+  = Result.ok
+    @@ [ EEffectDeclaration ("SmallDiscount", TArr (TGround Int, TEffect (TGround Int))) ]
 ;;
