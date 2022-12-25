@@ -6,8 +6,8 @@ description: "An interpreter for MAKE"
 maintainer: ["Ivan Morozko"]
 authors: ["Ivan Morozko"]
 license: "LGPL-3.0-or-later"
-homepage: "https://github.com/andreyizrailev/fp2022"
-bug-reports: "https://github.com/andreyizrailev/fp2022"
+homepage: "https://github.com/ol-imorozko/fp2022"
+bug-reports: "https://github.com/ol-imorozko/fp2022"
 depends: [
   "dune" {>= "2.8"}
   "angstrom"
@@ -15,6 +15,10 @@ depends: [
   "qcheck-core"
   "ppx_expect"
   "ppx_deriving"
+  "ppx_compare"
+  "ppx_sexp_conv"
+  "ppx_hash"
+  "graphlib"
   "core"
   "odoc" {with-doc}
   "ocamlformat" {build}

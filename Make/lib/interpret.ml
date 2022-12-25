@@ -3,20 +3,21 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
+open Graphlib.Std
+open Ppx_hash_lib.Std.Hash.Builtin
+open Ppx_compare_lib.Builtin
+open Ppx_sexp_conv_lib.Conv
 
 (** Extracts list of rules from ast. Keeps rules order *)
-let rules_of_ast =
-  let rec rules_of_exprs = function
-    | [] -> []
-    | expr :: tl ->
-      (match expr with
-       (* For now expr could only be a Rule, so we don't need *)
-       (* _ -> rules_of_exprs tl branch below *)
-       | Rule rule -> rule :: rules_of_exprs tl)
+let rules_of_ast : ast -> rule list =
+  let rule_of_expr = function
+    | Rule rule -> Some rule
+    (* For now expr could only be a Rule, so we don't need line below *)
+    (* | _ -> None *)
   in
   function
   | rule, [] -> [ rule ]
-  | rule, exprs -> rule :: rules_of_exprs exprs
+  | rule, exprs -> rule :: List.filter_map rule_of_expr exprs
 ;;
 
 (** Original rule type has tuple as "targets" type,
@@ -30,275 +31,177 @@ type rule_as_lists =
 (** Transform list of ast's rules to rule_as_lists list
  Keeps rules order *)
 let rules_as_lists_of_rules =
-  let rule_as_lists_of_rule : rule -> rule_as_lists = function
-    | { targets = t; prerequisites = p; recipes = r } ->
-      (match t with
-       | single_target, target_list ->
-         { targets = single_target :: target_list; prerequisites = p; recipes = r })
-  in
-  List.map rule_as_lists_of_rule
+  List.map (fun ({ targets = x, l; prerequisites; recipes } : rule) ->
+    { targets = x :: l; prerequisites; recipes })
 ;;
 
-type target_data =
-  { deps : string list
-  ; recipes : string list
-  }
+(* Return true if a target is present somewhere in targets in one rule *)
+let rule_has_target target rule = List.mem target rule.targets
 
-(* Remove duplicates from the list l *)
-let remove_duplicates l =
-  let cons_uniq l x = if List.mem x l then l else x :: l in
-  List.rev (List.fold_left cons_uniq [] l)
-;;
-
-(* Return true if a target is present somewhere in targets in rules *)
+(* Return true if a target is present somewhere in targets in list of rules *)
 let rules_has_target target rules =
-  let rule_has_target rule =
-    Option.is_some (List.find_opt (String.equal target) rule.targets)
-  in
-  let rules_with_target = List.filter rule_has_target rules in
-  List.length rules_with_target <> 0
+  Option.is_some (List.find_opt (rule_has_target target) rules)
 ;;
 
-(** Return target data among all rules for specified target.
+(** Return recipes for specified target among all rules.
 If two or more rules are found with the same target in the target list,
 and with different recipes, the newer one will be used *)
-let target_data_of_rules target rules =
-  let rule_has_target rule =
-    Option.is_some (List.find_opt (String.equal target) rule.targets)
+let recipes_of_target target rules =
+  let rules_with_target = List.filter (rule_has_target target) rules in
+  let recipes_list =
+    List.map (fun (rule : rule_as_lists) -> rule.recipes) rules_with_target
   in
-  let rules_with_target = List.filter rule_has_target rules in
-  let list_of_deps_and_recipes =
-    List.map (fun rule -> rule.prerequisites, rule.recipes) rules_with_target
+  let rec traverse_recipes = function
+    | [] -> []
+    | [ x ] -> x
+    | _ :: tl ->
+      Printf.eprintf
+        "Makefile: warning: overriding recipe for target '%s'\n\
+         Makefile: warning: ignoring old recipe for target '%s'\n"
+        target
+        target;
+      traverse_recipes tl
   in
-  let list_of_deps, list_of_recipes =
-    let d = List.map fst list_of_deps_and_recipes in
-    let r = List.map snd list_of_deps_and_recipes in
-    d, r
-  in
-  { deps = List.flatten list_of_deps |> remove_duplicates
-  ; recipes =
-      (let rec traverse_recipes = function
-         | [] -> []
-         | [ x ] -> x
-         | _ :: tl ->
-           Printf.eprintf
-             "Makefile: warning: overriding recipe for target '%s'\n\
-              Makefile: warning: ignoring old recipe for target '%s'\n"
-             target
-             target;
-           traverse_recipes tl
-       in
-       traverse_recipes list_of_recipes)
-  }
+  traverse_recipes recipes_list
 ;;
 
-(* Get unique filenames occuring in all rules targets and dependencies *)
+(** Return dependencies for specified target among all rules. *)
+let dependencies_of_target target rules =
+  let rules_with_target = List.filter (rule_has_target target) rules in
+  let dependencies_list =
+    List.map (fun (rule : rule_as_lists) -> rule.prerequisites) rules_with_target
+  in
+  List.concat dependencies_list |> Core.List.stable_dedup
+;;
+
+(* Get unique filenames occuring in targets and dependencies among all rules *)
 let get_unique_filenames rules =
   let rec get_all_filenames = function
     | [] -> []
     | { targets = t; prerequisites = p; recipes = _ } :: tl ->
       t @ p @ get_all_filenames tl
   in
-  get_all_filenames rules |> remove_duplicates
+  get_all_filenames rules |> Core.List.stable_dedup
 ;;
 
-(* ============DFS TRAVERSAL============ *)
+(*========GRAPH STUFF========*)
 
-module NodeMap = Map.Make (struct
-  type t = string
+(* This is mutable data structure.
+   We will use this type in Graphlib.Labeled, which requires "Node" type
+   to be Regular.Std.Opaque.S, which means it should include Core_kernel.Comparable.S
+   and Core_kernel.Hashable.S. *)
+module Node : sig
+  type t =
+    { target : string
+    ; recipes : string list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
+    }
+  [@@deriving compare, hash, sexp]
 
-  let compare : string -> string -> int = compare
+  include Core.Comparable.S with type t := t
+  include Core.Hashable.S with type t := t
+end = struct
+  module T = struct
+    type t =
+      { target : string
+      ; recipes : string list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
+      }
+    [@@deriving compare, hash, sexp]
+  end
+
+  include T
+  include Core.Comparable.Make (T)
+  include Core.Hashable.Make (T)
+end
+
+(* TODO: Use label (Unit) somehow. Probably mark PHONY targets with it *)
+module G = Graphlib.Labeled (Node) (Unit) (Unit)
+
+module VertexMap = Map.Make (struct
+  type t = string [@@deriving compare]
 end)
 
-(* Targets and dependencies graph as adjacency list *)
-type graph = target_data NodeMap.t
+(* Map to get corresponding vertex in graph by label (string),
+   cause Graphlib do not provide such interface. *)
+type vertex_of_target = G.Node.t VertexMap.t
 
-(* Construct graph *)
+(* Creates new vertex and puts in into the map.
+   If it's already present, simply returns that vertex *)
+let create_vertex map target rules =
+  match VertexMap.find_opt target map with
+  | None ->
+    let vertex =
+      G.Node.create
+        { node = { target; recipes = recipes_of_target target rules }; node_label = () }
+    in
+    let map = VertexMap.add target vertex map in
+    vertex, map
+  | Some vertex -> vertex, map
+;;
+
+(* Constructs graph and map to get corresponding vertex by target's name *)
 let graph_of_rules rules =
+  let map : vertex_of_target = VertexMap.empty in
+  let g = G.empty in
   let filenames = get_unique_filenames rules in
-  let graph : graph = NodeMap.empty in
-  let rec fill_map graph = function
-    | [] -> graph
+  let rec fill_graph map g = function
+    | [] -> g, map
     | target :: tl ->
-      let graph = NodeMap.add target (target_data_of_rules target rules) graph in
-      fill_map graph tl
+      let parent, map = create_vertex map target rules in
+      let g = G.Node.insert parent g in
+      let deps = dependencies_of_target target rules in
+      let rec fill_children_edges map g = function
+        | [] -> g, map
+        | target :: tl ->
+          let child, map = create_vertex map target rules in
+          let g = G.Edge.insert (G.Edge.create parent child ()) g in
+          fill_children_edges map g tl
+      in
+      let g, map = fill_children_edges map g deps in
+      fill_graph map g tl
   in
-  fill_map graph filenames
+  fill_graph map g filenames
 ;;
 
-type dfs_info =
-  { dfs_dtime : int NodeMap.t (* discovery time *)
-  ; dfs_ftime : int NodeMap.t (* finishing time *)
-  ; dfs_parents : string NodeMap.t (* parent map *)
-  ; dfs_time : int (* most recent time *)
-  ; dfs_edgeList : string -> string list
-  ; dfs_recompile : bool NodeMap.t (* Should we recompile this target? *)
-  ; rules : rule_as_lists list
-  ; graph : graph
-  }
-
-let dfs_init_info rules graph =
-  let edgeList node =
-    match NodeMap.find_opt node graph with
-    | None -> []
-    | Some data -> data.deps
+(* Traverse @targets, addding corresponding nodes to graph if they do not exist *)
+let add_default_goals targets map rules g =
+  let rec try_add_targets map rules g = function
+    | [] -> g, map
+    | target :: tl ->
+      let g, map =
+        match VertexMap.find_opt target map with
+        | None ->
+          let vertex, map = create_vertex map target rules in
+          G.Node.insert vertex g, VertexMap.add target vertex map
+        | Some _ -> g, map
+      in
+      try_add_targets map rules g tl
   in
-  { dfs_dtime = NodeMap.empty
-  ; dfs_ftime = NodeMap.empty
-  ; dfs_parents = NodeMap.empty
-  ; dfs_time = 0
-  ; dfs_edgeList = edgeList
-  ; dfs_recompile = NodeMap.empty
-  ; rules
-  ; graph
-  }
+  try_add_targets map rules g targets
 ;;
-
-type dfs_color_type =
-  | White (* not yet discovered *)
-  | Gray (* on recursion stack *)
-  | Black (* already visited *)
-
-(* DFS helpers *)
-let dfs_color info node =
-  if not (NodeMap.mem node info.dfs_dtime)
-  then White
-  else if not (NodeMap.mem node info.dfs_ftime)
-  then Gray
-  else Black
-;;
-
-(* increment time *)
-let dfs_inc_time info = { info with dfs_time = info.dfs_time + 1 }
-
-(* increment time, set discover time for node, mark node Gray, set bit to false *)
-let dfs_discover info node =
-  let info = dfs_inc_time info in
-  let dtime = NodeMap.add node info.dfs_time info.dfs_dtime in
-  { info with dfs_dtime = dtime }
-;;
-
-(* increment time, set finishing time for node, mark node Black *)
-let dfs_finish info node =
-  let info = dfs_inc_time info in
-  let ftime = NodeMap.add node info.dfs_time info.dfs_ftime in
-  { info with dfs_ftime = ftime }
-;;
-
-(* add parent mapping *)
-let dfs_add_parent info node parent =
-  let parents = NodeMap.add node parent info.dfs_parents in
-  { info with dfs_parents = parents }
-;;
-
-(* set flag for node *)
-let dfs_set_flag info node flag =
-  let recompile = NodeMap.add node flag info.dfs_recompile in
-  { info with dfs_recompile = recompile }
-;;
-
-(* get flag of node *)
-let flag_of_node info node =
-  match NodeMap.find_opt node info.dfs_recompile with
-  | None -> false
-  | Some flag -> flag
-;;
-
-(* Updates info in a way that node y is no longer a neighbour of node x *)
-let drop_dependency info x y =
-  let new_dfs_edgeList node =
-    if node = x
-    then List.filter (y |> String.equal |> Fun.negate) (info.dfs_edgeList node)
-    else info.dfs_edgeList node
-  in
-  { info with dfs_edgeList = new_dfs_edgeList }
-;;
-
-(* set recompile flag for all parents of target (but not for the target itself) *)
-let set_recompile_flag_for_all_parents info target =
-  let rec set_flag info t =
-    match NodeMap.find_opt t info.dfs_parents with
-    | None -> info
-    | Some parent -> set_flag (dfs_set_flag info parent true) parent
-  in
-  set_flag info target
-;;
-
-let print_cycle parents node =
-  print_string "make: Circular ";
-  let rec print cur =
-    let parent = NodeMap.find cur parents in
-    let () = if parent <> node then print parent else print_string parent in
-    print_string (" <- " ^ cur)
-  in
-  print node;
-  print_endline " dependency dropped."
-;;
-
-(*
-                    Algorithm to decide whether we should recompile target X
-
-                                   ┌────────────────────┐  no
-                                   │Should recompile flg├───────┐
-                                   └───────┬────────────┘       │
-                                        yes│                    │
-                                           │                    │
-                                      ┌────▼─────┐       yes ┌──▼──────┐   no
-                      ┌───────────────┤ recompile│      ┌────┤X exists?├──────┐
-                      │               └──────────┘      │    └─────────┘      │
-               ┌──────▼──────┐   no                     │                     │
-               │ No recipes? ├───────────►end      ┌────▼─────────────┐   ┌───▼────────┐ yes
-               └─────┬───────┘                     │get timestamp     │   │Rule in Ast?├────┐
-                     │                             │of X and parent(X)│   └─────┬──────┘    │
-       ┌─────────┐   │                             └────┬─────────────┘      no │           │
-   yes │X is main◄───┘                                  │               ┌───────▼─┐     ┌───▼─────┐
-     ┌─┤ target? │                     ┌──────────────┐ │               │X is main│     │recompile│
-     │ └──┬──────┘                     │X > parent(X)?├─┘               │ target? │     └─────┬───┘
-     │    │no                          └─┬──────────┬─┘                 └┬───────┬┘           │
-     │    └──────────►end             yes│          │ no              yes│       │no          │
-     │                                   │          │                    │       ▼            │
-     │                                   │          └─────────► end      │    raise NoRule    │
-     │                     ┌─────────────▼────────┐                      │                    │
-┌────▼────────────────┐    │Set recompile flag for│                      │            ┌───────▼─────┐
-│raise NothingToBeDone│    │   all parents of X   │                      │            │ No recipes? │
-└─────────────────────┘    └────────────┬─────────┘                      │            └───────┬─────┘
-                                        │                                │                    │
-                                        │                                │              ┌─────▼───┐
-                                        ▼                                │          yes │X is main│  no
-                                       end                               ├──────────────┤ target? ├────────►end
-                                                                         │              └─────────┘
-                                                                ┌────────▼────────────┐
-                                                                │raise NothingToBeDone│
-                                                                └─────────────────────┘
-
-
-One small fix, cause main target doesn't have a parent:
-
-                      ┌─────────┐          yes ┌─────────┐
- ┌──────────────┐ yes │X is main◄──────────────┤X exists?│
- │raise UpToDate◄─────┤ target? │              └─────────┘
- └──────────────┘     └──┬──────┘
-                         │no        ┌──────────────────┐
-                         └─────────►┘get timestamp     │
-
- *)
 
 exception Recipe of string * int
-exception NoRule of string * string
+exception NoRule of string
 exception UpToDate of string
 exception NothingToBeDone of string
 
-let get_recipes info target =
-  match NodeMap.find_opt target info.graph with
-  | None -> []
-  | Some data -> data.recipes
+(* Set of nodes that require recompiling *)
+type dfs_state =
+  { nodes_to_recompile : G.Node.Set.t
+  ; finish_component : bool
+  }
+
+(* fold on @n predecessors in graph @g. Loops are ignored *)
+let fold_pred f g n init =
+  let preds = G.Node.preds n g |> Base.Sequence.to_list_rev in
+  List.fold_left (fun a x -> if n = x then a else f x a) init preds
 ;;
 
-let recompile info target is_main_target =
-  let recipes = get_recipes info target in
+let recompile (node : G.Node.t) is_default_goal =
+  let recipes = node.node.recipes in
+  let target = node.node.target in
   let execute_recipes =
     let rec traverse_recipes = function
-      | [] -> info
+      | [] -> ()
       | recipe :: tl ->
         print_endline recipe;
         let rc = Sys.command recipe in
@@ -307,87 +210,165 @@ let recompile info target is_main_target =
     traverse_recipes recipes
   in
   match recipes with
-  | [] -> if is_main_target then raise (NothingToBeDone target) else info
+  | [] -> if is_default_goal then raise (NothingToBeDone target)
   | _ -> execute_recipes
 ;;
 
-(* Could raise exception *)
-let try_execute_recipes info target is_main_target =
-  if flag_of_node info target
-  then recompile info target is_main_target
+(* Returns true if for at least one parent of X
+   timestamp (X) > timestamp (Parent), or Parent does not exist  *)
+let check_timestamps_of_parents graph node target =
+  let check_timestamps target parent =
+    (not (Sys.file_exists parent))
+    ||
+    let parent_time = (Unix.stat parent).st_mtime in
+    let target_time = (Unix.stat target).st_mtime in
+    target_time > parent_time
+  in
+  fold_pred
+    (fun parent (ans, target) ->
+      let ans = ans || check_timestamps target parent.node.target in
+      ans, target)
+    graph
+    node
+    (false, target)
+  |> fst
+;;
+
+let rec mark_all_parents_as_recompile graph (node : G.Node.t) nodes_to_recompile =
+  let nodes_to_recompile =
+    fold_pred
+      (fun parent set ->
+        let set = mark_all_parents_as_recompile graph parent set in
+        G.Node.Set.add set node)
+      graph
+      node
+      nodes_to_recompile
+  in
+  G.Node.Set.add nodes_to_recompile node
+;;
+
+(*
+  Algorithm to decide whether we should recompile target X
+
+                     ┌────────────────┐  no
+        ┌────────────┤Should recompile├───────┐
+        │            └────────────────┘       │
+     yes│                                     │
+        │                                     │
+   ┌────▼─────┐                        yes ┌──▼──────┐   no
+   │ recompile│               ┌────────────┤X exists?├──────┐
+   └──────────┘               │            └─────────┘      │
+                      ┌───────▼─┐                           │
+               yes    │X is def │                       ┌───▼────────┐ yes
+         ┌────────────┤  goal?  │                       │Rule in Ast?├────┐
+         ▼            └────────┬┘                       └─────┬──────┘    │
+   raise UpToDate              │no                         no │           │
+                               │                      ┌───────▼─┐     ┌───▼─────┐
+                          ┌────▼───────────┐          │X is def │     │recompile│
+                          │Iterate over all│          │  goal?  │     └─────────┘
+                          │parents of X    │          └┬───────┬┘
+                          └────┬───────────┘        yes│       │ no
+                               │                       │       ▼
+                        yes ┌──▼──────┐   no           │    raise NoRule
+                       ┌────┤P exists?├───┐            │
+                       │    └─────────┘   │            │
+                       │                  │            ▼
+               ┌───────┴─────────┐        │    raise NothingToBeDone
+               │time(X) > time(P)│        │
+               └───────┬─────────┘        │
+                    yes│                  │
+                       │                  │
+                       │                  │
+                   ┌───▼──────────────────▼────┐
+                   │mark ALL parents of X      │
+                   │recursively as recompile   │
+                   └───────────────────────────┘
+ *)
+let try_execute_recipes (node : G.Node.t) graph rules nodes_to_recompile is_default_goal =
+  let target = node.node.target in
+  if G.Node.Set.mem nodes_to_recompile node
+  then (
+    recompile node is_default_goal;
+    nodes_to_recompile)
   else if Sys.file_exists target
   then
-    if is_main_target
+    if is_default_goal
     then raise (UpToDate target)
-    else (
-      let parent = NodeMap.find target info.dfs_parents in
-      if Sys.file_exists parent = false
-      then set_recompile_flag_for_all_parents info target
-      else (
-        let parent_time = (Unix.stat parent).st_mtime in
-        let target_time = (Unix.stat target).st_mtime in
-        if target_time > parent_time
-        then set_recompile_flag_for_all_parents info target
-        else info))
-  else if rules_has_target target info.rules
-  then recompile info target is_main_target
-  else if is_main_target
+    else if check_timestamps_of_parents graph node target
+    then mark_all_parents_as_recompile graph node nodes_to_recompile
+    else nodes_to_recompile
+  else if rules_has_target target rules
+  then (
+    recompile node is_default_goal;
+    nodes_to_recompile)
+  else if is_default_goal
   then raise (NothingToBeDone target)
-  else raise (NoRule (target, NodeMap.find target info.dfs_parents))
+  else raise (NoRule target)
 ;;
 
-(** Traverse graph from node u, executing recipes of u in the end
-Could raise exception *)
-let rec dfs_visit info u =
-  (* Visit all neighbours v of node u *)
-  let visit_node info v =
-    let info = dfs_add_parent info v u in
-    if dfs_color info v = Gray (* on recursion stack -> cycle found *)
-    then (
-      print_cycle info.dfs_parents v;
-      drop_dependency info u v)
-    else (
-      let info = dfs_discover info v in
-      (* recurse on v *)
-      let info = dfs_visit info v in
-      let info = dfs_finish info v in
-      try_execute_recipes info v false)
+(* Traversing **only one** component starting from @node in a
+   depth-first-search manner, applying f when leaving node.
+   Loops are ignored and info about them are printed to stdout. *)
+let traverse_component node graph f =
+  let reachable =
+    Graphlib.fold_reachable (module G) graph node ~init:G.Node.Set.empty ~f:G.Node.Set.add
   in
-  List.fold_left visit_node info (info.dfs_edgeList u)
+  Graphlib.depth_first_search
+    (module G)
+    graph
+    ~start:node
+    ~start_tree:(fun node state ->
+      if G.Node.Set.mem reachable node
+      then state
+      else { state with finish_component = true })
+    ~init:{ nodes_to_recompile = G.Node.Set.empty; finish_component = false }
+    ~leave_edge:(fun kind edge state ->
+      match kind with
+      | `Back ->
+        Printf.printf
+          "make: Circular %s <- %s dependency dropped.\n"
+          (G.Edge.src edge).node.target
+          (G.Edge.dst edge).node.target;
+        state
+      | _ -> state)
+    ~leave_node:f
 ;;
 
 (* Could raise exception *)
-let dfs rules graph target =
-  let info = dfs_init_info rules graph in
-  let info = dfs_discover info target in
-  let info = dfs_visit info target in
-  try_execute_recipes info target true
+let build_target target map graph rules =
+  (* This will find a node cause all possible targets should be
+  in the graph prior to calling the "build_target" function.*)
+  let node = VertexMap.find target map in
+  traverse_component node graph (fun _ node state ->
+    if state.finish_component
+    then state
+    else
+      { state with
+        nodes_to_recompile =
+          try_execute_recipes
+            node
+            graph
+            rules
+            state.nodes_to_recompile
+            (target = node.node.target)
+      })
 ;;
 
-(* Could raise exception *)
-let build_target rules target =
-  let graph = graph_of_rules rules in
-  dfs rules graph target
-;;
-
-let interpret (ast : ast) targets =
-  let rules = rules_of_ast ast in
-  let rules = rules_as_lists_of_rules rules in
+let interpret ast targets =
+  let rules = ast |> rules_of_ast |> rules_as_lists_of_rules in
+  let graph, map = graph_of_rules rules in
+  let graph, map = add_default_goals targets map rules graph in
   let rec traverse_targets = function
     | [] -> Ok ""
     | target :: tl ->
       (try
-         let _ = build_target rules target in
+         let _ = build_target target map graph rules in
          traverse_targets tl
        with
        | Recipe (target, rc) ->
          Error (Printf.sprintf "make: *** [Makefile: '%s'] Error %d" target rc)
-       | NoRule (target, main_target) ->
-         Error
-           (Printf.sprintf
-              "make: *** No rule to make target '%s', needed by %s.  Stop."
-              target
-              main_target)
+       | NoRule target ->
+         Error (Printf.sprintf "make: *** No rule to make target '%s'. Stop." target)
        | UpToDate target -> Ok (Printf.sprintf "make: '%s' is up to date." target)
        | NothingToBeDone target ->
          Ok (Printf.sprintf "make: Nothing to be done for '%s'." target))
@@ -397,3 +378,24 @@ let interpret (ast : ast) targets =
   | [] -> traverse_targets [ rules |> get_unique_filenames |> List.hd ]
   | _ -> traverse_targets targets
 ;;
+
+(* Usage: *)
+(* let file = open_out_bin "mygraph.dot" in *)
+(* Dot.output_graph file graph; *)
+module Dot = Graph.Graphviz.Dot (struct
+  module G = Graphlib.To_ocamlgraph (G)
+  include G
+
+  let edge_attributes _ = []
+  let default_edge_attributes _ = []
+  let get_subgraph _ = None
+
+  let vertex_attributes (_ : (Node.t, unit) labeled) =
+    (* [ `Shape `Box; (if v.node_label then `Color 16711680 else `Color 0) ] *)
+    [ `Shape `Box ]
+  ;;
+
+  let vertex_name (v : (Node.t, unit) labeled) = Printf.sprintf "\"%s\"" v.node.target
+  let default_vertex_attributes _ = []
+  let graph_attributes _ = []
+end)

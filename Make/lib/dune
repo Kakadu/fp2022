@@ -2,7 +2,7 @@
  (name make_lib)
  (public_name Make.lib)
  (modules Ast Parser Interpret)
- (libraries base angstrom unix)
+ (libraries base angstrom unix core ocamlgraph graphlib)
  (preprocess
-  (pps ppx_expect ppx_deriving.show))
+  (pps ppx_expect ppx_deriving.show ppx_sexp_conv ppx_hash ppx_compare))
  (inline_tests))

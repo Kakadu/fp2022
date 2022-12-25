@@ -10,9 +10,9 @@
 
 (maintainers "Ivan Morozko")
 
-(bug_reports "https://github.com/andreyizrailev/fp2022")
+(bug_reports "https://github.com/ol-imorozko/fp2022")
 
-(homepage "https://github.com/andreyizrailev/fp2022")
+(homepage "https://github.com/ol-imorozko/fp2022")
 
 (package
  (name "Make")
@@ -26,6 +26,10 @@
   qcheck-core
   ppx_expect
   ppx_deriving
+  ppx_compare
+  ppx_sexp_conv
+  ppx_hash
+  graphlib
   core
   (odoc :with-doc)
   (ocamlformat :build)
