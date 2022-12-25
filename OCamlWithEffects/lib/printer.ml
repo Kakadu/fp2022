@@ -33,7 +33,7 @@ let rec print result =
     (match argument with
     | Some argument -> print argument
     | None -> ())
-  | VFun _ -> printf "Not a value."
+  | _ -> printf "Not a value."
 ;;
 
 let print_run code =
