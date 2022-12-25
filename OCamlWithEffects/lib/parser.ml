@@ -676,17 +676,15 @@ let parse_list_type td =
        >>= fun typ ->
        remove_spaces *> option "" (string "list")
        >>= function
-       | "" -> return typ
-       | _ -> fail "Not a ground type."
+       | "" -> fail "Not a ground type."
+       | _ -> return typ
      in
      choice
-       [ parens @@ td.parse_arrow td
-       ; parens @@ td.parse_tuple_type td
+       [ parens @@ td.parse_arrow td <* remove_spaces <* string "list"
+       ; parens @@ td.parse_tuple_type td <* remove_spaces <* string "list"
        ; parse_ground_type'
-       ; self
+       ; self <* remove_spaces <* string "list"
        ]
-     <* remove_spaces
-     <* string "list"
      >>= fun typ ->
      remove_spaces *> option "" (string "*")
      >>= function
@@ -728,15 +726,9 @@ let parse_arrow td =
               [ parens self
               ; td.parse_list_type td
               ; td.parse_tuple_type td
-              ; td.parse_effect_type td
               ; parse_ground_type
               ])
-           (remove_spaces
-           *> string "->"
-           *> remove_spaces
-           *> choice
-                [ self; td.parse_list_type td; td.parse_tuple_type td; parse_ground_type ]
-           ))
+           (remove_spaces *> string "->" *> remove_spaces *> td.parse_type td))
 ;;
 
 let parse_effect_type td =
@@ -762,13 +754,12 @@ let parse_type td =
   remove_spaces
   *> (choice
         [ td.parse_arrow td
+        ; td.parse_effect_type td
         ; td.parse_list_type td
         ; td.parse_tuple_type td
-        ; td.parse_effect_type td
         ; parse_ground_type
         ]
-     <|> parens self
-     <|> fail "Parsing error: failed to parse type annotation.")
+     <|> parens self)
 ;;
 
 let default_td =
@@ -1613,45 +1604,10 @@ let%test _ =
        ]
 ;;
 
-(* let%expect_test _ =
-  Typing.print_typ
-    (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> string");
-  [%expect {|
-int -> string
-  |}]
-;;
-
-let%expect_test _ =
-  Typing.print_typ
-    (Result.get_ok
-    @@ parse_string ~consume:Prefix parse_type "(int -> int) -> (bool -> int) -> string");
-  [%expect {|
-  (int -> int) -> (bool -> int) -> string
-  |}]
-;;
-
-let%expect_test _ =
-  Typing.print_typ
-    (Result.get_ok
-    @@ parse_string ~consume:Prefix parse_type "int list -> (int -> char) -> char list");
-  [%expect {|
-  int list -> (int -> char) -> char list
-  |}]
-;;
-
-let%expect_test _ =
-  Typing.print_typ
-    (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> bool -> int * bool");
-  [%expect {|
-  int -> bool -> int * bool
-  |}]
-;;
-
-let%expect_test _ =
-  Format.printf
-    "%s\n"
-    (Result.get_error @@ parse_string ~consume:All parse_type "unknown_type -> int");
-  [%expect {|
-  : Parsing error: failed to parse type annotation.
-  |}]
+(* 36
+let%test _ =
+  parse "effect EmptyListEffect: int list effect"
+  = Result.ok
+    @@ [ EEffectDeclaration ("EmptyListEffect", )
+       ]
 ;; *)
