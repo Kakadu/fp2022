@@ -2,6 +2,7 @@ open Angstrom
 open Ast
 open List
 open String
+open Typing
 
 type error_message = string
 type input = string
@@ -21,7 +22,7 @@ type dispatch =
   ; parse_expression : dispatch -> expression Angstrom.t
   }
 
-(* Functions for constructing expressions *)
+(* Smart constructors for expressions *)
 let eliteral x = ELiteral x
 let eidentifier x = EIdentifier x
 let etuple head tail = ETuple (head :: tail)
@@ -59,11 +60,12 @@ let eeffect_declaration effect_name effect_type =
   EEffectDeclaration (effect_name, effect_type)
 ;;
 
-(* let eeffect_usage name argument_list = EEffectUsage (name, argument_list) *)
+let eeffect_noarg effect_name = EEffectNoArg effect_name
+let eeffect_arg effect_name expression = EEffectArg (effect_name, expression)
 let eperform expression = EPerform expression
 let econtinue expression = EContinue expression
-
-(* -------------------------------------- *)
+let eeffect_pattern expression = EEffectPattern expression
+(* ---------------------------------- *)
 
 (* Smart constructors for binary operators *)
 let badd _ = Add
@@ -100,8 +102,40 @@ let parse_entity =
      )
 ;;
 
+let parse_uncapitalized_entity =
+  parse_entity
+  >>= fun entity ->
+  if String.contains "abcdefghijklmnopqrstuvwxyz_" entity.[0]
+  then return entity
+  else fail "Not an uncapitalized entity."
+;;
+
+let parse_capitalized_entity =
+  parse_entity
+  >>= fun entity ->
+  if String.contains "ABCDEFGHIJKLMNOPQRSTUVWXYZ" entity.[0]
+  then return entity
+  else fail "Not a capitalized entity."
+;;
+
 let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
-let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun"; "and" ]
+
+let keywords =
+  [ "let"
+  ; "rec"
+  ; "match"
+  ; "with"
+  ; "if"
+  ; "then"
+  ; "else"
+  ; "in"
+  ; "fun"
+  ; "and"
+  ; "effect"
+  ; "type"
+  ]
+;;
+
 (* ------- *)
 
 (* Parsers *)
@@ -142,9 +176,9 @@ let parse_identifier =
   remove_spaces
   *>
   let parse_identifier =
-    parse_entity
+    parse_uncapitalized_entity
     >>= fun entity ->
-    if List.exists (( = ) entity) keywords || List.exists (( = ) entity) data_constructors
+    if List.exists (( = ) entity) keywords
     then fail "Parsing error: keyword used."
     else return @@ eidentifier entity
   in
@@ -233,7 +267,10 @@ let parse_fun d =
   <|> string "fun"
       *> lift2
            efun
-           (many1 parse_entity <* remove_spaces <* string "->" <* remove_spaces)
+           (many1 parse_uncapitalized_entity
+           <* remove_spaces
+           <* string "->"
+           <* remove_spaces)
            (parse_content <* remove_spaces)
 ;;
 
@@ -258,8 +295,8 @@ let declaration_helper constructing_function d =
   in
   lift3
     constructing_function
-    parse_entity
-    (many parse_entity)
+    parse_uncapitalized_entity
+    (many parse_uncapitalized_entity)
     (remove_spaces *> string "=" *> parse_content)
 ;;
 
@@ -502,7 +539,7 @@ let parse_data_constructor d =
   parens self
   <|> (lift2
          (fun constructor_name expression_list -> constructor_name, expression_list)
-         parse_entity
+         parse_capitalized_entity
          (option None (parse_content >>| fun expression -> Some expression))
       >>= function
       | "Ok", None | "Error", None | "Some", None ->
@@ -1390,7 +1427,7 @@ let%test _ =
        ]
 ;;
 
-let%expect_test _ =
+(* let%expect_test _ =
   Typing.print_typ
     (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> string");
   [%expect {|
@@ -1431,4 +1468,4 @@ let%expect_test _ =
   [%expect {|
   : Parsing error: failed to parse type annotation.
   |}]
-;;
+;; *)
