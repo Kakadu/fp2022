@@ -3,6 +3,7 @@ open Interpret
 open Inferencer
 open Parser
 open Format
+open Typing
 
 let rec print result =
   let rec print_list delimiter = function
@@ -32,7 +33,7 @@ let rec print result =
     (match argument with
     | Some argument -> print argument
     | None -> ())
-  | VFun _ -> printf "Not a value."
+  | _ -> printf "Not a value."
 ;;
 
 let print_run code =
