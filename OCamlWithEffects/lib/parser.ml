@@ -613,58 +613,123 @@ let parse_list_constructing d =
      lift2 econstruct_list (parse_content <* separator) (self <|> parse_content))
 ;;
 
-let rec parse_type =
-  let open Typing in
+(* Parsing of type annotations *)
+type type_dispatch =
+  { parse_list_type : type_dispatch -> typ Angstrom.t
+  ; parse_tuple_type : type_dispatch -> typ Angstrom.t
+  ; parse_arrow : type_dispatch -> typ Angstrom.t
+  ; parse_type : type_dispatch -> typ Angstrom.t
+  }
+
+let parse_ground_type =
   fix
   @@ fun self ->
-  (remove_spaces
+  remove_spaces
   *>
   let parse_int = string "int" *> return int_typ in
   let parse_bool = string "bool" *> return bool_typ in
   let parse_char = string "char" *> return char_typ in
   let parse_string = string "string" *> return string_typ in
   let parse_unit = string "unit" *> return unit_typ in
-  let parse_ground_type =
-    choice [ parse_int; parse_bool; parse_char; parse_string; parse_unit ]
-  in
-  let parse_list =
-    self
-    <* remove_spaces
-    <* string "list"
-    >>= fun typ ->
-    remove_spaces *> option "" (string "*")
-    >>= function
-    | "" -> return (TList typ)
-    | _ -> fail "Not a list"
-  in
-  let parse_tuple =
-    sep_by (remove_spaces *> string "*" <* remove_spaces) self
-    >>= fun typ_list ->
-    remove_spaces *> option "" (string "list")
-    >>= function
-    | "" ->
-      if Base.List.length typ_list > 1
-      then return (TTuple typ_list)
-      else fail "Parsing error: tuple requires at least two type arguments."
-    | _ -> fail "Not a tuple"
-  in
-  let parse_arrow =
-    fix
-    @@ fun arrow_self ->
-    lift2
-      (fun left right -> TArr (left, right))
-      (choice [ parens arrow_self; parse_list; parse_tuple; parse_ground_type ])
-      (remove_spaces *> string "->" *> remove_spaces *> self)
-  in
-  choice [ parse_arrow; parse_tuple; parse_list; parse_ground_type ])
-  <|> parens self
-  <|> fail "Parsing error: failed to parse type annotation."
+  choice [ parens self; parse_int; parse_bool; parse_char; parse_string; parse_unit ]
 ;;
 
+let parse_list_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let parse_ground_type' =
+       parse_ground_type
+       >>= fun typ ->
+       remove_spaces *> option "" (string "list")
+       >>= function
+       | "" -> return typ
+       | _ -> fail "Not a ground type."
+     in
+     choice
+       [ parens @@ td.parse_arrow td
+       ; parens @@ td.parse_tuple_type td
+       ; parse_ground_type'
+       ; self
+       ]
+     <* remove_spaces
+     <* string "list"
+     >>= fun typ ->
+     remove_spaces *> option "" (string "*")
+     >>= function
+     | "" -> return (tlist typ)
+     | _ -> fail "Not a list.")
+;;
+
+let parse_tuple_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> (sep_by1
+            (remove_spaces *> string "*" <* remove_spaces)
+            (choice
+               [ parens @@ td.parse_arrow td
+               ; parens self
+               ; td.parse_list_type td
+               ; parse_ground_type
+               ])
+         >>= fun typ_list ->
+         remove_spaces *> option "" (string "list")
+         >>= function
+         | "" ->
+           if Base.List.length typ_list > 1
+           then return (ttuple typ_list)
+           else fail "Not a tuple."
+         | _ -> fail "Not a tuple."))
+;;
+
+let parse_arrow td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift2
+           (fun left right -> TArr (left, right))
+           (choice
+              [ parens self
+              ; td.parse_list_type td
+              ; td.parse_tuple_type td
+              ; parse_ground_type
+              ])
+           (remove_spaces
+           *> string "->"
+           *> remove_spaces
+           *> choice
+                [ self; td.parse_list_type td; td.parse_tuple_type td; parse_ground_type ]
+           ))
+;;
+
+let parse_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (choice
+        [ td.parse_arrow td
+        ; td.parse_list_type td
+        ; td.parse_tuple_type td
+        ; parse_ground_type
+        ]
+     <|> parens self
+     <|> fail "Parsing error: failed to parse type annotation.")
+;;
+
+(* --------------------------- *)
+
 let parse_effect_declaration =
-  string "Effect"
+  string "effect"
   *> remove_spaces
-  *> lift2 eeffect_declaration parse_entity (remove_spaces *> string ":" *> parse_type)
+  *> lift2
+       eeffect_declaration
+       parse_capitalized_entity
+       (remove_spaces *> string ":" *> parse_type)
 ;;
 
 (* TODO: call before parse_application *)
