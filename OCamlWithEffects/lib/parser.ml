@@ -791,7 +791,8 @@ let default_td =
 (* --------------------------- *)
 
 let parse_effect_declaration =
-  string "effect"
+  remove_spaces
+  *> string "effect"
   *> remove_spaces
   *> lift2
        eeffect_declaration
@@ -927,7 +928,7 @@ let parse : input -> (expression list, error_message) result =
  fun program ->
   parse_string
     ~consume:All
-    (many (parse_declaration <|> parse_effect_declaration) <* remove_spaces)
+    (many (parse_effect_declaration <|> parse_declaration) <* remove_spaces)
     program
 ;;
 
@@ -1637,4 +1638,119 @@ let%test _ =
   parse "effect SmallDiscount : int -> int effect"
   = Result.ok
     @@ [ EEffectDeclaration ("SmallDiscount", TArr (TGround Int, TEffect (TGround Int))) ]
+;;
+
+(* 38 *)
+let%test _ =
+  parse
+    "effect E: int -> int effect\n\n\
+    \     let helper x = match perform (E x) with\n\n\
+    \        | effect (E s) -> continue (s*s)\n\n\
+    \        | l -> l\n\n\
+    \     let main = match perform (E 5) with\n\n\
+    \        | effect (E s) -> continue (s*s)\n\n\
+    \        | l -> helper l"
+  = Result.ok
+    @@ [ EEffectDeclaration ("E", TArr (TGround Int, TEffect (TGround Int)))
+       ; EDeclaration
+           ( "helper"
+           , [ "x" ]
+           , EMatchWith
+               ( EPerform (EEffectArg ("E", EIdentifier "x"))
+               , [ ( EEffectPattern (EEffectArg ("E", EIdentifier "s"))
+                   , EContinue (EBinaryOperation (Mul, EIdentifier "s", EIdentifier "s"))
+                   )
+                 ; EIdentifier "l", EIdentifier "l"
+                 ] ) )
+       ; EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( EPerform (EEffectArg ("E", ELiteral (LInt 5)))
+               , [ ( EEffectPattern (EEffectArg ("E", EIdentifier "s"))
+                   , EContinue (EBinaryOperation (Mul, EIdentifier "s", EIdentifier "s"))
+                   )
+                 ; EIdentifier "l", EApplication (EIdentifier "helper", EIdentifier "l")
+                 ] ) )
+       ]
+;;
+
+(* 39 *)
+let%test _ =
+  parse
+    "effect EmptyListException : int effect\n\n\
+    \    let list_hd list = match list with \n\n\
+    \       | [] -> perform EmptyListException\n\n\
+    \       | hd :: _ -> hd\n\n\
+    \    let safe_list_hd l = match list_hd l with\n\n\
+    \      | effect EmptyListException -> 0, false\n\n\
+    \      | res -> res, true\n\
+    \     \n\
+    \     let main = safe_list_hd []"
+  = Result.ok
+    @@ [ EEffectDeclaration ("EmptyListException", TEffect (TGround Int))
+       ; EDeclaration
+           ( "list_hd"
+           , [ "list" ]
+           , EMatchWith
+               ( EIdentifier "list"
+               , [ EList [], EPerform (EEffectNoArg "EmptyListException")
+                 ; EConstructList (EIdentifier "hd", EIdentifier "_"), EIdentifier "hd"
+                 ] ) )
+       ; EDeclaration
+           ( "safe_list_hd"
+           , [ "l" ]
+           , EMatchWith
+               ( EApplication (EIdentifier "list_hd", EIdentifier "l")
+               , [ ( EEffectPattern (EEffectNoArg "EmptyListException")
+                   , ETuple [ ELiteral (LInt 0); ELiteral (LBool false) ] )
+                 ; EIdentifier "res", ETuple [ EIdentifier "res"; ELiteral (LBool true) ]
+                 ] ) )
+       ; EDeclaration ("main", [], EApplication (EIdentifier "safe_list_hd", EList []))
+       ]
+;;
+
+(* 40 *)
+let%test _ =
+  parse
+    "effect SmallDiscount : int -> int effect\n\n\
+    \    effect BigDiscount : int -> int effect\n\n\
+    \    let count_discount value = if value < 10000 then perform (SmallDiscount value) \
+     else perform (BigDiscount value)\n\n\
+    \    let main = match count_discount 8500 with\n\n\
+    \      | effect (SmallDiscount v) -> continue (v - v / 10)\n\n\
+    \      | effect (BigDiscount v) -> continue (v - v / 5)\n\n\
+    \      | v -> v"
+  = Result.ok
+    @@ [ EEffectDeclaration ("SmallDiscount", TArr (TGround Int, TEffect (TGround Int)))
+       ; EEffectDeclaration ("BigDiscount", TArr (TGround Int, TEffect (TGround Int)))
+       ; EDeclaration
+           ( "count_discount"
+           , [ "value" ]
+           , EIf
+               ( EBinaryOperation (LT, EIdentifier "value", ELiteral (LInt 10000))
+               , EPerform (EEffectArg ("SmallDiscount", EIdentifier "value"))
+               , EPerform (EEffectArg ("BigDiscount", EIdentifier "value")) ) )
+       ; EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( EApplication (EIdentifier "count_discount", ELiteral (LInt 8500))
+               , [ ( EEffectPattern (EEffectArg ("SmallDiscount", EIdentifier "v"))
+                   , EContinue
+                       (EBinaryOperation
+                          ( Sub
+                          , EIdentifier "v"
+                          , EBinaryOperation (Div, EIdentifier "v", ELiteral (LInt 10)) ))
+                   )
+                 ; ( EEffectPattern (EEffectArg ("BigDiscount", EIdentifier "v"))
+                   , EContinue
+                       (EBinaryOperation
+                          ( Sub
+                          , EIdentifier "v"
+                          , EBinaryOperation (Div, EIdentifier "v", ELiteral (LInt 5)) ))
+                   )
+                 ; EIdentifier "v", EIdentifier "v"
+                 ] ) )
+       ]
 ;;
