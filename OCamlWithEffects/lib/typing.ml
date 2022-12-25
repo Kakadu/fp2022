@@ -19,27 +19,33 @@ type typ =
   | TADT of adt_type * typ
   | TEffect of typ
 
+(* Ground types *)
 let int_typ = TGround Int
 let bool_typ = TGround Bool
 let string_typ = TGround String
 let unit_typ = TGround Unit
 let char_typ = TGround Char
-let t_arrow l r = TArr (l, r)
-let t_tuple typ_list = TTuple typ_list
-let t_list typ = TList typ
-let t_var n = TVar n
-let t_adt name typ = TADT (name, typ)
+(* ------------ *)
+
+(* Smart constructors for types *)
+let tarrow left_type right_type = TArr (left_type, right_type)
+let ttuple type_list = TTuple type_list
+let tlist typ = TList typ
+let tvar n = TVar n
+let tadt name typ = TADT (name, typ)
+let teffect typ = TEffect typ
+(* ---------------------------- *)
 
 let rec pp_type fmt typ =
   let open Format in
   match typ with
   | TGround x ->
     (match x with
-     | Int -> fprintf fmt "int"
-     | String -> fprintf fmt "string"
-     | Char -> fprintf fmt "char"
-     | Bool -> fprintf fmt "bool"
-     | Unit -> fprintf fmt "unit")
+    | Int -> fprintf fmt "int"
+    | String -> fprintf fmt "string"
+    | Char -> fprintf fmt "char"
+    | Bool -> fprintf fmt "bool"
+    | Unit -> fprintf fmt "unit")
   | TTuple ts ->
     fprintf
       fmt
