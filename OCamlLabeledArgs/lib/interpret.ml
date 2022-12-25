@@ -7,23 +7,24 @@ open Base
 open Errors
 
 module Interpret (M : MONADERROR) = struct
-  include M
+  open M
 
-  let lookup_name name env = !(IdMap.find name env)
+  let lookup_name name (env : environment) = !(IdMap.find name env)
 
   let compare_values v v' =
     match v, v' with
-    | VBool b, VBool b' -> compare_bool b b'
-    | VInt n, VInt n' -> compare_int n n'
-    | _ -> failwith "Runtime failure"
+    | VBool b, VBool b' -> return (compare_bool b b')
+    | VInt n, VInt n' -> return (compare_int n n')
+    | _ -> fail (RuntimeError "could not compare values")
   ;;
 
-  let rec eval e (env : environment) : value =
+  let rec eval e (env : environment) =
     match e with
     | Const c -> eval_const c
-    | Var name -> lookup_name name env
+    | Var name -> return (lookup_name name env)
     | Binop _ -> eval_binop e env
-    | Fun (label, default, name, exp) -> VClosure (env, label, default, name, exp)
+    | Fun (label, default, name, exp) ->
+      return (VClosure (env, label, default, name, exp))
     | App (fu, label, arg) -> eval_app fu label arg env
     | IfThenElse (cond, tbody, fbody) -> eval_if cond tbody fbody env
     | Let (name, body, exp) -> eval_let name body exp env
@@ -31,14 +32,16 @@ module Interpret (M : MONADERROR) = struct
 
   and eval_const c =
     match c with
-    | Bool b -> VBool b
-    | Int n -> VInt n
-    | Unit -> VUnit
+    | Bool b -> return (VBool b)
+    | Int n -> return (VInt n)
+    | Unit -> return VUnit
 
   and eval_if cond tbody fbody env =
-    match eval cond env with
+    eval cond env
+    >>= fun cond_val ->
+    match cond_val with
     | VBool b -> eval (if b then tbody else fbody) env
-    | _ -> failwith "Runtime failure"
+    | _ -> fail (RuntimeError "error in if condition")
 
   and eval_binop e env =
     match e with
@@ -55,49 +58,64 @@ module Interpret (M : MONADERROR) = struct
        | Ltq -> eval_cmp ( <= ) l r env
        | Gt -> eval_cmp ( > ) l r env
        | Gtq -> eval_cmp ( >= ) l r env)
-    | _ -> failwith "Runtime failure: error in binary operation"
+    | _ -> fail (RuntimeError "error in binary operation")
 
   and eval_arithm op l r env =
-    let le = eval l env in
-    let re = eval r env in
-    match le, re with
-    | VInt n, VInt n' -> VInt (op n n')
-    | VInt _, _ -> failwith "Runtime failure: type error with right operand"
-    | _ -> failwith "Runtime failure: type error with left operand"
+    eval l env
+    >>= fun l_val ->
+    eval r env
+    >>= fun r_val ->
+    match l_val, r_val with
+    | VInt n, VInt n' -> return (VInt (op n n'))
+    | VInt _, _ -> fail (RuntimeError "type error with right operand")
+    | _ -> fail (RuntimeError "type error with left operand")
 
   and eval_cmp op l r env =
-    let le = eval l env in
-    let re = eval r env in
-    VBool (op (compare_values le re) 0)
+    eval l env
+    >>= fun l_val ->
+    eval r env
+    >>= fun r_val -> compare_values l_val r_val >>= fun c -> return (VBool (op c 0))
 
   (* TODO: decide how to match argument labels *)
   and eval_app fu label arg env =
-    match eval fu env with
+    eval fu env
+    >>= fun closure_val ->
+    match closure_val with
     | VClosure (env_of_fu, ArgNoLabel, None, name, fu_body) ->
-      let arg_value = eval arg env in
-      eval fu_body (IdMap.add name (ref arg_value) env_of_fu)
+      eval arg env
+      >>= fun arg_val -> eval fu_body (IdMap.add name (ref arg_val) env_of_fu)
     | VClosure (env_of_fu, ArgLabeled l, None, name, fu_body) ->
-      let arg_value = eval arg env in
-      eval fu_body (IdMap.add l (ref arg_value) env_of_fu)
+      eval arg env >>= fun arg_val -> eval fu_body (IdMap.add l (ref arg_val) env_of_fu)
     | VClosure (env_of_fu, ArgOptional l, None, name, fu_body) ->
-      let arg_value = eval arg env in
-      eval fu_body (IdMap.add l (ref arg_value) env_of_fu)
+      eval arg env >>= fun arg_val -> eval fu_body (IdMap.add l (ref arg_val) env_of_fu)
     | VClosure (env_of_fu, ArgOptional l, Some e, name, fu_body) ->
-      let arg_value = eval e env in
-      eval fu_body (IdMap.add l (ref arg_value) env_of_fu)
-    | _ -> failwith "Runtime failure: this is not a function"
+      eval arg env >>= fun arg_val -> eval fu_body (IdMap.add l (ref arg_val) env_of_fu)
+    | _ -> fail (RuntimeError "this is not a function")
 
   and eval_let name body exp env =
-    let body_value = eval body env in
-    eval exp (IdMap.add name (ref body_value) env)
+    eval body env >>= fun body_val -> eval exp (IdMap.add name (ref body_val) env)
 
   and eval_letrec name body exp env =
     let new_env = IdMap.add name (ref VUndef) env in
-    let body_value = eval body new_env in
+    eval body new_env
+    >>= fun body_val ->
     match IdMap.find name new_env with
-    | exception Not_found -> failwith "Runtime error: Couldn't update environemt"
+    | exception Not_found -> fail (RuntimeError "Couldn't update environment")
     | _ ->
-      let new_env = IdMap.add name (ref body_value) new_env in
+      let new_env = IdMap.add name (ref body_val) new_env in
       eval exp new_env
   ;;
+end
+
+module EvalResult : MONADERROR with type 'a t = ('a, error) result = struct
+  type 'a t = ('a, error) result
+
+  let ( >>= ) value func =
+    match value with
+    | Ok x -> func x
+    | Error s -> Error s
+  ;;
+
+  let return x = Ok x
+  let fail error = Error error
 end

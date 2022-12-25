@@ -2,12 +2,13 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
+open Ast
+
 (* ------------------------------------------------------ *)
 (* -------------------- Parser tests -------------------- *)
 (* ------------------------------------------------------ *)
 
 open Parser
-open Ast
 
 (* Base combinators *)
 let%test _ = parse identifier "_" = Ok "_"
@@ -253,4 +254,35 @@ let%test _ =
           , ""
           , Fun (ArgLabeled "name1", None, "", Binop (Plus, Var "name1", Var "name2")) )
       )
+;;
+
+(* ------------------------------------------------------ *)
+(* -------------------- Infer tests --------------------- *)
+(* ------------------------------------------------------ *)
+
+(* To be done *)
+
+(* ------------------------------------------------------ *)
+(* --------------------- Eval tests --------------------- *)
+(* ------------------------------------------------------ *)
+
+open Interpret
+
+let basic = Binop (Plus, Const (Int 1), Const (Int 9))
+let increment = Fun (ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1)))
+
+let%test _ =
+  let module E = Interpret (EvalResult) in
+  let env = IdMap.empty in
+  match E.eval basic env with
+  | Ok (VInt 10) -> true
+  | _ -> false
+;;
+
+let%test _ =
+  let module E = Interpret (EvalResult) in
+  let env = IdMap.add "x" (ref (VInt 8)) IdMap.empty in
+  match E.eval increment env with
+  | Ok (VClosure (_, ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1)))) -> true
+  | _ -> false
 ;;
