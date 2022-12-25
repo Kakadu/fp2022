@@ -76,7 +76,7 @@ module Type = struct
     | TVar b -> b = v
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> Base.List.exists typ_list ~f:(occurs_in v)
-    | TList typ | TADT (_, typ) -> occurs_in v typ
+    | TList typ | TADT (_, typ) | TEffect typ -> occurs_in v typ
     | TGround _ -> false
   ;;
 
@@ -90,7 +90,7 @@ module Type = struct
           typ_list
           ~f:(fun t s -> Base.Set.union s (helper empty_set t))
           ~init:acc
-      | TList typ | TADT (_, typ) -> helper acc typ
+      | TList typ | TADT (_, typ) | TEffect typ -> helper acc typ
       | TGround _ -> acc
     in
     helper empty_set
@@ -268,6 +268,12 @@ let lookup_env e map =
     return (Subst.empty, ans)
 ;;
 
+let lookup_effect effect map =
+  match Base.Map.find map effect with
+  | None -> fail (`NoVariable effect)
+  | Some (_, typ) -> return (Subst.empty, typ)
+;;
+
 let infer =
   let rec helper : TypeEnv.t -> expression -> (Subst.t * typ) R.t =
    fun env -> function
@@ -373,7 +379,7 @@ let infer =
     | EConstructList (operand, list) ->
       let* operand_subst, operand_typ = helper env operand in
       let* list_subst, list_typ = helper env list in
-      let* subst' = unify list_typ (tlist operand_typ) in
+      let* subst' = unify (tlist operand_typ) list_typ in
       let* final_subst = Subst.compose_all [ operand_subst; list_subst; subst' ] in
       return (final_subst, Subst.apply subst' list_typ)
     | EDataConstructor (constructor_name, content) ->
@@ -454,6 +460,29 @@ let infer =
     | EDeclaration (_, arguments_list, function_body)
     | ERecursiveDeclaration (_, arguments_list, function_body) ->
       helper env (EFun (arguments_list, function_body))
+    | EEffectDeclaration (_, typ) -> return (Subst.empty, typ)
+    | EEffectNoArg name -> lookup_effect name env
+    | EEffectArg (name, expression) ->
+      let* fresh_var = fresh_var in
+      let* subst, typ = helper env expression in
+      let* _, effect_typ = lookup_effect name env in
+      let* subst' = unify (tarrow typ fresh_var) effect_typ in
+      let trez = Subst.apply subst' fresh_var in
+      let* final_subst = Subst.compose subst subst' in
+      return (final_subst, trez)
+    | EPerform expression ->
+      let* subst, typ = helper env expression in
+      let* fresh_var = fresh_var in
+      let* subst' = unify typ (teffect fresh_var) in
+      let* final_subst = Subst.compose subst subst' in
+      return (final_subst, fresh_var)
+    | EContinue expression -> helper env expression
+    | EEffectPattern expression ->
+      let* fresh_var = fresh_var in
+      let* subst, typ = helper env expression in
+      let* subst' = unify typ (TEffect fresh_var) in
+      let* final_subst = Subst.compose subst subst' in
+      return (final_subst, typ)
     | _ -> fail `NotReachable
   in
   helper
@@ -478,6 +507,10 @@ let check_types (program : expression list) =
          let env = TypeEnv.apply s env in
          let generalized_type = generalize env (Subst.apply s tv) in
          helper (TypeEnv.extend environment name generalized_type) tail
+       | EEffectDeclaration (name, typ) ->
+         helper
+           (TypeEnv.extend environment name (Base.Set.empty (module Base.Int), typ))
+           tail
        | _ -> fail `NotReachable)
     | _ -> return ()
   in

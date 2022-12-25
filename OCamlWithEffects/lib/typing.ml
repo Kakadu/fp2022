@@ -66,6 +66,7 @@ let rec pp_type fmt typ =
   | TADT (name, typ) ->
     pp_type fmt typ;
     fprintf fmt "%s" name
+  | TEffect typ -> fprintf fmt "%a effect" pp_type typ
 ;;
 
 let print_typ typ =

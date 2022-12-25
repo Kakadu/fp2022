@@ -3,6 +3,7 @@ open Interpret
 open Inferencer
 open Parser
 open Format
+open Typing
 
 let rec print result =
   let rec print_list delimiter = function
