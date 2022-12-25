@@ -1604,10 +1604,8 @@ let%test _ =
        ]
 ;;
 
-(* 36
+(* 36 *)
 let%test _ =
   parse "effect EmptyListEffect: int list effect"
-  = Result.ok
-    @@ [ EEffectDeclaration ("EmptyListEffect", )
-       ]
-;; *)
+  = Result.ok @@ [ EEffectDeclaration ("EmptyListEffect", TEffect (TList (TGround Int))) ]
+;;
