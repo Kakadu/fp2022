@@ -128,9 +128,9 @@
   > let count_solutions_of_sq_equation a b c =
   >   let sq x = x * x
   >   in
-  >   let D = sq b - 4 * a * c
+  >   let d = sq b - 4 * a * c
   >   in
-  >   if D > 0 then 2 else (if D = 0 then 1 else 0)
+  >   if d > 0 then 2 else (if d = 0 then 1 else 0)
   > 
   > let main = count_solutions_of_sq_equation 2 9 4
   > EOF
@@ -139,9 +139,9 @@
   > let count_solutions_of_sq_equation a b c =
   >   let sq x = x * x
   >   in
-  >   let D = sq b - 4 * a * c
+  >   let d = sq b - 4 * a * c
   >   in
-  >   if D > 0 then 2 else (if D = 0 then 1 else 0)
+  >   if d > 0 then 2 else (if d = 0 then 1 else 0)
   > 
   > let main = count_solutions_of_sq_equation 2 9 4
   > EOF
@@ -315,3 +315,62 @@
   > let main = "0" :: int_list
   > EOF
   Unification failed: type of the expression is string but expected type was int
+  $ ./demo.exe <<- EOF
+  > effect Failure : string -> int
+  > 
+  > let binary_int_of_str n = match n with
+  >   | "0" -> 0
+  >   | "1" -> 1
+  >   | s -> perform (Failure s)
+  > 
+  > let rec sum_up list = match list with
+  >   | [] -> 0
+  >   | s :: ss -> binary_int_of_str s + sum_up ss
+  > 
+  > let test_list = ["0"; "hope"; "1"; "it"; "0"; "works"; "1"]
+  > 
+  > let main = match sum_up test_list with
+  >   | effect (Failure _) -> continue 0
+  >   | res -> res
+  > EOF
+  2
+  $ ./interpreterTests.exe <<-EOF
+  > effect E: int -> int
+  > 
+  > let helper x = match perform (E x) with
+  >    | effect (E s) k -> continue k (s*s)
+  >    | l -> l
+  > 
+  > let main = match perform (E 5) with
+  >    | effect (E s) k -> continue k (s*s)
+  >    | l -> helper l
+  > EOF
+  625
+  $ ./interpreterTests.exe <<-EOF
+  > effect EmptyListException : int
+  > 
+  > let list_hd = function
+  >    | [] -> perform EmptyListException
+  >    | hd :: _ -> hd
+  > 
+  > let safe_list_hd l = match list_hd l with
+  >   | effect EmptyListException -> 0, false
+  >   | res -> res, true
+  > 
+  > let main = safe_list_hd []
+  > EOF
+  (0, false)
+  $ ./interpreterTests.exe <<-EOF
+  > effect EmptyListException : int
+  > 
+  > let list_hd = function
+  >    | [] -> perform EmptyListException
+  >    | hd :: _ -> hd
+  > 
+  > let safe_list_hd l = match list_hd l with
+  >   | effect EmptyListException -> 0, false
+  >   | res -> res, true
+  > 
+  > let main = safe_list_hd [12; 65; 94]
+  > EOF
+  (12, true)
