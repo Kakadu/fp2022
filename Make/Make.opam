@@ -14,8 +14,8 @@ depends: [
   "ppx_inline_test" {with-test}
   "qcheck-core"
   "ppx_expect"
-  "core"
   "ppx_deriving"
+  "core"
   "odoc" {with-doc}
   "ocamlformat" {build}
   "base"
