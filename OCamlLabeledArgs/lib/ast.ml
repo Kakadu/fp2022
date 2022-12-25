@@ -63,4 +63,4 @@ type typ =
   | TInt
   | TUnit
   | TVar of id
-  | Arrow of arg_label * typ * typ
+  | Arrow of typ * typ
