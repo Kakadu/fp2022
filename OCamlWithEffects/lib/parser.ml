@@ -20,6 +20,9 @@ type dispatch =
   ; parse_let_in : dispatch -> expression Angstrom.t
   ; parse_data_constructor : dispatch -> expression Angstrom.t
   ; parse_expression : dispatch -> expression Angstrom.t
+  ; parse_effect_arg : dispatch -> expression Angstrom.t
+  ; parse_perform : dispatch -> expression Angstrom.t
+  ; parse_continue : dispatch -> expression Angstrom.t
   }
 
 (* Smart constructors for expressions *)
@@ -133,6 +136,8 @@ let keywords =
   ; "and"
   ; "effect"
   ; "type"
+  ; "perform"
+  ; "continue"
   ]
 ;;
 
@@ -185,6 +190,16 @@ let parse_identifier =
   parse_identifier
 ;;
 
+let parse_effect_noarg = lift eeffect_noarg parse_capitalized_entity
+
+let parse_effect_pattern parse_content =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift eeffect_pattern (string "effect" *> remove_spaces *> parse_content))
+;;
+
 let parse_tuple d =
   fix
   @@ fun self ->
@@ -196,6 +211,7 @@ let parse_tuple d =
            ; d.parse_binary_operation d
            ; d.parse_unary_operation d
            ; d.parse_list d
+           ; d.parse_perform d
            ; d.parse_application d
            ; d.parse_fun d
            ; d.parse_conditional d
@@ -227,6 +243,7 @@ let parse_list d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; self
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -253,6 +270,7 @@ let parse_fun d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; self
       ; d.parse_conditional d
@@ -283,6 +301,7 @@ let declaration_helper constructing_function d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -326,6 +345,7 @@ let parse_let_in d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -361,6 +381,7 @@ let parse_conditional d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; self
@@ -392,6 +413,7 @@ let parse_matching d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -410,8 +432,8 @@ let parse_matching d =
            (let parse_case =
               lift2
                 (fun case action -> case, action)
-                parse_content
-                (remove_spaces *> string "->" *> parse_content)
+                (parse_content <|> parse_effect_pattern parse_content)
+                (remove_spaces *> string "->" *> (parse_content <|> d.parse_continue d))
             and separator = remove_spaces *> string "|" in
             remove_spaces
             *> string "with"
@@ -455,7 +477,10 @@ let parse_binary_operation d =
   let parse_content =
     choice
       [ parens self
+      ; d.parse_list_constructing d
       ; d.parse_unary_operation d
+      ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_conditional d
       ; d.parse_matching d
@@ -499,6 +524,7 @@ let parse_application d =
          ; parens @@ d.parse_binary_operation d
          ; parens @@ d.parse_unary_operation d
          ; d.parse_list d
+         ; parens @@ d.parse_perform d
          ; parens self
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
@@ -526,6 +552,7 @@ let parse_data_constructor d =
       ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_unary_operation d
       ; d.parse_list d
+      ; parens @@ d.parse_perform d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_fun d
       ; parens @@ d.parse_conditional d
@@ -561,6 +588,7 @@ let parse_unary_operation d =
     let indent = many1 (satisfy space_predicate) in
     choice
       [ parens self <|> indent *> self
+      ; parens @@ d.parse_perform d <|> indent *> d.parse_perform d
       ; parens @@ d.parse_application d <|> indent *> d.parse_application d
       ; parens @@ d.parse_conditional d <|> indent *> d.parse_conditional d
       ; parens @@ d.parse_matching d <|> indent *> d.parse_matching d
@@ -573,6 +601,7 @@ let parse_unary_operation d =
     choice
       [ parens @@ d.parse_binary_operation d
       ; parens self
+      ; parens @@ d.parse_perform d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_conditional d
       ; parens @@ d.parse_matching d
@@ -600,6 +629,7 @@ let parse_list_constructing d =
          ; parens @@ d.parse_binary_operation d
          ; d.parse_unary_operation d
          ; d.parse_list d
+         ; d.parse_perform d
          ; d.parse_application d
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
@@ -618,6 +648,7 @@ type type_dispatch =
   { parse_list_type : type_dispatch -> typ Angstrom.t
   ; parse_tuple_type : type_dispatch -> typ Angstrom.t
   ; parse_arrow : type_dispatch -> typ Angstrom.t
+  ; parse_effect_type : type_dispatch -> typ Angstrom.t
   ; parse_type : type_dispatch -> typ Angstrom.t
   }
 
@@ -697,6 +728,7 @@ let parse_arrow td =
               [ parens self
               ; td.parse_list_type td
               ; td.parse_tuple_type td
+              ; td.parse_effect_type td
               ; parse_ground_type
               ])
            (remove_spaces
@@ -707,6 +739,23 @@ let parse_arrow td =
            ))
 ;;
 
+let parse_effect_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift
+           teffect
+           (choice
+              [ parens @@ td.parse_arrow td
+              ; parens @@ td.parse_tuple_type td
+              ; td.parse_list_type td
+              ; parse_ground_type
+              ]
+           <* remove_spaces
+           <* string "effect"))
+;;
+
 let parse_type td =
   fix
   @@ fun self ->
@@ -715,10 +764,15 @@ let parse_type td =
         [ td.parse_arrow td
         ; td.parse_list_type td
         ; td.parse_tuple_type td
+        ; td.parse_effect_type td
         ; parse_ground_type
         ]
      <|> parens self
      <|> fail "Parsing error: failed to parse type annotation.")
+;;
+
+let default_td =
+  { parse_list_type; parse_tuple_type; parse_arrow; parse_effect_type; parse_type }
 ;;
 
 (* --------------------------- *)
@@ -729,16 +783,73 @@ let parse_effect_declaration =
   *> lift2
        eeffect_declaration
        parse_capitalized_entity
-       (remove_spaces *> string ":" *> parse_type)
+       (remove_spaces *> string ":" *> remove_spaces *> parse_type default_td)
 ;;
 
-(* TODO: call before parse_application *)
-let parse_perform =
-  remove_spaces *> string "Effect.perform" *> remove_spaces *> parse_identifier
+let parse_effect_arg d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
+         ; parens @@ d.parse_binary_operation d
+         ; parens @@ d.parse_unary_operation d
+         ; d.parse_list d
+         ; parens @@ d.parse_perform d
+         ; parens @@ d.parse_application d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
+         ; parse_literal
+         ; parse_identifier
+         ]
+     in
+     lift2 eeffect_arg parse_capitalized_entity operand_parser)
+;;
+
+let parse_perform d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift
+           eperform
+           (string "perform"
+           *> remove_spaces
+           *> (parse_effect_noarg <|> parse_effect_arg d)))
 ;;
 
 let parse_continue d =
-  remove_spaces *> string "continue" *> remove_spaces *> d.parse_expression d
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
+         ; parens @@ d.parse_binary_operation d
+         ; parens @@ d.parse_unary_operation d
+         ; d.parse_list d
+         ; parens @@ d.parse_perform d
+         ; parens @@ d.parse_application d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
+         ; parse_literal
+         ; parse_identifier
+         ]
+     in
+     lift econtinue (string "continue" *> remove_spaces *> operand_parser))
 ;;
 
 (* ------- *)
@@ -750,6 +861,7 @@ let parse_expression d =
     ; d.parse_binary_operation d
     ; d.parse_unary_operation d
     ; d.parse_list d
+    ; d.parse_perform d
     ; d.parse_application d
     ; d.parse_fun d
     ; d.parse_conditional d
@@ -774,6 +886,9 @@ let default =
   ; parse_let_in
   ; parse_data_constructor
   ; parse_expression
+  ; parse_effect_arg
+  ; parse_perform
+  ; parse_continue
   }
 ;;
 
@@ -790,11 +905,17 @@ let parse_unary_operation = parse_unary_operation default
 let parse_list_constructing = parse_list_constructing default
 let parse_data_constructor = parse_data_constructor default
 let parse_expression = parse_expression default
+let parse_effect_arg = parse_effect_arg default
+let parse_perform = parse_perform default
+let parse_continue = parse_continue default
 
 (* Main parsing function *)
 let parse : input -> (expression list, error_message) result =
  fun program ->
-  parse_string ~consume:All (many parse_declaration <* remove_spaces) program
+  parse_string
+    ~consume:All
+    (many (parse_declaration <|> parse_effect_declaration) <* remove_spaces)
+    program
 ;;
 
 (* -------------------- TESTS -------------------- *)
