@@ -316,7 +316,7 @@
   > EOF
   Unification failed: type of the expression is string but expected type was int
   $ ./demo.exe <<- EOF
-  > effect Failure : string -> int
+  > effect Failure : string -> int effect
   > 
   > let binary_int_of_str n = match n with
   >   | "0" -> 0
@@ -335,7 +335,7 @@
   > EOF
   2
   $ ./interpreterTests.exe <<-EOF
-  > effect E: int -> int
+  > effect E: int -> int effect
   > 
   > let helper x = match perform (E x) with
   >    | effect (E s) k -> continue k (s*s)
@@ -347,7 +347,7 @@
   > EOF
   625
   $ ./interpreterTests.exe <<-EOF
-  > effect EmptyListException : int
+  > effect EmptyListException : int effect
   > 
   > let list_hd = function
   >    | [] -> perform EmptyListException
@@ -361,7 +361,7 @@
   > EOF
   (0, false)
   $ ./interpreterTests.exe <<-EOF
-  > effect EmptyListException : int
+  > effect EmptyListException : int effect
   > 
   > let list_hd = function
   >    | [] -> perform EmptyListException
@@ -374,3 +374,29 @@
   > let main = safe_list_hd [12; 65; 94]
   > EOF
   (12, true)
+  > ./interpreterTests.exe <<-EOF
+  > effect SmallDiscount : int -> int effect
+  > 
+  > effect BigDiscount : int -> int effect
+  > 
+  > let count_discount = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
+  > 
+  > let main = match count_discount 8500 with
+  >   | effect (SmallDiscount v) -> continue (v * 0.9)
+  >   | effect (BigDiscount v) -> continue (v * 0.8)
+  >   | v -> v
+  > EOF
+  7650
+  > ./interpreterTests.exe <<-EOF
+  > effect SmallDiscount : int -> int effect
+  > 
+  > effect BigDiscount : int -> int effect
+  > 
+  > let count_discount = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
+  > 
+  > let main = match count_discount 25000 with
+  >   | effect (SmallDiscount v) -> continue (v * 0.9)
+  >   | effect (BigDiscount v) -> continue (v * 0.8)
+  >   | v -> v
+  > EOF
+  20000
