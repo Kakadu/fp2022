@@ -222,27 +222,25 @@ end = struct
       else return @@ VFun (id_list, function_body, environment, recursive)
     | EFun (arguments_list, function_body) ->
       (match arguments_list with
-      | [] -> eval function_body environment
-      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
-       | [] -> eval function_body environment
-       | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
+        | [] -> eval function_body environment
+        | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | EDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
-      | [] -> eval function_body environment
-      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
+        | [] -> eval function_body environment
+        | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | ERecursiveDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
-      | [] -> eval function_body environment
-      | _ -> return @@ VFun (arguments_list, function_body, environment, true))
+        | [] -> eval function_body environment
+        | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
     | EIf (condition, true_branch, false_branch) ->
       let* eval_conditional = eval condition environment in
       (match eval_conditional with
-      | VBool true -> eval true_branch environment
-      | VBool false -> eval false_branch environment
-      | _ ->
-        fail
-          "Runtime error: expression was expected of type bool because it is in the \
-           condition of an if-statement.")
+        | VBool true -> eval true_branch environment
+        | VBool false -> eval false_branch environment
+        | _ ->
+          fail
+            "Runtime error: expression was expected of type bool because it is in the \
+            condition of an if-statement.")
     | EUnaryOperation (operator, operand) ->
       let* operand = eval operand environment in
       (match operator, operand with
