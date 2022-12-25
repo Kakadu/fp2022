@@ -2,6 +2,7 @@ open Angstrom
 open Ast
 open List
 open String
+open Typing
 
 type error_message = string
 type input = string
@@ -19,9 +20,12 @@ type dispatch =
   ; parse_let_in : dispatch -> expression Angstrom.t
   ; parse_data_constructor : dispatch -> expression Angstrom.t
   ; parse_expression : dispatch -> expression Angstrom.t
+  ; parse_effect_arg : dispatch -> expression Angstrom.t
+  ; parse_perform : dispatch -> expression Angstrom.t
+  ; parse_continue : dispatch -> expression Angstrom.t
   }
 
-(* Functions for constructing expressions *)
+(* Smart constructors for expressions *)
 let eliteral x = ELiteral x
 let eidentifier x = EIdentifier x
 let etuple head tail = ETuple (head :: tail)
@@ -54,7 +58,17 @@ let edata_constructor constructor_name expression =
 
 let eunary_operation operation expression = EUnaryOperation (operation, expression)
 let econstruct_list head tail = EConstructList (head, tail)
-(* -------------------------------------- *)
+
+let eeffect_declaration effect_name effect_type =
+  EEffectDeclaration (effect_name, effect_type)
+;;
+
+let eeffect_noarg effect_name = EEffectNoArg effect_name
+let eeffect_arg effect_name expression = EEffectArg (effect_name, expression)
+let eperform expression = EPerform expression
+let econtinue expression = EContinue expression
+let eeffect_pattern expression = EEffectPattern expression
+(* ---------------------------------- *)
 
 (* Smart constructors for binary operators *)
 let badd _ = Add
@@ -91,8 +105,42 @@ let parse_entity =
      )
 ;;
 
+let parse_uncapitalized_entity =
+  parse_entity
+  >>= fun entity ->
+  if String.contains "abcdefghijklmnopqrstuvwxyz_" entity.[0]
+  then return entity
+  else fail "Not an uncapitalized entity."
+;;
+
+let parse_capitalized_entity =
+  parse_entity
+  >>= fun entity ->
+  if String.contains "ABCDEFGHIJKLMNOPQRSTUVWXYZ" entity.[0]
+  then return entity
+  else fail "Not a capitalized entity."
+;;
+
 let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
-let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun"; "and" ]
+
+let keywords =
+  [ "let"
+  ; "rec"
+  ; "match"
+  ; "with"
+  ; "if"
+  ; "then"
+  ; "else"
+  ; "in"
+  ; "fun"
+  ; "and"
+  ; "effect"
+  ; "type"
+  ; "perform"
+  ; "continue"
+  ]
+;;
+
 (* ------- *)
 
 (* Parsers *)
@@ -133,13 +181,23 @@ let parse_identifier =
   remove_spaces
   *>
   let parse_identifier =
-    parse_entity
+    parse_uncapitalized_entity
     >>= fun entity ->
-    if List.exists (( = ) entity) keywords || List.exists (( = ) entity) data_constructors
+    if List.exists (( = ) entity) keywords
     then fail "Parsing error: keyword used."
     else return @@ eidentifier entity
   in
   parse_identifier
+;;
+
+let parse_effect_noarg = lift eeffect_noarg parse_capitalized_entity
+
+let parse_effect_pattern parse_content =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift eeffect_pattern (string "effect" *> remove_spaces *> parse_content))
 ;;
 
 let parse_tuple d =
@@ -153,6 +211,7 @@ let parse_tuple d =
            ; d.parse_binary_operation d
            ; d.parse_unary_operation d
            ; d.parse_list d
+           ; d.parse_perform d
            ; d.parse_application d
            ; d.parse_fun d
            ; d.parse_conditional d
@@ -184,6 +243,7 @@ let parse_list d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; self
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -210,6 +270,7 @@ let parse_fun d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; self
       ; d.parse_conditional d
@@ -224,7 +285,10 @@ let parse_fun d =
   <|> string "fun"
       *> lift2
            efun
-           (many1 parse_entity <* remove_spaces <* string "->" <* remove_spaces)
+           (many1 parse_uncapitalized_entity
+           <* remove_spaces
+           <* string "->"
+           <* remove_spaces)
            (parse_content <* remove_spaces)
 ;;
 
@@ -237,6 +301,7 @@ let declaration_helper constructing_function d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -249,8 +314,8 @@ let declaration_helper constructing_function d =
   in
   lift3
     constructing_function
-    parse_entity
-    (many parse_entity)
+    parse_uncapitalized_entity
+    (many parse_uncapitalized_entity)
     (remove_spaces *> string "=" *> parse_content)
 ;;
 
@@ -280,6 +345,7 @@ let parse_let_in d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -315,6 +381,7 @@ let parse_conditional d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; self
@@ -346,6 +413,7 @@ let parse_matching d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -364,8 +432,8 @@ let parse_matching d =
            (let parse_case =
               lift2
                 (fun case action -> case, action)
-                parse_content
-                (remove_spaces *> string "->" *> parse_content)
+                (parse_content <|> parse_effect_pattern parse_content)
+                (remove_spaces *> string "->" *> (parse_content <|> d.parse_continue d))
             and separator = remove_spaces *> string "|" in
             remove_spaces
             *> string "with"
@@ -409,7 +477,10 @@ let parse_binary_operation d =
   let parse_content =
     choice
       [ parens self
+      ; d.parse_list_constructing d
       ; d.parse_unary_operation d
+      ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_conditional d
       ; d.parse_matching d
@@ -453,6 +524,7 @@ let parse_application d =
          ; parens @@ d.parse_binary_operation d
          ; parens @@ d.parse_unary_operation d
          ; d.parse_list d
+         ; parens @@ d.parse_perform d
          ; parens self
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
@@ -480,6 +552,7 @@ let parse_data_constructor d =
       ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_unary_operation d
       ; d.parse_list d
+      ; parens @@ d.parse_perform d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_fun d
       ; parens @@ d.parse_conditional d
@@ -493,7 +566,7 @@ let parse_data_constructor d =
   parens self
   <|> (lift2
          (fun constructor_name expression_list -> constructor_name, expression_list)
-         parse_entity
+         parse_capitalized_entity
          (option None (parse_content >>| fun expression -> Some expression))
       >>= function
       | "Ok", None | "Error", None | "Some", None ->
@@ -515,6 +588,7 @@ let parse_unary_operation d =
     let indent = many1 (satisfy space_predicate) in
     choice
       [ parens self <|> indent *> self
+      ; parens @@ d.parse_perform d <|> indent *> d.parse_perform d
       ; parens @@ d.parse_application d <|> indent *> d.parse_application d
       ; parens @@ d.parse_conditional d <|> indent *> d.parse_conditional d
       ; parens @@ d.parse_matching d <|> indent *> d.parse_matching d
@@ -527,6 +601,7 @@ let parse_unary_operation d =
     choice
       [ parens @@ d.parse_binary_operation d
       ; parens self
+      ; parens @@ d.parse_perform d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_conditional d
       ; parens @@ d.parse_matching d
@@ -554,6 +629,7 @@ let parse_list_constructing d =
          ; parens @@ d.parse_binary_operation d
          ; d.parse_unary_operation d
          ; d.parse_list d
+         ; d.parse_perform d
          ; d.parse_application d
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
@@ -567,6 +643,215 @@ let parse_list_constructing d =
      lift2 econstruct_list (parse_content <* separator) (self <|> parse_content))
 ;;
 
+(* Parsing of type annotations *)
+type type_dispatch =
+  { parse_list_type : type_dispatch -> typ Angstrom.t
+  ; parse_tuple_type : type_dispatch -> typ Angstrom.t
+  ; parse_arrow : type_dispatch -> typ Angstrom.t
+  ; parse_effect_type : type_dispatch -> typ Angstrom.t
+  ; parse_type : type_dispatch -> typ Angstrom.t
+  }
+
+let parse_ground_type =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *>
+  let parse_int = string "int" *> return int_typ in
+  let parse_bool = string "bool" *> return bool_typ in
+  let parse_char = string "char" *> return char_typ in
+  let parse_string = string "string" *> return string_typ in
+  let parse_unit = string "unit" *> return unit_typ in
+  choice [ parens self; parse_int; parse_bool; parse_char; parse_string; parse_unit ]
+;;
+
+let parse_list_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let parse_ground_type' =
+       parse_ground_type
+       >>= fun typ ->
+       remove_spaces *> option "" (string "list")
+       >>= function
+       | "" -> return typ
+       | _ -> fail "Not a ground type."
+     in
+     choice
+       [ parens @@ td.parse_arrow td
+       ; parens @@ td.parse_tuple_type td
+       ; parse_ground_type'
+       ; self
+       ]
+     <* remove_spaces
+     <* string "list"
+     >>= fun typ ->
+     remove_spaces *> option "" (string "*")
+     >>= function
+     | "" -> return (tlist typ)
+     | _ -> fail "Not a list.")
+;;
+
+let parse_tuple_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> (sep_by1
+            (remove_spaces *> string "*" <* remove_spaces)
+            (choice
+               [ parens @@ td.parse_arrow td
+               ; parens self
+               ; td.parse_list_type td
+               ; parse_ground_type
+               ])
+         >>= fun typ_list ->
+         remove_spaces *> option "" (string "list")
+         >>= function
+         | "" ->
+           if Base.List.length typ_list > 1
+           then return (ttuple typ_list)
+           else fail "Not a tuple."
+         | _ -> fail "Not a tuple."))
+;;
+
+let parse_arrow td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift2
+           (fun left right -> TArr (left, right))
+           (choice
+              [ parens self
+              ; td.parse_list_type td
+              ; td.parse_tuple_type td
+              ; td.parse_effect_type td
+              ; parse_ground_type
+              ])
+           (remove_spaces
+           *> string "->"
+           *> remove_spaces
+           *> choice
+                [ self; td.parse_list_type td; td.parse_tuple_type td; parse_ground_type ]
+           ))
+;;
+
+let parse_effect_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift
+           teffect
+           (choice
+              [ parens @@ td.parse_arrow td
+              ; parens @@ td.parse_tuple_type td
+              ; td.parse_list_type td
+              ; parse_ground_type
+              ]
+           <* remove_spaces
+           <* string "effect"))
+;;
+
+let parse_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (choice
+        [ td.parse_arrow td
+        ; td.parse_list_type td
+        ; td.parse_tuple_type td
+        ; td.parse_effect_type td
+        ; parse_ground_type
+        ]
+     <|> parens self
+     <|> fail "Parsing error: failed to parse type annotation.")
+;;
+
+let default_td =
+  { parse_list_type; parse_tuple_type; parse_arrow; parse_effect_type; parse_type }
+;;
+
+(* --------------------------- *)
+
+let parse_effect_declaration =
+  string "effect"
+  *> remove_spaces
+  *> lift2
+       eeffect_declaration
+       parse_capitalized_entity
+       (remove_spaces *> string ":" *> remove_spaces *> parse_type default_td)
+;;
+
+let parse_effect_arg d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
+         ; parens @@ d.parse_binary_operation d
+         ; parens @@ d.parse_unary_operation d
+         ; d.parse_list d
+         ; parens @@ d.parse_perform d
+         ; parens @@ d.parse_application d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
+         ; parse_literal
+         ; parse_identifier
+         ]
+     in
+     lift2 eeffect_arg parse_capitalized_entity operand_parser)
+;;
+
+let parse_perform d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift
+           eperform
+           (string "perform"
+           *> remove_spaces
+           *> (parse_effect_noarg <|> parse_effect_arg d)))
+;;
+
+let parse_continue d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
+         ; parens @@ d.parse_binary_operation d
+         ; parens @@ d.parse_unary_operation d
+         ; d.parse_list d
+         ; parens @@ d.parse_perform d
+         ; parens @@ d.parse_application d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
+         ; parse_literal
+         ; parse_identifier
+         ]
+     in
+     lift econtinue (string "continue" *> remove_spaces *> operand_parser))
+;;
+
 (* ------- *)
 
 let parse_expression d =
@@ -576,6 +861,7 @@ let parse_expression d =
     ; d.parse_binary_operation d
     ; d.parse_unary_operation d
     ; d.parse_list d
+    ; d.parse_perform d
     ; d.parse_application d
     ; d.parse_fun d
     ; d.parse_conditional d
@@ -600,6 +886,9 @@ let default =
   ; parse_let_in
   ; parse_data_constructor
   ; parse_expression
+  ; parse_effect_arg
+  ; parse_perform
+  ; parse_continue
   }
 ;;
 
@@ -616,11 +905,17 @@ let parse_unary_operation = parse_unary_operation default
 let parse_list_constructing = parse_list_constructing default
 let parse_data_constructor = parse_data_constructor default
 let parse_expression = parse_expression default
+let parse_effect_arg = parse_effect_arg default
+let parse_perform = parse_perform default
+let parse_continue = parse_continue default
 
 (* Main parsing function *)
 let parse : input -> (expression list, error_message) result =
  fun program ->
-  parse_string ~consume:All (many parse_declaration <* remove_spaces) program
+  parse_string
+    ~consume:All
+    (many (parse_declaration <|> parse_effect_declaration) <* remove_spaces)
+    program
 ;;
 
 (* -------------------- TESTS -------------------- *)
@@ -1317,3 +1612,46 @@ let%test _ =
                  ] ) )
        ]
 ;;
+
+(* let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> string");
+  [%expect {|
+int -> string
+  |}]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok
+    @@ parse_string ~consume:Prefix parse_type "(int -> int) -> (bool -> int) -> string");
+  [%expect {|
+  (int -> int) -> (bool -> int) -> string
+  |}]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok
+    @@ parse_string ~consume:Prefix parse_type "int list -> (int -> char) -> char list");
+  [%expect {|
+  int list -> (int -> char) -> char list
+  |}]
+;;
+
+let%expect_test _ =
+  Typing.print_typ
+    (Result.get_ok @@ parse_string ~consume:Prefix parse_type "int -> bool -> int * bool");
+  [%expect {|
+  int -> bool -> int * bool
+  |}]
+;;
+
+let%expect_test _ =
+  Format.printf
+    "%s\n"
+    (Result.get_error @@ parse_string ~consume:All parse_type "unknown_type -> int");
+  [%expect {|
+  : Parsing error: failed to parse type annotation.
+  |}]
+;; *)
