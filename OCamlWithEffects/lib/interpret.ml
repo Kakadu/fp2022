@@ -97,11 +97,11 @@ end = struct
     match expression with
     | ELiteral literal ->
       (match literal with
-       | LInt x -> return @@ VInt x
-       | LString x -> return @@ VString x
-       | LBool x -> return @@ VBool x
-       | LChar x -> return @@ VChar x
-       | LUnit -> return VUnit)
+      | LInt x -> return @@ VInt x
+      | LString x -> return @@ VString x
+      | LBool x -> return @@ VBool x
+      | LChar x -> return @@ VChar x
+      | LUnit -> return VUnit)
     | EBinaryOperation (operation, left_operand, right_operand) ->
       let* left_operand = eval left_operand environment in
       let* right_operand = eval right_operand environment in
@@ -125,80 +125,80 @@ end = struct
         | _ -> fail "Runtime error: this predicate should be only used for VADT types."
       in
       (match operation, left_operand, right_operand with
-       (* Operations on ADT *)
-       | Eq, VADT (x_name, x_data), VADT (y_name, y_data) ->
-         vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
-         >>= fun x -> return @@ VBool x
-       | NEq, VADT (x_name, x_data), VADT (y_name, y_data) ->
-         vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
-         >>= fun x -> return @@ VBool (not x)
-       | _, VADT (_, _), VADT (_, _) -> fail "Runtime error: unsupported operation."
-       (* Arithmetic operations *)
-       | Add, VInt x, VInt y -> return @@ VInt (x + y)
-       | Sub, VInt x, VInt y -> return @@ VInt (x - y)
-       | Mul, VInt x, VInt y -> return @@ VInt (x * y)
-       | Div, VInt x, VInt y ->
-         if y = 0 then fail "Runtime error: division by zero" else return @@ VInt (x / y)
-       | (Add | Sub | Mul | Div), _, _ ->
-         fail "Runtime error: operands were expected of type int."
-       (* Equality *)
-       | Eq, VInt x, VInt y -> return @@ VBool (x = y)
-       | Eq, VString x, VString y -> return @@ VBool (x = y)
-       | Eq, VBool x, VBool y -> return @@ VBool (x = y)
-       | Eq, VChar x, VChar y -> return @@ VBool (x = y)
-       | Eq, VList x, VList y -> return @@ VBool (x = y)
-       | Eq, _, _ -> fail "Runtime error: unsupported operation"
-       (* TODO VADT equality comparison *)
-       (* Inequality *)
-       | NEq, VInt x, VInt y -> return @@ VBool (x <> y)
-       | NEq, VString x, VString y -> return @@ VBool (x <> y)
-       | NEq, VBool x, VBool y -> return @@ VBool (x <> y)
-       | NEq, VChar x, VChar y -> return @@ VBool (x <> y)
-       | NEq, VList x, VList y -> return @@ VBool (x <> y)
-       | NEq, _, _ -> fail "Runtime error: unsupported operation"
-       (* TODO VADT inequality comparison *)
-       (* Greater than ( > ) *)
-       | GT, VInt x, VInt y -> return @@ VBool (x > y)
-       | GT, VBool x, VBool y -> return @@ VBool (x > y)
-       | GT, VString x, VString y -> return @@ VBool (x > y)
-       | GT, VChar x, VChar y -> return @@ VBool (x > y)
-       | GT, VList x, VList y -> return @@ VBool (x > y)
-       | GT, _, _ -> fail "Runtime error: unsupported operation"
-       (* Less then ( < ) *)
-       | LT, VInt x, VInt y -> return @@ VBool (x < y)
-       | LT, VBool x, VBool y -> return @@ VBool (x < y)
-       | LT, VString x, VString y -> return @@ VBool (x < y)
-       | LT, VChar x, VChar y -> return @@ VBool (x < y)
-       | LT, VList x, VList y -> return @@ VBool (x < y)
-       | LT, _, _ -> fail "Runtime error: unsupported operation"
-       (* Greater than or equal ( >= ) *)
-       | GTE, VInt x, VInt y -> return @@ VBool (x >= y)
-       | GTE, VBool x, VBool y -> return @@ VBool (x >= y)
-       | GTE, VString x, VString y -> return @@ VBool (x >= y)
-       | GTE, VChar x, VChar y -> return @@ VBool (x >= y)
-       | GTE, VList x, VList y -> return @@ VBool (x >= y)
-       | GTE, _, _ -> fail "Runtime error: unsupported operation"
-       (* Less then or equal ( <= ) *)
-       | LTE, VInt x, VInt y -> return @@ VBool (x <= y)
-       | LTE, VBool x, VBool y -> return @@ VBool (x <= y)
-       | LTE, VString x, VString y -> return @@ VBool (x <= y)
-       | LTE, VChar x, VChar y -> return @@ VBool (x <= y)
-       | LTE, VList x, VList y -> return @@ VBool (x <= y)
-       | LTE, _, _ -> fail "Runtime error: unsupported operation"
-       (* And ( && ) *)
-       | AND, VBool x, VBool y -> return @@ VBool (x && y)
-       | OR, VBool x, VBool y -> return @@ VBool (x || y)
-       | (AND | OR), _, _ -> fail "Runtime error: bool type was expected.")
+      (* Operations on ADT *)
+      | Eq, VADT (x_name, x_data), VADT (y_name, y_data) ->
+        vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+        >>= fun x -> return @@ VBool x
+      | NEq, VADT (x_name, x_data), VADT (y_name, y_data) ->
+        vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+        >>= fun x -> return @@ VBool (not x)
+      | _, VADT (_, _), VADT (_, _) -> fail "Runtime error: unsupported operation."
+      (* Arithmetic operations *)
+      | Add, VInt x, VInt y -> return @@ VInt (x + y)
+      | Sub, VInt x, VInt y -> return @@ VInt (x - y)
+      | Mul, VInt x, VInt y -> return @@ VInt (x * y)
+      | Div, VInt x, VInt y ->
+        if y = 0 then fail "Runtime error: division by zero" else return @@ VInt (x / y)
+      | (Add | Sub | Mul | Div), _, _ ->
+        fail "Runtime error: operands were expected of type int."
+      (* Equality *)
+      | Eq, VInt x, VInt y -> return @@ VBool (x = y)
+      | Eq, VString x, VString y -> return @@ VBool (x = y)
+      | Eq, VBool x, VBool y -> return @@ VBool (x = y)
+      | Eq, VChar x, VChar y -> return @@ VBool (x = y)
+      | Eq, VList x, VList y -> return @@ VBool (x = y)
+      | Eq, _, _ -> fail "Runtime error: unsupported operation"
+      (* TODO VADT equality comparison *)
+      (* Inequality *)
+      | NEq, VInt x, VInt y -> return @@ VBool (x <> y)
+      | NEq, VString x, VString y -> return @@ VBool (x <> y)
+      | NEq, VBool x, VBool y -> return @@ VBool (x <> y)
+      | NEq, VChar x, VChar y -> return @@ VBool (x <> y)
+      | NEq, VList x, VList y -> return @@ VBool (x <> y)
+      | NEq, _, _ -> fail "Runtime error: unsupported operation"
+      (* TODO VADT inequality comparison *)
+      (* Greater than ( > ) *)
+      | GT, VInt x, VInt y -> return @@ VBool (x > y)
+      | GT, VBool x, VBool y -> return @@ VBool (x > y)
+      | GT, VString x, VString y -> return @@ VBool (x > y)
+      | GT, VChar x, VChar y -> return @@ VBool (x > y)
+      | GT, VList x, VList y -> return @@ VBool (x > y)
+      | GT, _, _ -> fail "Runtime error: unsupported operation"
+      (* Less then ( < ) *)
+      | LT, VInt x, VInt y -> return @@ VBool (x < y)
+      | LT, VBool x, VBool y -> return @@ VBool (x < y)
+      | LT, VString x, VString y -> return @@ VBool (x < y)
+      | LT, VChar x, VChar y -> return @@ VBool (x < y)
+      | LT, VList x, VList y -> return @@ VBool (x < y)
+      | LT, _, _ -> fail "Runtime error: unsupported operation"
+      (* Greater than or equal ( >= ) *)
+      | GTE, VInt x, VInt y -> return @@ VBool (x >= y)
+      | GTE, VBool x, VBool y -> return @@ VBool (x >= y)
+      | GTE, VString x, VString y -> return @@ VBool (x >= y)
+      | GTE, VChar x, VChar y -> return @@ VBool (x >= y)
+      | GTE, VList x, VList y -> return @@ VBool (x >= y)
+      | GTE, _, _ -> fail "Runtime error: unsupported operation"
+      (* Less then or equal ( <= ) *)
+      | LTE, VInt x, VInt y -> return @@ VBool (x <= y)
+      | LTE, VBool x, VBool y -> return @@ VBool (x <= y)
+      | LTE, VString x, VString y -> return @@ VBool (x <= y)
+      | LTE, VChar x, VChar y -> return @@ VBool (x <= y)
+      | LTE, VList x, VList y -> return @@ VBool (x <= y)
+      | LTE, _, _ -> fail "Runtime error: unsupported operation"
+      (* And ( && ) *)
+      | AND, VBool x, VBool y -> return @@ VBool (x && y)
+      | OR, VBool x, VBool y -> return @@ VBool (x || y)
+      | (AND | OR), _, _ -> fail "Runtime error: bool type was expected.")
     | EIdentifier name ->
       if name = "_"
       then fail "Runtime error: used wildcard in right-hand expression."
       else
         let* v = find environment.ids name in
         (match v with
-         | VFun (id_list, function_body, environment, Recursive) ->
-           return
-           @@ VFun (id_list, function_body, update_ids environment name v, Recursive)
-         | _ -> return v)
+          | VFun (id_list, function_body, environment, Recursive) ->
+            return
+            @@ VFun (id_list, function_body, update_ids environment name v, Recursive)
+          | _ -> return v)
     | EApplication (function_expr, argument_expr) ->
       let* eval_argument = eval argument_expr environment in
       let* eval_function = eval function_expr environment in
@@ -222,64 +222,80 @@ end = struct
       else return @@ VFun (id_list, function_body, environment, recursive)
     | EFun (arguments_list, function_body) ->
       (match arguments_list with
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
        | [] -> eval function_body environment
        | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | EDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
-       | [] -> eval function_body environment
-       | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, false))
     | ERecursiveDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
-       | [] -> eval function_body environment
-       | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, true))
     | EIf (condition, true_branch, false_branch) ->
       let* eval_conditional = eval condition environment in
       (match eval_conditional with
-       | VBool true -> eval true_branch environment
-       | VBool false -> eval false_branch environment
-       | _ ->
-         fail
-           "Runtime error: expression was expected of type bool because it is in the \
-            condition of an if-statement.")
+      | VBool true -> eval true_branch environment
+      | VBool false -> eval false_branch environment
+      | _ ->
+        fail
+          "Runtime error: expression was expected of type bool because it is in the \
+           condition of an if-statement.")
     | EUnaryOperation (operator, operand) ->
       let* operand = eval operand environment in
       (match operator, operand with
-       | Minus, VInt x -> return @@ VInt (-x)
-       | Not, VBool x -> return @@ VBool (not x)
-       | _ -> fail "Runtime error: mismatching types.")
+      | Minus, VInt x -> return @@ VInt (-x)
+      | Not, VBool x -> return @@ VBool (not x)
+      | _ -> fail "Runtime error: mismatching types.")
     | EList list ->
       (match list with
-       | [] -> return @@ VList []
-       | _ ->
-         let rec eval_list list =
-           match hd_exn list, tl_exn list with
-           | head, [] ->
-             let* head = eval head environment in
-             return @@ VList [ head ]
-           | head, tail ->
-             let* head = eval head environment in
-             let* tail = eval_list tail in
-             (match tail with
-              | VList tail ->
-                let next_element = hd_exn tail in
-                (match head, next_element with
-                 | VInt _, VInt _
-                 | VString _, VString _
-                 | VBool _, VBool _
-                 | VChar _, VChar _
-                 | VUnit, VUnit
-                 | VList _, VList _
-                 | VTuple _, VTuple _
-                 | VFun (_, _, _, _), VFun (_, _, _, _)
-                 | VADT (_, _), VADT (_, _) -> return @@ VList (head :: tail)
-                 | _ -> fail "Runtime error: mismatching types in list.")
-              | _ -> fail "Runtime error: could not interpret list.")
-         in
-         eval_list list)
+      | [] -> return @@ VList []
+      | _ ->
+        let rec eval_list list =
+          match hd_exn list, tl_exn list with
+          | head, [] ->
+            let* head = eval head environment in
+            return @@ VList [ head ]
+          | head, tail ->
+            let* head = eval head environment in
+            let* tail = eval_list tail in
+            (match tail with
+            | VList tail ->
+              let next_element = hd_exn tail in
+              (match head, next_element with
+              | VInt _, VInt _
+              | VString _, VString _
+              | VBool _, VBool _
+              | VChar _, VChar _
+              | VUnit, VUnit
+              | VList _, VList _
+              | VTuple _, VTuple _
+              | VFun (_, _, _, _), VFun (_, _, _, _)
+              | VADT (_, _), VADT (_, _) -> return @@ VList (head :: tail)
+              | _ -> fail "Runtime error: mismatching types in list.")
+            | _ -> fail "Runtime error: could not interpret list.")
+        in
+        eval_list list)
     | EConstructList (operand, list) ->
       let* operand = eval operand environment in
       let* list = eval list environment in
       (match operand, list with
+      | VFun (_, _, _, _), _ ->
+        fail "Runtime error: unable to place a function into a list."
+      | x, VList list -> return @@ VList (x :: list)
+      | _ -> fail "Runtime error: mismatching types.")
+    | EDataConstructor (constructor_name, contents_list) ->
+      let rec eval_arguments = function
+        | [] -> return @@ []
+        | list ->
+          let* head = eval (hd_exn list) environment in
+          let* tail = eval_arguments (tl_exn list) in
+          return @@ (head :: tail)
+      in
+      let* contents_list = eval_arguments contents_list in
+      return @@ VADT (constructor_name, contents_list)
        | VFun (_, _, _, _), _ ->
          fail "Runtime error: unable to place a function into a list."
        | x, VList list -> return @@ VList (x :: list)
@@ -298,6 +314,11 @@ end = struct
         | h :: t ->
           let* result = eval h environment in
           (match h with
+          | EDeclaration (name, _, _) ->
+            eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
+          | ERecursiveDeclaration (name, _, _) ->
+            eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
+          | _ -> fail "Runtime error: declaration was expected.")
            | EDeclaration (name, _, _) ->
              eval_bindings (update_ids environment name result) t
            | ERecursiveDeclaration (name, _, _) ->
@@ -370,6 +391,20 @@ end = struct
         | VTuple matched_tuple, ETuple tuple -> helper environment (matched_tuple, tuple)
         | VList matched_list, EConstructList (head, tail) ->
           (match matched_list with
+          | matched_head :: matched_tail ->
+            let result, environment, head_success =
+              compare_patterns
+                matched_head
+                head
+                (EFun ([ "_" ], ELiteral LUnit))
+                environment
+            in
+            let monadic_execution, new_environment, tail_success =
+              compare_patterns (VList matched_tail) tail action environment
+            in
+            result *> monadic_execution, new_environment, head_success && tail_success
+          | [] -> fail "Runtime error: pattern-matching failed.", environment, false)
+        | VADT (matched_name, value_list), EDataConstructor (name, expression_list) ->
            | matched_head :: matched_tail ->
              let result, environment, head_success =
                compare_patterns
@@ -433,6 +468,11 @@ end = struct
       | h :: t ->
         let* result = eval h environment in
         (match h with
+        | EDeclaration (name, _, _) ->
+          helper (Map.update environment name ~f:(fun _ -> result)) t
+        | ERecursiveDeclaration (name, _, _) ->
+          helper (Map.update environment name ~f:(fun _ -> result)) t
+        | _ -> fail "Runtime error: declaration was expected.")
          | EDeclaration (name, _, _) -> helper (update_ids environment name result) t
          | ERecursiveDeclaration (name, _, _) ->
            helper (update_ids environment name result) t
