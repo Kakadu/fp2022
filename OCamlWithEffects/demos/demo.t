@@ -119,11 +119,11 @@
   > 
   > let main = filter (fun v -> v * v < 150) [12; 3; 54; 85; 36; 0; 91; 100; 1; 2; 13; 28; 63]
   > EOF
-  Runtime error: unbound value filter.
+  No such variable: filter
   $ ./demo.exe <<- EOF
   > let main = f 1 2
   > EOF
-  Runtime error: unbound value f.
+  No such variable: f
   $ ./demo.exe <<- EOF
   > let count_solutions_of_sq_equation a b c =
   >   let sq x = x * x
@@ -169,7 +169,7 @@
   $ ./demo.exe <<- EOF
   > let main = "abc" + "def"
   > EOF
-  Runtime error: operands were expected of type int.
+  Unification failed: type of the expression is string but expected type was int
   $ ./demo.exe <<- EOF
   > let pifagor_check = fun x y z -> x * x + y * y = z * z
   > 
@@ -236,7 +236,7 @@
   > 
   > let main = (if idx = 1 then fst else snd) (13, 45, 89)
   > EOF
-  Runtime error: pattern-matching is not exhaustive.
+  Unification failed: type of the expression is int * int * int but expected type was 'p * 'p
   $ ./demo.exe <<- EOF
   > let rec matrix_sum m1 m2 =
   >   let rec lines_sum l1 l2 =
@@ -309,3 +309,9 @@
   > let main = matrix_sum (matrix_mult_number matrix1 2) (matrix_mult_number matrix2 7)
   > EOF
   [[30; 213; 14]; [579; 148; 574]; [146; 620; 167]]
+  $ ./demo.exe <<- EOF
+  > let int_list = [1; 2; 3]
+  > 
+  > let main = "0" :: int_list
+  > EOF
+  Unification failed: type of the expression is string but expected type was int

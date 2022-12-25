@@ -1,5 +1,4 @@
 open Ast
-open Base
 open List
 
 module type MONAD_FAIL = sig
@@ -44,28 +43,30 @@ end = struct
   open M
 
   let find map key =
-    match Map.find map key with
+    match Base.Map.find map key with
     | Some v -> return v
-    | None -> fail (String.concat [ "Runtime error: unbound value "; key; "." ])
+    | None -> fail (Base.String.concat [ "Runtime error: unbound value "; key; "." ])
   ;;
 
   let find_effect set effect_name =
-    match Set.exists set ~f:(Poly.( = ) effect_name) with
+    match Base.Set.exists set ~f:(Base.Poly.( = ) effect_name) with
     | true -> return true
-    | false -> fail (String.concat [ "Runtime error: unbound effect "; effect_name; "." ])
+    | false ->
+      fail (Base.String.concat [ "Runtime error: unbound effect "; effect_name; "." ])
   ;;
 
   let update_ids environment key value =
-    { environment with ids = Map.update environment.ids key ~f:(fun _ -> value) }
+    { environment with ids = Base.Map.update environment.ids key ~f:(fun _ -> value) }
   ;;
 
   let update_effects environment effect_name =
-    { environment with effects = Set.add environment.effects effect_name }
+    { environment with effects = Base.Set.add environment.effects effect_name }
   ;;
 
   let update_effect_handlers environment key value =
     { environment with
-      effect_handlers = Map.update environment.effect_handlers key ~f:(fun _ -> value)
+      effect_handlers =
+        Base.Map.update environment.effect_handlers key ~f:(fun _ -> value)
     }
   ;;
 
@@ -74,9 +75,9 @@ end = struct
   ;;
 
   let empty =
-    { ids = Map.empty (module String)
-    ; effects = Set.empty (module String)
-    ; effect_handlers = Map.empty (module String)
+    { ids = Base.Map.empty (module Base.String)
+    ; effects = Base.Set.empty (module Base.String)
+    ; effect_handlers = Base.Map.empty (module Base.String)
     }
   ;;
 
@@ -88,12 +89,6 @@ end = struct
         let* tail = foldr f ini t in
         return @@ f head tail
     in
-    let ( = ) = Poly.( = )
-    and ( <> ) x y = not @@ Poly.( = ) x y
-    and ( > ) = Poly.( > )
-    and ( < ) = Poly.( < )
-    and ( >= ) = Poly.( >= )
-    and ( <= ) = Poly.( <= ) in
     match expression with
     | ELiteral literal ->
       (match literal with
@@ -119,16 +114,15 @@ end = struct
             | Some (VBool x), Some (VBool y) -> return @@ (x = y)
             | Some (VChar x), Some (VChar y) -> return @@ (x = y)
             | Some (VList x), Some (VList y) -> return @@ (x = y)
-            | Some (VADT (x_name, x_data)), Some (VADT (y_name, y_data)) ->
-              vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
+            | Some (VADT (_, _)), Some (VADT (_, _)) ->
+              vadt_predicate left_operand right_operand
             | _ -> fail "Runtime error: mismatching types.")
         | _ -> fail "Runtime error: this predicate should be only used for VADT types."
       in
       (match operation, left_operand, right_operand with
       (* Operations on ADT *)
-      | Eq, VADT (x_name, x_data), VADT (y_name, y_data) ->
-        vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
-        >>= fun x -> return @@ VBool x
+      | Eq, VADT (_, _), VADT (_, _) ->
+        vadt_predicate left_operand right_operand >>= fun result -> return @@ VBool result
       | NEq, VADT (x_name, x_data), VADT (y_name, y_data) ->
         vadt_predicate (VADT (x_name, x_data)) (VADT (y_name, y_data))
         >>= fun x -> return @@ VBool (not x)
@@ -141,64 +135,37 @@ end = struct
         if y = 0 then fail "Runtime error: division by zero" else return @@ VInt (x / y)
       | (Add | Sub | Mul | Div), _, _ ->
         fail "Runtime error: operands were expected of type int."
-      (* Equality *)
-      | Eq, VInt x, VInt y -> return @@ VBool (x = y)
-      | Eq, VString x, VString y -> return @@ VBool (x = y)
-      | Eq, VBool x, VBool y -> return @@ VBool (x = y)
-      | Eq, VChar x, VChar y -> return @@ VBool (x = y)
-      | Eq, VList x, VList y -> return @@ VBool (x = y)
-      | Eq, _, _ -> fail "Runtime error: unsupported operation"
-      (* TODO VADT equality comparison *)
-      (* Inequality *)
-      | NEq, VInt x, VInt y -> return @@ VBool (x <> y)
-      | NEq, VString x, VString y -> return @@ VBool (x <> y)
-      | NEq, VBool x, VBool y -> return @@ VBool (x <> y)
-      | NEq, VChar x, VChar y -> return @@ VBool (x <> y)
-      | NEq, VList x, VList y -> return @@ VBool (x <> y)
-      | NEq, _, _ -> fail "Runtime error: unsupported operation"
-      (* TODO VADT inequality comparison *)
-      (* Greater than ( > ) *)
-      | GT, VInt x, VInt y -> return @@ VBool (x > y)
-      | GT, VBool x, VBool y -> return @@ VBool (x > y)
-      | GT, VString x, VString y -> return @@ VBool (x > y)
-      | GT, VChar x, VChar y -> return @@ VBool (x > y)
-      | GT, VList x, VList y -> return @@ VBool (x > y)
-      | GT, _, _ -> fail "Runtime error: unsupported operation"
-      (* Less then ( < ) *)
-      | LT, VInt x, VInt y -> return @@ VBool (x < y)
-      | LT, VBool x, VBool y -> return @@ VBool (x < y)
-      | LT, VString x, VString y -> return @@ VBool (x < y)
-      | LT, VChar x, VChar y -> return @@ VBool (x < y)
-      | LT, VList x, VList y -> return @@ VBool (x < y)
-      | LT, _, _ -> fail "Runtime error: unsupported operation"
-      (* Greater than or equal ( >= ) *)
-      | GTE, VInt x, VInt y -> return @@ VBool (x >= y)
-      | GTE, VBool x, VBool y -> return @@ VBool (x >= y)
-      | GTE, VString x, VString y -> return @@ VBool (x >= y)
-      | GTE, VChar x, VChar y -> return @@ VBool (x >= y)
-      | GTE, VList x, VList y -> return @@ VBool (x >= y)
-      | GTE, _, _ -> fail "Runtime error: unsupported operation"
-      (* Less then or equal ( <= ) *)
-      | LTE, VInt x, VInt y -> return @@ VBool (x <= y)
-      | LTE, VBool x, VBool y -> return @@ VBool (x <= y)
-      | LTE, VString x, VString y -> return @@ VBool (x <= y)
-      | LTE, VChar x, VChar y -> return @@ VBool (x <= y)
-      | LTE, VList x, VList y -> return @@ VBool (x <= y)
-      | LTE, _, _ -> fail "Runtime error: unsupported operation"
       (* And ( && ) *)
       | AND, VBool x, VBool y -> return @@ VBool (x && y)
       | OR, VBool x, VBool y -> return @@ VBool (x || y)
-      | (AND | OR), _, _ -> fail "Runtime error: bool type was expected.")
+      | (AND | OR), _, _ -> fail "Runtime error: bool type was expected."
+      (* Equality *)
+      | op, arg1, arg2 ->
+        let comparison_operation : 'a. 'a -> 'a -> bool =
+          match op with
+          | Eq -> Base.Poly.( = )
+          | NEq -> Base.Poly.( <> )
+          | GT -> Base.Poly.( > )
+          | LT -> Base.Poly.( < )
+          | GTE -> Base.Poly.( >= )
+          | _ -> Base.Poly.( <= )
+        in
+        (match arg1, arg2 with
+        | VInt x, VInt y -> return @@ VBool (comparison_operation x y)
+        | VString x, VString y -> return @@ VBool (comparison_operation x y)
+        | VBool x, VBool y -> return @@ VBool (comparison_operation x y)
+        | VChar x, VChar y -> return @@ VBool (comparison_operation x y)
+        | VList x, VList y -> return @@ VBool (comparison_operation x y)
+        | _, _ -> fail "Runtime error: unsupported operation"))
     | EIdentifier name ->
       if name = "_"
       then fail "Runtime error: used wildcard in right-hand expression."
       else
         let* v = find environment.ids name in
         (match v with
-          | VFun (id_list, function_body, environment, Recursive) ->
-            return
-            @@ VFun (id_list, function_body, update_ids environment name v, Recursive)
-          | _ -> return v)
+        | VFun (id_list, function_body, environment, Recursive) ->
+          return @@ VFun (id_list, function_body, update_ids environment name v, Recursive)
+        | _ -> return v)
     | EApplication (function_expr, argument_expr) ->
       let* eval_argument = eval argument_expr environment in
       let* eval_function = eval function_expr environment in
@@ -222,25 +189,25 @@ end = struct
       else return @@ VFun (id_list, function_body, environment, recursive)
     | EFun (arguments_list, function_body) ->
       (match arguments_list with
-        | [] -> eval function_body environment
-        | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | EDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
-        | [] -> eval function_body environment
-        | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
     | ERecursiveDeclaration (_, arguments_list, function_body) ->
       (match arguments_list with
-        | [] -> eval function_body environment
-        | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
+      | [] -> eval function_body environment
+      | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
     | EIf (condition, true_branch, false_branch) ->
       let* eval_conditional = eval condition environment in
       (match eval_conditional with
-        | VBool true -> eval true_branch environment
-        | VBool false -> eval false_branch environment
-        | _ ->
-          fail
-            "Runtime error: expression was expected of type bool because it is in the \
-            condition of an if-statement.")
+      | VBool true -> eval true_branch environment
+      | VBool false -> eval false_branch environment
+      | _ ->
+        fail
+          "Runtime error: expression was expected of type bool because it is in the \
+           condition of an if-statement.")
     | EUnaryOperation (operator, operand) ->
       let* operand = eval operand environment in
       (match operator, operand with
@@ -252,7 +219,7 @@ end = struct
       | [] -> return @@ VList []
       | _ ->
         let rec eval_list list =
-          match hd_exn list, tl_exn list with
+          match Base.List.hd_exn list, Base.List.tl_exn list with
           | head, [] ->
             let* head = eval head environment in
             return @@ VList [ head ]
@@ -260,19 +227,7 @@ end = struct
             let* head = eval head environment in
             let* tail = eval_list tail in
             (match tail with
-            | VList tail ->
-              let next_element = hd_exn tail in
-              (match head, next_element with
-              | VInt _, VInt _
-              | VString _, VString _
-              | VBool _, VBool _
-              | VChar _, VChar _
-              | VUnit, VUnit
-              | VList _, VList _
-              | VTuple _, VTuple _
-              | VFun (_, _, _, _), VFun (_, _, _, _)
-              | VADT (_, _), VADT (_, _) -> return @@ VList (head :: tail)
-              | _ -> fail "Runtime error: mismatching types in list.")
+            | VList tail -> return @@ VList (head :: tail)
             | _ -> fail "Runtime error: could not interpret list.")
         in
         eval_list list)
@@ -284,26 +239,12 @@ end = struct
         fail "Runtime error: unable to place a function into a list."
       | x, VList list -> return @@ VList (x :: list)
       | _ -> fail "Runtime error: mismatching types.")
-    | EDataConstructor (constructor_name, contents_list) ->
-      let rec eval_arguments = function
-        | [] -> return @@ []
-        | list ->
-          let* head = eval (hd_exn list) environment in
-          let* tail = eval_arguments (tl_exn list) in
-          return @@ (head :: tail)
-      in
-      let* contents_list = eval_arguments contents_list in
-      return @@ VADT (constructor_name, contents_list)
-       | VFun (_, _, _, _), _ ->
-         fail "Runtime error: unable to place a function into a list."
-       | x, VList list -> return @@ VList (x :: list)
-       | _ -> fail "Runtime error: mismatching types.")
     | EDataConstructor (constructor_name, content) ->
       (match content with
-       | Some data ->
-         let* data = eval data environment in
-         return @@ VADT (constructor_name, Some data)
-       | None -> return @@ VADT (constructor_name, None))
+      | Some data ->
+        let* data = eval data environment in
+        return @@ VADT (constructor_name, Some data)
+      | None -> return @@ VADT (constructor_name, None))
     | ETuple list ->
       let* list = foldr (fun x xs -> x :: xs) [] list in
       return @@ VTuple list
@@ -313,41 +254,36 @@ end = struct
           let* result = eval h environment in
           (match h with
           | EDeclaration (name, _, _) ->
-            eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
+            eval_bindings (update_ids environment name result) t
           | ERecursiveDeclaration (name, _, _) ->
-            eval_bindings (Map.update environment name ~f:(fun _ -> result)) t
+            eval_bindings (update_ids environment name result) t
           | _ -> fail "Runtime error: declaration was expected.")
-           | EDeclaration (name, _, _) ->
-             eval_bindings (update_ids environment name result) t
-           | ERecursiveDeclaration (name, _, _) ->
-             eval_bindings (update_ids environment name result) t
-           | _ -> fail "Runtime error: declaration was expected.")
         | _ -> eval expression environment
       in
       eval_bindings environment bindings_list
     | EMatchWith (matched_expression, case_list) ->
       let* environment =
-        List.fold_right
+        Base.List.fold_right
           case_list
           ~f:(fun (case, action) environment ->
-            let* environment = environment in
+            let* environment in
             match case with
             | EEffectPattern effect ->
               (match effect with
-               | EEffectNoArg name ->
-                 let* _ = find_effect environment.effects name in
-                 return @@ update_effect_handlers environment name (EFun ([], action))
-               | EEffectArg (name, expression) ->
-                 let* _ = find_effect environment.effects name in
-                 return
-                 @@ update_effect_handlers
-                      environment
-                      name
-                      (EFun
-                         ( [ "eFFectValuE" ]
-                         , EMatchWith (EIdentifier "eFFectValuE", [ expression, action ])
-                         ))
-               | _ -> fail "Runtime error: not an effect.")
+              | EEffectNoArg name ->
+                let* _ = find_effect environment.effects name in
+                return @@ update_effect_handlers environment name (EFun ([], action))
+              | EEffectArg (name, expression) ->
+                let* _ = find_effect environment.effects name in
+                return
+                @@ update_effect_handlers
+                     environment
+                     name
+                     (EFun
+                        ( [ "eFFectValuE" ]
+                        , EMatchWith (EIdentifier "eFFectValuE", [ expression, action ])
+                        ))
+              | _ -> fail "Runtime error: not an effect.")
             | _ -> return environment)
           ~init:(return environment)
       in
@@ -402,20 +338,6 @@ end = struct
             in
             result *> monadic_execution, new_environment, head_success && tail_success
           | [] -> fail "Runtime error: pattern-matching failed.", environment, false)
-        | VADT (matched_name, value_list), EDataConstructor (name, expression_list) ->
-           | matched_head :: matched_tail ->
-             let result, environment, head_success =
-               compare_patterns
-                 matched_head
-                 head
-                 (EFun ([ "_" ], ELiteral LUnit))
-                 environment
-             in
-             let monadic_execution, new_environment, tail_success =
-               compare_patterns (VList matched_tail) tail action environment
-             in
-             result *> monadic_execution, new_environment, head_success && tail_success
-           | [] -> fail "Runtime error: pattern-matching failed.", environment, false)
         | VADT (matched_name, value), EDataConstructor (name, expression) ->
           if matched_name <> name
           then fail "Runtime error: pattern-matching failed.", environment, false
@@ -437,7 +359,7 @@ end = struct
         | [] -> fail "Runtime error: pattern-matching is not exhaustive."
       in
       helper
-        (List.filter case_list ~f:(function
+        (Base.List.filter case_list ~f:(function
           | EEffectPattern _, _ -> false
           | _ -> true))
     | EEffectDeclaration (name, _) -> return (VEffectDeclaration name)
@@ -446,13 +368,13 @@ end = struct
     | EPerform expression ->
       let* eval_expression = eval expression environment in
       (match eval_expression with
-       | VEffectNoArg effect_name ->
-         let* handler = find environment.effect_handlers effect_name in
-         eval handler environment
-       | VEffectArg (effect_name, argument) ->
-         let* handler = find environment.effect_handlers effect_name in
-         eval (EApplication (handler, argument)) environment
-       | _ -> fail "Runtime error: not an effect.")
+      | VEffectNoArg effect_name ->
+        let* handler = find environment.effect_handlers effect_name in
+        eval handler environment
+      | VEffectArg (effect_name, argument) ->
+        let* handler = find environment.effect_handlers effect_name in
+        eval (EApplication (handler, argument)) environment
+      | _ -> fail "Runtime error: not an effect.")
     | EContinue expression -> eval expression environment
     | EEffectPattern expression ->
       let* eval_expression = eval expression environment in
@@ -466,16 +388,11 @@ end = struct
       | h :: t ->
         let* result = eval h environment in
         (match h with
-        | EDeclaration (name, _, _) ->
-          helper (Map.update environment name ~f:(fun _ -> result)) t
+        | EDeclaration (name, _, _) -> helper (update_ids environment name result) t
         | ERecursiveDeclaration (name, _, _) ->
-          helper (Map.update environment name ~f:(fun _ -> result)) t
+          helper (update_ids environment name result) t
+        | EEffectDeclaration (name, _) -> helper (update_effects environment name) t
         | _ -> fail "Runtime error: declaration was expected.")
-         | EDeclaration (name, _, _) -> helper (update_ids environment name result) t
-         | ERecursiveDeclaration (name, _, _) ->
-           helper (update_ids environment name result) t
-         | EEffectDeclaration (name, _) -> helper (update_effects environment name) t
-         | _ -> fail "Runtime error: declaration was expected.")
       | _ -> return VUnit
     in
     helper environment program
@@ -535,7 +452,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 60)
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 60)
 
 let test_program =
   [ EDeclaration
@@ -549,7 +466,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 2)
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 2)
 
 let test_program =
   [ EDeclaration
@@ -562,8 +479,8 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 15)
-let%test _ = Poly.( = ) (InterpretResult.run []) @@ Result.Ok VUnit
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 15)
+let%test _ = InterpretResult.run [] = Result.Ok VUnit
 
 let test_program =
   [ EDeclaration
@@ -572,8 +489,7 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VList [ VInt 2; VInt 3; VInt (-5) ])
+  InterpretResult.run test_program = Result.Ok (VList [ VInt 2; VInt 3; VInt (-5) ])
 ;;
 
 let test_program =
@@ -588,8 +504,8 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VList [ VList [ VChar 'c'; VChar 'f' ]; VList [ VChar 'h'; VChar 'g' ] ])
+  InterpretResult.run test_program
+  = Result.Ok (VList [ VList [ VChar 'c'; VChar 'f' ]; VList [ VChar 'h'; VChar 'g' ] ])
 ;;
 
 let test_program =
@@ -602,8 +518,7 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VList [ VInt 2; VInt 2; VInt (-10) ])
+  InterpretResult.run test_program = Result.Ok (VList [ VInt 2; VInt 2; VInt (-10) ])
 ;;
 
 let test_program =
@@ -620,13 +535,13 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok
-       (VList
-          [ VADT ("Ok", Some (VBool true))
-          ; VADT ("Ok", Some (VBool false))
-          ; VADT ("Error", Some (VString "failed"))
-          ])
+  InterpretResult.run test_program
+  = Result.Ok
+      (VList
+         [ VADT ("Ok", Some (VBool true))
+         ; VADT ("Ok", Some (VBool false))
+         ; VADT ("Error", Some (VString "failed"))
+         ])
 ;;
 
 let test_program =
@@ -640,10 +555,7 @@ let test_program =
   ]
 ;;
 
-let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
-  @@ Result.Ok (VTuple [ VChar 'f'; VInt 0 ])
-;;
+let%test _ = InterpretResult.run test_program = Result.Ok (VTuple [ VChar 'f'; VInt 0 ])
 
 let test_program =
   [ EDeclaration
@@ -655,7 +567,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt (-1))
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt (-1))
 
 let test_program =
   [ EDeclaration
@@ -684,7 +596,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VInt 55)
+let%test _ = InterpretResult.run test_program = Result.Ok (VInt 55)
 
 let test_program =
   [ EDeclaration
@@ -696,7 +608,7 @@ let test_program =
   ]
 ;;
 
-let%test _ = Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VBool true)
+let%test _ = InterpretResult.run test_program = Result.Ok (VBool true)
 
 let test_program =
   [ EDeclaration
@@ -710,9 +622,7 @@ let test_program =
   ]
 ;;
 
-let%test _ =
-  Poly.( = ) (InterpretResult.run test_program) @@ Result.Ok (VList [ VInt 1; VInt 2 ])
-;;
+let%test _ = InterpretResult.run test_program = Result.Ok (VList [ VInt 1; VInt 2 ])
 
 let test_program =
   [ EDeclaration
@@ -735,7 +645,7 @@ let test_program =
 ;;
 
 let%test _ =
-  Poly.( = ) (InterpretResult.run test_program)
+  Base.Poly.( = ) (InterpretResult.run test_program)
   @@ Result.Ok (VADT ("Some", Some (VInt 2)))
 ;;
 
@@ -766,8 +676,8 @@ let rec print result =
   | VADT (name, argument) ->
     printf "%s " name;
     (match argument with
-     | Some argument -> print argument
-     | None -> ())
+    | Some argument -> print argument
+    | None -> ())
   | VFun _ -> printf "Not a value."
 ;;
 
