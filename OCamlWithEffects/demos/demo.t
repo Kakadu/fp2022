@@ -338,18 +338,18 @@
   > effect E: int -> int effect
   > 
   > let helper x = match perform (E x) with
-  >    | effect (E s) k -> continue k (s*s)
+  >    | effect (E s) -> continue (s*s)
   >    | l -> l
   > 
   > let main = match perform (E 5) with
-  >    | effect (E s) k -> continue k (s*s)
+  >    | effect (E s) -> continue (s*s)
   >    | l -> helper l
   > EOF
   625
   $ ./interpreterTests.exe <<-EOF
   > effect EmptyListException : int effect
   > 
-  > let list_hd = function
+  > let list_hd list = match list with
   >    | [] -> perform EmptyListException
   >    | hd :: _ -> hd
   > 
@@ -363,7 +363,7 @@
   $ ./interpreterTests.exe <<-EOF
   > effect EmptyListException : int effect
   > 
-  > let list_hd = function
+  > let list_hd list = match list with
   >    | [] -> perform EmptyListException
   >    | hd :: _ -> hd
   > 
@@ -379,11 +379,11 @@
   > 
   > effect BigDiscount : int -> int effect
   > 
-  > let count_discount = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
+  > let count_discount value = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
   > 
   > let main = match count_discount 8500 with
-  >   | effect (SmallDiscount v) -> continue (v * 0.9)
-  >   | effect (BigDiscount v) -> continue (v * 0.8)
+  >   | effect (SmallDiscount v) -> continue (v - v / 10)
+  >   | effect (BigDiscount v) -> continue (v - v / 5)
   >   | v -> v
   > EOF
   7650
@@ -392,11 +392,11 @@
   > 
   > effect BigDiscount : int -> int effect
   > 
-  > let count_discount = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
+  > let count_discount value = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
   > 
   > let main = match count_discount 25000 with
-  >   | effect (SmallDiscount v) -> continue (v * 0.9)
-  >   | effect (BigDiscount v) -> continue (v * 0.8)
+  >   | effect (SmallDiscount v) -> continue (v - v / 10)
+  >   | effect (BigDiscount v) -> continue (v - v / 5)
   >   | v -> v
   > EOF
   20000
