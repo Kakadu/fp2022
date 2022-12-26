@@ -223,9 +223,8 @@ let try_apply_start_nonterm text parse_res input =
   applier (get_all_nonterms start_rule grammar) 0
 ;;
 
-let gen_parser_and_tree_parser text parse_res =
-  try_apply_start_nonterm text parse_res, parse_tree text parse_res
-;;
+let gen_parser = try_apply_start_nonterm
+let gen_tree_parser = parse_tree
 
 open Lexer
 open Parser
@@ -233,7 +232,7 @@ open Parser
 let get_parser_and_tree_parser text =
   (* tokens, start rule, grammar *)
   let parse_result = parse' text in
-  try Ok (gen_parser_and_tree_parser text parse_result) with
+  try Ok (gen_parser text parse_result, gen_tree_parser text parse_result) with
   | InvalidToken (l, s) ->
     Error
       (Format.sprintf

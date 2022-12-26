@@ -4,10 +4,10 @@
 
 %token <string> TOKEN
 %token <string> START
-%token PROCENTPROCENT
-%token VERT (* | *)
+%token PROCENTPROCENT "%%"
+%token VERT "|"
 %token <string> NONTERM 
-%token SEMICOLON (* ; *)
+%token SEMICOLON ";"
 %token <string> RULECOMPONENT 
 %token EOF
 
@@ -28,16 +28,16 @@ let start :=
     | s = START; { s }
 
 let grammar := 
-    | PROCENTPROCENT; ntrms = nonterms; EOF; { ntrms }
+    | "%%"; ntrms = nonterms; EOF; { ntrms }
 
 let nonterms := 
     | n = NONTERM; rls = rules; nms = nonterms; { (List.map (fun a -> n, a) rls) @ nms }
     | n = NONTERM; rls = rules; { (List.map (fun a -> n, a) rls) }
 
 let rules :=
-    | VERT; rc = rulecomps; rls = rules; { rc :: rls }
-    | VERT; rc = rulecomps; { [rc] }
+    | "|"; rc = rulecomps; rls = rules; { rc :: rls }
+    | "|"; rc = rulecomps; { [rc] }
 
 let rulecomps :=
-    | r = RULECOMPONENT; SEMICOLON; rc = rulecomps; { r :: rc }
+    | r = RULECOMPONENT; ";"; rc = rulecomps; { r :: rc }
     | r = RULECOMPONENT; { [r] }
