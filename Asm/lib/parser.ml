@@ -106,7 +106,7 @@ let gen_regreg_p reg_p =
 ;;
 
 (* Parser two registers and convert them to RegReg (...) *)
-let bregreg_p = gen_regreg_p breg_p <?> "breg_const_p"
+let bregreg_p = gen_regreg_p breg_p <?> "bregreg_p"
 let wregreg_p = gen_regreg_p wreg_p <?> "wregreg_p"
 let dregreg_p = gen_regreg_p dreg_p <?> "dregreg_p"
 
