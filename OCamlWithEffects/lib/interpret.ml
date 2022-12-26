@@ -49,9 +49,7 @@ and value =
   | VEffectDeclaration of id
   | VEffectPattern of expression
 
-module Interpret (M : MONAD_FAIL) : sig
-  val run : expression list -> (value, error) M.t
-end = struct
+module Environment (M : MONAD_FAIL) = struct
   open M
 
   let find map key =
@@ -91,6 +89,13 @@ end = struct
     ; effect_handlers = Base.Map.empty (module Base.String)
     }
   ;;
+end
+
+module Interpret (M : MONAD_FAIL) : sig
+  val run : expression list -> (value, error) M.t
+end = struct
+  open M
+  open Environment (M)
 
   let rec eval (expression : expression) (environment : environment) =
     let rec foldr f ini = function
