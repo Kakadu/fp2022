@@ -541,7 +541,7 @@ let w e = Result.map snd (run (infer TypeEnv.empty e))
 let print_result e =
   match w e with
   | Ok typ -> print_typ typ
-  | Error x -> print_error x
+  | Error x -> print_type_error x
 ;;
 
 let test_program =

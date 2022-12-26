@@ -104,7 +104,7 @@ let pp_error fmt (err : error) =
     fprintf fmt "Effect appears in pattern-matching but handler was not provided."
 ;;
 
-let print_error error =
+let print_type_error error =
   let s = Format.asprintf "%a" pp_error error in
   Format.printf "%s\n" s
 ;;
