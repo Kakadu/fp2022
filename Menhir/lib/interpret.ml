@@ -625,3 +625,62 @@ let%test _ =
     (not res) && ret = 0 (* REJECT *)
   | _ -> false
 ;;
+
+let test_text = {|
+%token EOL
+%token X
+%start main
+%%
+main:
+| main; EOL
+| main; EOL
+| X
+|}
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "Y" ] in
+    (not res) && ret = 0 (* REJECT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "X" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "EOL" ] in
+    (not res) && ret = 0 (* REJECT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "X"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "X"; "EOL"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "X"; "EOL"; "EOL"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
