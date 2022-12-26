@@ -42,23 +42,17 @@ let speclist =
 let anon_fun x = input_file := x
 
 let check_errors () =
-  if Array.length Sys.argv <> 3
-  then
+  match Sys.argv with
+  | [| _; "menhir-interpret"; _ |] -> ()
+  | _ ->
     raise
       (Arg.Bad
-         "Bad number of arguments; usage: 'dune exec ./REPL.exe menhir-interpret \
-          <path-to-file>'")
-  else ();
-  let first_arg = Sys.argv.(1) in
-  if String.equal "menhir-interpret" first_arg
-  then ()
-  else raise (Arg.Bad ("Bad arg (first arg should be 'menhir-interpret'): " ^ first_arg))
+         "Bad args: use dune exec ./REPL.exe help to get information about correct usage")
 ;;
 
 let print_help () =
-  if (not (Array.length Sys.argv = 2)) || not (String.equal Sys.argv.(1) "help")
-  then ()
-  else (
+  match Sys.argv with
+  | [| _; "help" |] ->
     print_endline
       "USAGE: dune exec ./REPL.exe menhir-interpret <path-to-file>\n\n\
        YOUR FILE SHOULD HAVE A SYNTAX SIMILAR TO THE FOLLOWING EXAMPLE:\n\
@@ -79,7 +73,8 @@ let print_help () =
        \t | ...\n\
        \t ...\n\
        \t | ...\n";
-    exit 1)
+    exit 0
+  | _ -> ()
 ;;
 
 exception OpenFileError of string
