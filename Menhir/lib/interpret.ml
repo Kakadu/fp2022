@@ -96,10 +96,11 @@ let lr_grammar_fix g =
 
 (* useless rules: A -> A or A -> epsilon *)
 let rec delete_useless_rules = function
-  | (lhs, rhs) :: tl
-    when (List.length rhs = 1 && String.equal lhs (List.hd rhs)) || List.length rhs = 0 ->
-    delete_useless_rules tl
-  | h :: tl -> h :: delete_useless_rules tl
+  | (lhs, rhs) :: tl ->
+    (match rhs with
+     | a :: [] when String.equal lhs a -> delete_useless_rules tl
+     | [] -> delete_useless_rules tl
+     | _ -> (lhs, rhs) :: delete_useless_rules tl)
   | _ -> []
 ;;
 
