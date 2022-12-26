@@ -7,22 +7,12 @@ open Ast
 open OperandsHandler
 
 module Interpreter = struct
-  (* Current state of execution *)
   type state_t =
     { reg_map : int IntMap.t
-        (* Map from register ids to their values.
-         Note that we won't have registers like "ax" here since their value can be
-         obtained from "eax". So, the map only contains "primary" registers, i.e.
-         ones that are not part of the others *)
-    ; stack : int ListStack.t (* Program stack in an oridnary sense *)
+    ; stack : int ListStack.t
     ; flags : int
-        (* Updated after each cmp command. Negative if the left
-           operand of cmp was less than the right one, zero if they
-           were equal, positive otherwise *)
     ; label_map : instruction list StringMap.t
     ; cstack : instruction list ListStack.t
-        (* Call stack. We push the list of instructions after the call and pop
-           it after ret *)
     }
   [@@deriving show]
 

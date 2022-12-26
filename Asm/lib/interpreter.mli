@@ -6,6 +6,7 @@ open Ast
 open Utils
 
 module Interpreter : sig
+  (* Current state of execution *)
   type state_t =
     { reg_map : int IntMap.t
         (* Map from register ids to their values.
