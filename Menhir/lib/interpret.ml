@@ -193,16 +193,12 @@ let parse_tree text parse_res (input : string list) =
   let tree_list = parse text parse_res input in
   let main_tree = Nonterm (start_rule, tree_list) in
   let rec print_tree = function
-    | Term s -> String.concat s [ " "; " " ]
+    | Term s -> Format.sprintf " %s " s
     | Nonterm (s, parse_tree_list) ->
-      String.concat
-        ""
-        [ " [ "
-        ; s
-        ; " : "
-        ; String.concat " " (List.map (fun x -> print_tree x) parse_tree_list)
-        ; " ] "
-        ]
+      Format.sprintf
+        " [ %s : %s ] "
+        s
+        (String.concat " " (List.map (fun x -> print_tree x) parse_tree_list))
   in
   print_tree main_tree
 ;;
