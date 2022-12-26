@@ -205,18 +205,17 @@ let parse_tree text parse_res (input : string list) =
 
 let try_apply_start_nonterm text parse_res input =
   let _, start_rule, grammar = parse_res in
-  let rec applier start_nonterms return_code =
-    match start_nonterms with
+  let rec applier return_code = function
     | h :: tl ->
       let cond, ret, _ = try_apply_rule text h input parse_res in
       if cond
-      then if ret = 0 then true, ret else applier tl ret
+      then if ret = 0 then true, ret else applier ret tl
       else if return_code = -1
-      then applier tl return_code
-      else applier tl ret
+      then applier return_code tl
+      else applier ret tl
     | [] -> false, return_code
   in
-  applier (get_all_nonterms start_rule grammar) 0
+  applier 0 (get_all_nonterms start_rule grammar)
 ;;
 
 let gen_parser = try_apply_start_nonterm
