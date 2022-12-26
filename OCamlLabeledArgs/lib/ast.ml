@@ -64,3 +64,4 @@ type typ =
   | TUnit
   | TVar of id
   | Arrow of typ * typ
+(* I'll probably have to add arg_label to arrow. FIXME: when implementing typechecking *)

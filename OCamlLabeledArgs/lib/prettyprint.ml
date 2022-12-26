@@ -28,14 +28,26 @@ let pp_expr =
       fprintf ppf "let %s = %a in %a" name printer body printer in_e
     | LetRec (name, body, in_e) ->
       fprintf ppf "let rec %s = %a in %a" name printer body printer in_e
-    (* TODO: decide how to pprint labels *)
-    | Fun (label, default, name, e) -> fprintf ppf "fun %s -> %a" name printer e
-    | App (fu, label, arg) -> fprintf ppf "(%a) (%a)" printer fu printer arg
-    | Binop (op, l, r) -> fprintf ppf "(%s)" (op_to_str op)
+    | Fun (label, default, name, e) -> pp_fun ppf label default name e
+    | App (fu, label, arg) -> pp_app ppf fu label arg
+    | Binop (op, l, r) -> fprintf ppf "(%a %s %a)" printer l (op_to_str op) printer r
   and pp_const ppf = function
     | Bool b -> pp_print_bool ppf b
     | Int n -> fprintf ppf "%d" n
     | Unit -> fprintf ppf "()"
+  and pp_fun ppf label default name e =
+    match label with
+    | ArgNoLabel -> fprintf ppf "fun %s -> %a" name printer e
+    | ArgLabeled s -> fprintf ppf "fun ~%s:%s -> %a" s name printer e
+    | ArgOptional s ->
+      (match default with
+       | None -> fprintf ppf "fun ?%s -> %a" s printer e
+       | Some def_e ->
+         fprintf ppf "fun ?%s:(%s = %a) -> %a" s name printer def_e printer e)
+  and pp_app ppf fu label arg =
+    match label with
+    | ArgNoLabel -> fprintf ppf "(%a) (%a)" printer fu printer arg
+    | ArgLabeled s | ArgOptional s -> fprintf ppf "(%a) (~%s:%a)" printer fu s printer arg
   in
   printer
 ;;
@@ -44,7 +56,7 @@ let pp_typ =
   let rec printer ppf = function
     | TBool -> fprintf ppf "bool"
     | TInt -> fprintf ppf "int"
-    | TVar x -> fprintf ppf "'_%s" x
+    | TVar x -> fprintf ppf "'%s" x
     | TUnit -> fprintf ppf "unit"
     | Arrow ((Arrow (_l, _r) as l), r) -> fprintf ppf "(%a) -> %a" printer l printer r
     | Arrow (l, r) -> fprintf ppf "%a -> %a" printer l printer r
@@ -53,7 +65,7 @@ let pp_typ =
 ;;
 
 let pp_value =
-  let rec printer ppf = function
+  let printer ppf = function
     | VUndef -> fprintf ppf "undefined"
     | VBool b -> pp_print_bool ppf b
     | VInt n -> fprintf ppf "%d" n
