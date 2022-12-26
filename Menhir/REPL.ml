@@ -30,7 +30,7 @@ let rec repl_tokens_list parser tree_parser =
 (* Arg module usage *)
 let interpret = ref false
 let input_file = ref ""
-let usage = String.concat "" [ "usage: "; Sys.argv.(0); " menhir-interpret <file>" ]
+let usage = Format.sprintf "usage: %s menhir-interpret <file>" Sys.argv.(0)
 
 let speclist =
   [ ( "menhir-interpret"

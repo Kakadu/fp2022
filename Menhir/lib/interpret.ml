@@ -28,6 +28,85 @@ let file_text_where_only_rules text =
     (String.length text - end_position_of_mly_tokens text)
 ;;
 
+(*>>>>>>>>>>>>>>>>>>>>>>>>> elimination of left recursion <<<<<<<<<<<<<<<<<<<<<<<<<*)
+
+(*
+  1. Let's write down all the rules of output from A in the form:
+    A -> Aa_1 |...|Aa_n|b_1|...|b_m, where
+      > a is a nonempty sequence of terminals and nonterminals (a not -> epsilon);
+      > b is a nonempty sequence of terminals and nonterminals not starting with A. 
+  2. Replace the rules of inference from A with A -> b_1A'|...|b_mA'|b_1|...|b_m.
+  3. Let's create a new nonterminal A'->a_1A'|...|a_nA'|a_1|...|a_n.
+*)
+let get_h_string_list = function
+  | h :: _ -> h
+  | _ -> ""
+;;
+
+let get_tl_string_list = function
+  | _ :: tl -> tl
+  | _ -> []
+;;
+
+let rec get_alphas g name =
+  match g with
+  | (lhs, rhs) :: tl
+    when String.equal lhs name && String.equal (get_h_string_list rhs) name ->
+    get_tl_string_list rhs :: get_alphas tl name
+  | _ :: tl -> get_alphas tl name
+  | _ -> []
+;;
+
+let rec get_bettas g name =
+  match g with
+  | (lhs, rhs) :: tl
+    when String.equal lhs name && not (String.equal (get_h_string_list rhs) name) ->
+    rhs :: get_bettas tl name
+  | _ :: tl -> get_bettas tl name
+  | _ -> []
+;;
+
+let get_new_A_with_A' g a_name =
+  let a_name' = a_name ^ "'" in
+  let b = get_bettas g a_name in
+  let a = get_alphas g a_name in
+  let new_a =
+    List.map (fun x -> a_name, x @ [ a_name' ]) b @ List.map (fun x -> a_name, x) b
+  in
+  let a' =
+    List.map (fun x -> a_name', x @ [ a_name' ]) a @ List.map (fun x -> a_name', x) a
+  in
+  new_a @ a'
+;;
+
+let rec get_nonterm_names helper = function
+  | (lhs, _) :: tl when String.equal lhs helper -> get_nonterm_names helper tl
+  | (lhs, _) :: tl -> lhs :: get_nonterm_names lhs tl
+  | _ -> []
+;;
+
+let lr_grammar_fix g =
+  let nonterm_names = get_nonterm_names "" g in
+  let rec fix = function
+    | h :: tl -> get_new_A_with_A' g h @ fix tl
+    | _ -> []
+  in
+  fix nonterm_names
+;;
+
+(* useless rules: A -> A or A -> epsilon *)
+let rec delete_useless_rules = function
+  | (lhs, rhs) :: tl
+    when (List.length rhs = 1 && String.equal lhs (List.hd rhs)) || List.length rhs = 0 ->
+    delete_useless_rules tl
+  | h :: tl -> h :: delete_useless_rules tl
+  | _ -> []
+;;
+
+let grammar_fix g = lr_grammar_fix (delete_useless_rules g)
+
+(*>>>>>>>>>>>>>>>>>>>>>>>>> +++++++++++++++++++++++++++++ <<<<<<<<<<<<<<<<<<<<<<<<<*)
+
 (* tokens, start_rule, grammar *)
 let parse' text : string list * string * grammar =
   let parse_tokens_and_start_rule = Lexer.from_string Parser.token_and_start in
@@ -37,7 +116,7 @@ let parse' text : string list * string * grammar =
   let parse_rules = Lexer.from_string Parser.grammar in
   let grammar = parse_rules (file_text_where_only_rules text) in
   let tokens, start_rule = tokens_and_start_rule in
-  tokens, start_rule, (start_rule, grammar)
+  tokens, start_rule, (start_rule, grammar_fix grammar)
 ;;
 
 let read_all_file_text file_path =
@@ -472,5 +551,76 @@ let%test _ =
   | Ok (parser, _) ->
     let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
     res (* ACCEPT *)
+  | _ -> false
+;;
+
+(* TESTS WITH GRAMMAR SUBJECT TO LEFT RECURSION *)
+
+let test_text =
+  {|%token INT
+%token PLUS
+%token MUL
+%token LBRACE
+%token RBRACE
+%token EOL
+%start main
+%%
+main:
+| expr; EOL
+| EOL
+expr:
+| LBRACE; expr; RBRACE
+| expr; PLUS; expr
+| expr; MUL; expr
+| INT|}
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "INT" ] in
+    (not res) && ret = -1 (* OVERSHOOT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "INT"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "INT"; "PLUS"; "INT"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ = parser [ "INT"; "MUL"; "INT"; "PLUS"; "INT"; "EOL" ] in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, _ =
+      parser [ "LBRACE"; "INT"; "PLUS"; "INT"; "MUL"; "INT"; "RBRACE"; "EOL" ]
+    in
+    res (* ACCEPT *)
+  | _ -> false
+;;
+
+let%test _ =
+  match get_parser_and_tree_parser test_text with
+  | Ok (parser, _) ->
+    let res, ret = parser [ "RBRACE" ] in
+    (not res) && ret = 0 (* REJECT *)
   | _ -> false
 ;;
