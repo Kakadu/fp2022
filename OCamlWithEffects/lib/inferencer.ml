@@ -76,7 +76,7 @@ module Type = struct
     | TVar b -> b = v
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> Base.List.exists typ_list ~f:(occurs_in v)
-    | TList typ | TADT (_, typ) | TEffect typ -> occurs_in v typ
+    | TList typ | TADT (_, typ) | TEffect typ | TContinue typ -> occurs_in v typ
     | TGround _ -> false
   ;;
 
@@ -90,7 +90,7 @@ module Type = struct
           typ_list
           ~f:(fun t s -> Base.Set.union s (helper empty_set t))
           ~init:acc
-      | TList typ | TADT (_, typ) | TEffect typ -> helper acc typ
+      | TList typ | TADT (_, typ) | TEffect typ | TContinue typ -> helper acc typ
       | TGround _ -> acc
     in
     helper empty_set
@@ -171,6 +171,8 @@ end = struct
            ~init:(return empty))
     | TList typ1, TList typ2 -> unify typ1 typ2
     | TADT (id1, typ1), TADT (id2, typ2) when id1 = id2 -> unify typ1 typ2
+    | TEffect typ1, TEffect typ2 -> unify typ1 typ2
+    | TContinue typ1, TContinue typ2 -> unify typ1 typ2
     | _ -> fail @@ `UnificationFailed (l, r)
 
   and extend k v s =
@@ -441,12 +443,28 @@ let infer =
       in
       let* env' = bootstrap_env env (fst head) in
       let* _, head_expression_type = helper env' (snd head) in
+      let head_expression_type =
+        match head_expression_type with
+        | TContinue typ -> typ
+        | typ -> typ
+      in
       let* subst' =
         Base.List.fold_right case_list ~init:(return Subst.empty) ~f:(fun case subst ->
           let* env'' = bootstrap_env env (fst case) in
           let* case_subst, case_type = helper env'' (fst case) in
-          let* subst'' = unify case_type matched_type in
+          let new_case_type =
+            match case_type with
+            | TEffect case_type -> case_type
+            | case_type -> case_type
+          in
+          let* subst'' = unify new_case_type matched_type in
           let* computation_subst, computation_type = helper env'' (snd case) in
+          let* computation_type =
+            match case_type, computation_type with
+            | TEffect _, TContinue computation_type -> return computation_type
+            | TEffect _, _ -> fail `NoHandlerProvided
+            | _, computation_type -> return computation_type
+          in
           (* print_typ (Subst.find_exn 3 subst);
           print_typ (Subst.find_exn 1 subst); *)
           (* Format.printf " ";
@@ -476,14 +494,15 @@ let infer =
       let* subst' = unify typ (teffect fresh_var) in
       let* final_subst = Subst.compose subst subst' in
       return (final_subst, fresh_var)
-    | EContinue expression -> helper env expression
+    | EContinue expression ->
+      let* subst, typ = helper env expression in
+      return (subst, tcontinue typ)
     | EEffectPattern expression ->
       let* fresh_var = fresh_var in
       let* subst, typ = helper env expression in
       let* subst' = unify typ (TEffect fresh_var) in
       let* final_subst = Subst.compose subst subst' in
       return (final_subst, typ)
-    | _ -> fail `NotReachable
   in
   helper
 ;;
@@ -550,30 +569,6 @@ let%test _ =
   match run @@ check_types test_program with
   | Ok _ -> true
   | _ -> false
-;;
-
-let%expect_test _ =
-  print_result
-    (EFun
-       ( [ "x" ]
-       , EConstructList
-           ( EFun
-               ( [ "x"; "y"; "z" ]
-               , EIf
-                   ( EBinaryOperation
-                       ( Eq
-                       , EBinaryOperation
-                           ( Add
-                           , EBinaryOperation (Mul, EIdentifier "x", EIdentifier "x")
-                           , EBinaryOperation (Mul, EIdentifier "y", EIdentifier "y") )
-                       , EBinaryOperation (Mul, EIdentifier "z", EIdentifier "z") )
-                   , ELiteral (LBool true)
-                   , ELiteral (LBool false) ) )
-           , EIdentifier "x" ) ));
-  [%expect
-    {|
-    (int -> int -> int -> bool) list -> (int -> int -> int -> bool) list
-  |}]
 ;;
 
 let%expect_test _ =

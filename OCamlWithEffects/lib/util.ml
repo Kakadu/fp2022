@@ -19,5 +19,7 @@ let rec find_identifiers = function
     (match expression with
      | Some expression -> find_identifiers expression
      | _ -> [])
+  | EEffectPattern expression -> find_identifiers expression
+  | EEffectArg (_, expression) -> find_identifiers expression
   | _ -> []
 ;;

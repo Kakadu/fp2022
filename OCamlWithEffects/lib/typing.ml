@@ -18,6 +18,7 @@ type typ =
   | TGround of ground_type
   | TADT of adt_type * typ
   | TEffect of typ
+  | TContinue of typ
 
 (* Ground types *)
 let int_typ = TGround Int
@@ -34,6 +35,7 @@ let tlist typ = TList typ
 let tvar n = TVar n
 let tadt name typ = TADT (name, typ)
 let teffect typ = TEffect typ
+let tcontinue typ = TContinue typ
 (* ---------------------------- *)
 
 let rec pp_type fmt typ =
@@ -67,6 +69,7 @@ let rec pp_type fmt typ =
     pp_type fmt typ;
     fprintf fmt "%s" name
   | TEffect typ -> fprintf fmt "%a effect" pp_type typ
+  | TContinue typ -> fprintf fmt "%a continuation" pp_type typ
 ;;
 
 let print_typ typ =
@@ -82,6 +85,7 @@ type error =
   | `NoConstructor of identifier
   | `UnificationFailed of typ * typ
   | `NotReachable
+  | `NoHandlerProvided
   ]
 
 let pp_error fmt (err : error) =
@@ -96,6 +100,8 @@ let pp_error fmt (err : error) =
     fprintf fmt " but expected type was ";
     pp_type fmt t2
   | `NotReachable -> fprintf fmt "Not reachable."
+  | `NoHandlerProvided ->
+    fprintf fmt "Effect appears in pattern-matching but handler was not provided."
 ;;
 
 let print_error error =

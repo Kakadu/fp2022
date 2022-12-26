@@ -334,7 +334,7 @@
   >   | res -> res
   > EOF
   2
-  $ ./interpreterTests.exe <<-EOF
+  $ ./demo.exe <<-EOF
   > effect E: int -> int effect
   > 
   > let helper x = match perform (E x) with
@@ -346,7 +346,7 @@
   >    | l -> helper l
   > EOF
   625
-  $ ./interpreterTests.exe <<-EOF
+  $ ./demo.exe <<-EOF
   > effect EmptyListException : int effect
   > 
   > let list_hd list = match list with
@@ -359,8 +359,8 @@
   > 
   > let main = safe_list_hd []
   > EOF
-  (0, false)
-  $ ./interpreterTests.exe <<-EOF
+  Effect appears in pattern-matching but handler was not provided.
+  $ ./demo.exe <<-EOF
   > effect EmptyListException : int effect
   > 
   > let list_hd list = match list with
@@ -373,8 +373,8 @@
   > 
   > let main = safe_list_hd [12; 65; 94]
   > EOF
-  (12, true)
-  > ./interpreterTests.exe <<-EOF
+  Effect appears in pattern-matching but handler was not provided.
+  $ ./demo.exe <<-EOF
   > effect SmallDiscount : int -> int effect
   > 
   > effect BigDiscount : int -> int effect
@@ -387,7 +387,7 @@
   >   | v -> v
   > EOF
   7650
-  > ./interpreterTests.exe <<-EOF
+  $ ./demo.exe <<-EOF
   > effect SmallDiscount : int -> int effect
   > 
   > effect BigDiscount : int -> int effect
@@ -400,3 +400,4 @@
   >   | v -> v
   > EOF
   20000
+
