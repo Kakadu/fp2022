@@ -407,7 +407,7 @@
   > EOF
   (1, 2, 3, "abc", <fun>)
   $ ./demo.exe <<-EOF
-  > let f x = x * 100
+  > let f v = v * 100
   > let main = ["0", "1", f "2"]
   > EOF
   Unification failed: type of the expression is string but expected type was int
