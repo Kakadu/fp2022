@@ -357,20 +357,6 @@
   >   | effect EmptyListException -> 0, false
   >   | res -> res, true
   > 
-  > let main = safe_list_hd []
-  > EOF
-  Effect appears in pattern-matching but handler was not provided.
-  $ ./demo.exe <<-EOF
-  > effect EmptyListException : int effect
-  > 
-  > let list_hd list = match list with
-  >    | [] -> perform EmptyListException
-  >    | hd :: _ -> hd
-  > 
-  > let safe_list_hd l = match list_hd l with
-  >   | effect EmptyListException -> 0, false
-  >   | res -> res, true
-  > 
   > let main = safe_list_hd [12; 65; 94]
   > EOF
   Effect appears in pattern-matching but handler was not provided.
@@ -400,4 +386,28 @@
   >   | v -> v
   > EOF
   20000
-
+  $ ./demo.exe <<-EOF
+  > effect E: int -> int effect
+  > 
+  > let helper x = match perform (E x) with
+  >    | effect (E s) -> continue "hello"
+  >    | l -> l
+  > 
+  > let main = match perform (E 5) with
+  >    | effect (E s) -> continue (s*s)
+  >    | l -> helper l
+  > EOF
+  Unification failed: type of the expression is string but expected type was int
+  $ ./demo.exe <<-EOF
+  > let main = [1; 2; 3; "abc"]
+  > EOF
+  Unification failed: type of the expression is string but expected type was int
+  $ ./demo.exe <<-EOF
+  > let main = (1, 2, 3, "abc", fun x -> x * x)
+  > EOF
+  (1, 2, 3, "abc", <fun>)
+  $ ./demo.exe <<-EOF
+  > let f x = x * 100
+  > let main = ["0", "1", f "2"]
+  > EOF
+  Unification failed: type of the expression is string but expected type was int
