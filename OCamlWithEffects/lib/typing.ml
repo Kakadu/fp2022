@@ -63,13 +63,7 @@ let rec pp_type fmt typ =
       value_list
   | TList typ -> fprintf fmt (arrow_format typ ^^ " list") pp_type typ
   | TArr (typ_left, typ_right) ->
-    fprintf
-      fmt
-      (arrow_format typ_left ^^ " -> " ^^ arrow_format typ_right)
-      pp_type
-      typ_left
-      pp_type
-      typ_right
+    fprintf fmt (arrow_format typ_left ^^ " -> %a") pp_type typ_left pp_type typ_right
   | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
   | TADT (name, typ) ->
     pp_type fmt typ;
