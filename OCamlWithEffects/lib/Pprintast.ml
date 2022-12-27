@@ -1,5 +1,7 @@
 open Ast
 open Format
+open Base
+open Typing
 
 let pp_literal fmt = function
   | LInt x -> fprintf fmt "%d" x
@@ -43,7 +45,7 @@ let rec pp_expression fmt =
       pp_list fmt delimiter tail
     | [] -> ()
   in
-  let pp_id_list fmt list = Base.List.iter list ~f:(fun x -> fprintf fmt "%s;" x) in
+  let pp_id_list fmt list = List.iter list ~f:(fun x -> fprintf fmt "%s;" x) in
   function
   | ELiteral literal -> pp_literal fmt literal
   | EIdentifier id -> fprintf fmt "%s" id
@@ -98,5 +100,40 @@ let rec pp_expression fmt =
     fprintf fmt "let %s %a = %a" name pp_id_list id_list pp_expression expression
   | ERecursiveDeclaration (name, id_list, expression) ->
     fprintf fmt "let rec %s %a = %a" name pp_id_list id_list pp_expression expression
-  | _ -> fprintf fmt ""
+  | EIf (predicate, true_branch, false_branch) ->
+    fprintf
+      fmt
+      "if %a then %a else %a"
+      pp_expression
+      predicate
+      pp_expression
+      true_branch
+      pp_expression
+      false_branch
+  | EDataConstructor (name, expression) ->
+    (match expression with
+     | Some expression -> fprintf fmt "%s %a" name pp_expression expression
+     | None -> fprintf fmt "%s" name)
+  | EEffectDeclaration (name, typ) -> fprintf fmt "effect %s : %a" name pp_type typ
+  | EEffectNoArg name -> fprintf fmt "%s" name
+  | EEffectArg (name, expression) -> fprintf fmt "%s %a" name pp_expression expression
+  | EPerform expression -> fprintf fmt "perform %a" pp_expression expression
+  | EContinue expression -> fprintf fmt "continue %a" pp_expression expression
+  | EEffectPattern expression -> fprintf fmt "effect %a" pp_expression expression
+  | ELetIn (expression_list, expression) ->
+    (match expression_list with
+     | [] -> fprintf fmt "Parsing error."
+     | head :: tail ->
+       fprintf fmt "%a" pp_expression head;
+       List.iter tail ~f:(fun declaration ->
+         match declaration with
+         | EDeclaration (name, id_list, expression)
+         | ERecursiveDeclaration (name, id_list, expression) ->
+           fprintf fmt "and %s %a = %a" name pp_id_list id_list pp_expression expression
+         | _ -> fprintf fmt "Unreacheable");
+       fprintf fmt "in %a" pp_expression expression)
+  | EMatchWith (matched_expression, case_list) ->
+    fprintf fmt "match %a with " pp_expression matched_expression;
+    List.iter case_list ~f:(fun (case, action) ->
+      fprintf fmt "| %a -> %a" pp_expression case pp_expression action)
 ;;
