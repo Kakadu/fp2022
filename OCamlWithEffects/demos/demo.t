@@ -200,7 +200,7 @@
   >     | "qwerty123" -> Ok "success"
   >     | _ -> Error "FAIL"
   > EOF
-  Not a value.
+  <fun>
   $ ./demo.exe <<- EOF
   > let fst pair =
   >   match pair with (x, _) -> x
