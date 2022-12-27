@@ -1,7 +1,9 @@
 open Interpret.InterpretResult
 open Interpret
+open Inferencer
 open Parser
 open Format
+open Typing
 
 let rec print result =
   let rec print_list delimiter = function
@@ -26,22 +28,36 @@ let rec print result =
     printf "(";
     print_list ',' tuple;
     printf ")"
-  | VADT (name, arguments_list) ->
+  | VADT (name, argument) ->
     printf "%s " name;
-    List.iter
-      (fun elem ->
-        print elem;
-        printf " ")
-      arguments_list
-  | VFun _ -> printf "Not a value."
+    (match argument with
+    | Some argument -> print argument
+    | None -> ())
+  | _ -> printf "Not a value."
 ;;
 
 let print_run code =
   match parse code with
   | Ok ast ->
-    (match run ast with
-    | Ok result -> print result
-    | Error error -> printf "%s" error)
+    (match R.run (check_types ast) with
+    | Ok _ ->
+      (match run ast with
+      | Ok result -> print result
+      | Error error -> printf "%s" error)
+    | Error error -> print_error error)
+  | Error error ->
+    printf "%s" error;
+    printf "\n"
+;;
+
+let print_typ code =
+  match parse code with
+  | Ok ast ->
+    List.iter
+      (fun elem ->
+        print_result elem;
+        printf "\n")
+      ast
   | Error error ->
     printf "%s" error;
     printf "\n"

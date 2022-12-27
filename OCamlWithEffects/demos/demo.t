@@ -65,7 +65,7 @@
   > 
   > let main = head [97; 81; 0; 54; 13]
   > EOF
-  Some 97 
+  Some 97
   $ ./demo.exe <<- EOF
   > let head list =
   >   match list with
@@ -83,7 +83,7 @@
   > 
   > let main = tail [97; 81; 0; 54; 13]
   > EOF
-  Some [81; 0; 54; 13] 
+  Some [81; 0; 54; 13]
   $ ./demo.exe <<- EOF
   > let tail list =
   >   match list with
@@ -119,18 +119,18 @@
   > 
   > let main = filter (fun v -> v * v < 150) [12; 3; 54; 85; 36; 0; 91; 100; 1; 2; 13; 28; 63]
   > EOF
-  Runtime error: unbound value filter.
+  No such variable: filter
   $ ./demo.exe <<- EOF
   > let main = f 1 2
   > EOF
-  Runtime error: unbound value f.
+  No such variable: f
   $ ./demo.exe <<- EOF
   > let count_solutions_of_sq_equation a b c =
   >   let sq x = x * x
   >   in
-  >   let D = sq b - 4 * a * c
+  >   let d = sq b - 4 * a * c
   >   in
-  >   if D > 0 then 2 else (if D = 0 then 1 else 0)
+  >   if d > 0 then 2 else (if d = 0 then 1 else 0)
   > 
   > let main = count_solutions_of_sq_equation 2 9 4
   > EOF
@@ -139,9 +139,9 @@
   > let count_solutions_of_sq_equation a b c =
   >   let sq x = x * x
   >   in
-  >   let D = sq b - 4 * a * c
+  >   let d = sq b - 4 * a * c
   >   in
-  >   if D > 0 then 2 else (if D = 0 then 1 else 0)
+  >   if d > 0 then 2 else (if d = 0 then 1 else 0)
   > 
   > let main = count_solutions_of_sq_equation 2 9 4
   > EOF
@@ -169,7 +169,7 @@
   $ ./demo.exe <<- EOF
   > let main = "abc" + "def"
   > EOF
-  Runtime error: operands were expected of type int.
+  Unification failed: type of the expression is string but expected type was int
   $ ./demo.exe <<- EOF
   > let pifagor_check = fun x y z -> x * x + y * y = z * z
   > 
@@ -184,7 +184,7 @@
   > 
   > let main = check_password "qwerty"
   > EOF
-  Error "FAIL" 
+  Error "FAIL"
   $ ./demo.exe <<- EOF
   > let check_password password = 
   >   match password with
@@ -193,7 +193,7 @@
   > 
   > let main = check_password "qwerty123"
   > EOF
-  Ok "success" 
+  Ok "success"
   $ ./demo.exe <<- EOF
   > let check_password password = 
   >   match password with
@@ -236,7 +236,7 @@
   > 
   > let main = (if idx = 1 then fst else snd) (13, 45, 89)
   > EOF
-  Runtime error: pattern-matching is not exhaustive.
+  Unification failed: type of the expression is int * int * int but expected type was 'p * 'p
   $ ./demo.exe <<- EOF
   > let rec matrix_sum m1 m2 =
   >   let rec lines_sum l1 l2 =
@@ -309,3 +309,95 @@
   > let main = matrix_sum (matrix_mult_number matrix1 2) (matrix_mult_number matrix2 7)
   > EOF
   [[30; 213; 14]; [579; 148; 574]; [146; 620; 167]]
+  $ ./demo.exe <<- EOF
+  > let int_list = [1; 2; 3]
+  > 
+  > let main = "0" :: int_list
+  > EOF
+  Unification failed: type of the expression is string but expected type was int
+  $ ./demo.exe <<- EOF
+  > effect Failure : string -> int effect
+  > 
+  > let binary_int_of_str n = match n with
+  >   | "0" -> 0
+  >   | "1" -> 1
+  >   | s -> perform (Failure s)
+  > 
+  > let rec sum_up list = match list with
+  >   | [] -> 0
+  >   | s :: ss -> binary_int_of_str s + sum_up ss
+  > 
+  > let test_list = ["0"; "hope"; "1"; "it"; "0"; "works"; "1"]
+  > 
+  > let main = match sum_up test_list with
+  >   | effect (Failure _) -> continue 0
+  >   | res -> res
+  > EOF
+  2
+  $ ./demo.exe <<-EOF
+  > effect E: int -> int effect
+  > 
+  > let helper x = match perform (E x) with
+  >    | effect (E s) -> continue (s*s)
+  >    | l -> l
+  > 
+  > let main = match perform (E 5) with
+  >    | effect (E s) -> continue (s*s)
+  >    | l -> helper l
+  > EOF
+  625
+  $ ./demo.exe <<-EOF
+  > effect EmptyListException : int effect
+  > 
+  > let list_hd list = match list with
+  >    | [] -> perform EmptyListException
+  >    | hd :: _ -> hd
+  > 
+  > let safe_list_hd l = match list_hd l with
+  >   | effect EmptyListException -> 0, false
+  >   | res -> res, true
+  > 
+  > let main = safe_list_hd []
+  > EOF
+  Effect appears in pattern-matching but handler was not provided.
+  $ ./demo.exe <<-EOF
+  > effect EmptyListException : int effect
+  > 
+  > let list_hd list = match list with
+  >    | [] -> perform EmptyListException
+  >    | hd :: _ -> hd
+  > 
+  > let safe_list_hd l = match list_hd l with
+  >   | effect EmptyListException -> 0, false
+  >   | res -> res, true
+  > 
+  > let main = safe_list_hd [12; 65; 94]
+  > EOF
+  Effect appears in pattern-matching but handler was not provided.
+  $ ./demo.exe <<-EOF
+  > effect SmallDiscount : int -> int effect
+  > 
+  > effect BigDiscount : int -> int effect
+  > 
+  > let count_discount value = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
+  > 
+  > let main = match count_discount 8500 with
+  >   | effect (SmallDiscount v) -> continue (v - v / 10)
+  >   | effect (BigDiscount v) -> continue (v - v / 5)
+  >   | v -> v
+  > EOF
+  7650
+  $ ./demo.exe <<-EOF
+  > effect SmallDiscount : int -> int effect
+  > 
+  > effect BigDiscount : int -> int effect
+  > 
+  > let count_discount value = if value < 10000 then perform (SmallDiscount value) else perform (BigDiscount value)
+  > 
+  > let main = match count_discount 25000 with
+  >   | effect (SmallDiscount v) -> continue (v - v / 10)
+  >   | effect (BigDiscount v) -> continue (v - v / 5)
+  >   | v -> v
+  > EOF
+  20000
+

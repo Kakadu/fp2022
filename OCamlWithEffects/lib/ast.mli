@@ -1,3 +1,6 @@
+open Typing
+
+type capitalized_id = string [@@deriving eq, show { with_path = false }]
 type id = string [@@deriving eq, show { with_path = false }]
 type data_constructor_name = string [@@deriving eq, show { with_path = false }]
 
@@ -45,4 +48,10 @@ type expression =
   | ELetIn of expression list * expression (** let x = 1 and y = 2 in x + y *)
   | EIf of expression * expression * expression (** if true then 1 else 0 *)
   | EMatchWith of expression * (expression * expression) list (** match x with _ -> x *)
-  | EDataConstructor of data_constructor_name * expression list (** Some 5 *)
+  | EDataConstructor of data_constructor_name * expression option (** Some 5 *)
+  | EEffectDeclaration of id * typ (** effect E : int -> string effect *)
+  | EEffectNoArg of capitalized_id (** E *)
+  | EEffectArg of capitalized_id * expression (** E 1 *)
+  | EPerform of expression (** perform (E 1) *)
+  | EContinue of expression (** continue 3 *)
+  | EEffectPattern of expression (** effect (Failure _) -> *)

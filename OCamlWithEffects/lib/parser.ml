@@ -2,6 +2,7 @@ open Angstrom
 open Ast
 open List
 open String
+open Typing
 
 type error_message = string
 type input = string
@@ -19,9 +20,12 @@ type dispatch =
   ; parse_let_in : dispatch -> expression Angstrom.t
   ; parse_data_constructor : dispatch -> expression Angstrom.t
   ; parse_expression : dispatch -> expression Angstrom.t
+  ; parse_effect_arg : dispatch -> expression Angstrom.t
+  ; parse_perform : dispatch -> expression Angstrom.t
+  ; parse_continue : dispatch -> expression Angstrom.t
   }
 
-(* Functions for constructing expressions *)
+(* Smart constructors for expressions *)
 let eliteral x = ELiteral x
 let eidentifier x = EIdentifier x
 let etuple head tail = ETuple (head :: tail)
@@ -48,13 +52,23 @@ let eapplication function_expression operand_expression =
   EApplication (function_expression, operand_expression)
 ;;
 
-let edata_constructor constructor_name expressions =
-  EDataConstructor (constructor_name, expressions)
+let edata_constructor constructor_name expression =
+  EDataConstructor (constructor_name, expression)
 ;;
 
 let eunary_operation operation expression = EUnaryOperation (operation, expression)
 let econstruct_list head tail = EConstructList (head, tail)
-(* -------------------------------------- *)
+
+let eeffect_declaration effect_name effect_type =
+  EEffectDeclaration (effect_name, effect_type)
+;;
+
+let eeffect_noarg effect_name = EEffectNoArg effect_name
+let eeffect_arg effect_name expression = EEffectArg (effect_name, expression)
+let eperform expression = EPerform expression
+let econtinue expression = EContinue expression
+let eeffect_pattern expression = EEffectPattern expression
+(* ---------------------------------- *)
 
 (* Smart constructors for binary operators *)
 let badd _ = Add
@@ -91,8 +105,42 @@ let parse_entity =
      )
 ;;
 
+let parse_uncapitalized_entity =
+  parse_entity
+  >>= fun entity ->
+  if String.contains "abcdefghijklmnopqrstuvwxyz_" entity.[0]
+  then return entity
+  else fail "Not an uncapitalized entity."
+;;
+
+let parse_capitalized_entity =
+  parse_entity
+  >>= fun entity ->
+  if String.contains "ABCDEFGHIJKLMNOPQRSTUVWXYZ" entity.[0]
+  then return entity
+  else fail "Not a capitalized entity."
+;;
+
 let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
-let keywords = [ "let"; "rec"; "match"; "with"; "if"; "then"; "else"; "in"; "fun"; "and" ]
+
+let keywords =
+  [ "let"
+  ; "rec"
+  ; "match"
+  ; "with"
+  ; "if"
+  ; "then"
+  ; "else"
+  ; "in"
+  ; "fun"
+  ; "and"
+  ; "effect"
+  ; "type"
+  ; "perform"
+  ; "continue"
+  ]
+;;
+
 (* ------- *)
 
 (* Parsers *)
@@ -133,13 +181,23 @@ let parse_identifier =
   remove_spaces
   *>
   let parse_identifier =
-    parse_entity
+    parse_uncapitalized_entity
     >>= fun entity ->
-    if List.exists (( = ) entity) keywords || List.exists (( = ) entity) data_constructors
+    if List.exists (( = ) entity) keywords
     then fail "Parsing error: keyword used."
     else return @@ eidentifier entity
   in
   parse_identifier
+;;
+
+let parse_effect_noarg = lift eeffect_noarg parse_capitalized_entity
+
+let parse_effect_pattern effect_parser =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift eeffect_pattern (string "effect" *> remove_spaces *> effect_parser))
 ;;
 
 let parse_tuple d =
@@ -153,6 +211,7 @@ let parse_tuple d =
            ; d.parse_binary_operation d
            ; d.parse_unary_operation d
            ; d.parse_list d
+           ; d.parse_perform d
            ; d.parse_application d
            ; d.parse_fun d
            ; d.parse_conditional d
@@ -184,6 +243,7 @@ let parse_list d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; self
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -210,6 +270,7 @@ let parse_fun d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; self
       ; d.parse_conditional d
@@ -224,7 +285,10 @@ let parse_fun d =
   <|> string "fun"
       *> lift2
            efun
-           (many1 parse_entity <* remove_spaces <* string "->" <* remove_spaces)
+           (many1 parse_uncapitalized_entity
+           <* remove_spaces
+           <* string "->"
+           <* remove_spaces)
            (parse_content <* remove_spaces)
 ;;
 
@@ -237,6 +301,7 @@ let declaration_helper constructing_function d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -249,8 +314,8 @@ let declaration_helper constructing_function d =
   in
   lift3
     constructing_function
-    parse_entity
-    (many parse_entity)
+    parse_uncapitalized_entity
+    (many parse_uncapitalized_entity)
     (remove_spaces *> string "=" *> parse_content)
 ;;
 
@@ -279,6 +344,7 @@ let parse_let_in d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -315,6 +381,7 @@ let parse_conditional d =
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; self
@@ -339,13 +406,25 @@ let parse_matching d =
   @@ fun self ->
   remove_spaces
   *>
-  let parse_content =
+  let parse_content_left =
+    choice
+      [ d.parse_tuple d
+      ; d.parse_list_constructing d
+      ; d.parse_unary_operation d
+      ; d.parse_list d
+      ; d.parse_data_constructor d
+      ; parse_literal
+      ; parse_identifier
+      ]
+  in
+  let parse_content_right =
     choice
       [ d.parse_tuple d
       ; d.parse_list_constructing d
       ; d.parse_binary_operation d
       ; d.parse_unary_operation d
       ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_fun d
       ; d.parse_conditional d
@@ -360,12 +439,16 @@ let parse_matching d =
   <|> string "match"
       *> lift2
            ematchwith
-           parse_content
+           parse_content_right
            (let parse_case =
               lift2
                 (fun case action -> case, action)
-                parse_content
-                (remove_spaces *> string "->" *> parse_content)
+                (parse_effect_pattern
+                   (d.parse_effect_arg d <|> parse_effect_noarg <|> parse_identifier)
+                <|> parse_content_left)
+                (remove_spaces
+                *> string "->"
+                *> (d.parse_continue d <|> parse_content_right))
             and separator = remove_spaces *> string "|" in
             remove_spaces
             *> string "with"
@@ -409,7 +492,10 @@ let parse_binary_operation d =
   let parse_content =
     choice
       [ parens self
+      ; d.parse_list_constructing d
       ; d.parse_unary_operation d
+      ; d.parse_list d
+      ; d.parse_perform d
       ; d.parse_application d
       ; d.parse_conditional d
       ; d.parse_matching d
@@ -453,6 +539,7 @@ let parse_application d =
          ; parens @@ d.parse_binary_operation d
          ; parens @@ d.parse_unary_operation d
          ; d.parse_list d
+         ; parens @@ d.parse_perform d
          ; parens self
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
@@ -480,6 +567,7 @@ let parse_data_constructor d =
       ; parens @@ d.parse_binary_operation d
       ; parens @@ d.parse_unary_operation d
       ; d.parse_list d
+      ; parens @@ d.parse_perform d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_fun d
       ; parens @@ d.parse_conditional d
@@ -493,15 +581,16 @@ let parse_data_constructor d =
   parens self
   <|> (lift2
          (fun constructor_name expression_list -> constructor_name, expression_list)
-         parse_entity
-         (many parse_content)
+         parse_capitalized_entity
+         (option None (parse_content >>| fun expression -> Some expression))
       >>= function
-      | constructor_name, expression_list ->
+      | "Ok", None | "Error", None | "Some", None ->
+        fail "Parsing error: constructor expected 1 argument, but got 0."
+      | "None", Some _ ->
+        fail "Parsing error: constructor expected 0 arguments, but got 1."
+      | constructor_name, expression ->
         if List.exists (( = ) constructor_name) data_constructors
-        then
-          if List.length expression_list > 1
-          then fail "Parsing error: data constructor received too many arguments."
-          else return @@ edata_constructor constructor_name expression_list
+        then return @@ edata_constructor constructor_name expression
         else fail "Parsing error: invalid constructor.")
 ;;
 
@@ -514,6 +603,7 @@ let parse_unary_operation d =
     let indent = many1 (satisfy space_predicate) in
     choice
       [ parens self <|> indent *> self
+      ; parens @@ d.parse_perform d <|> indent *> d.parse_perform d
       ; parens @@ d.parse_application d <|> indent *> d.parse_application d
       ; parens @@ d.parse_conditional d <|> indent *> d.parse_conditional d
       ; parens @@ d.parse_matching d <|> indent *> d.parse_matching d
@@ -526,6 +616,7 @@ let parse_unary_operation d =
     choice
       [ parens @@ d.parse_binary_operation d
       ; parens self
+      ; parens @@ d.parse_perform d
       ; parens @@ d.parse_application d
       ; parens @@ d.parse_conditional d
       ; parens @@ d.parse_matching d
@@ -553,6 +644,7 @@ let parse_list_constructing d =
          ; parens @@ d.parse_binary_operation d
          ; d.parse_unary_operation d
          ; d.parse_list d
+         ; d.parse_perform d
          ; d.parse_application d
          ; parens @@ d.parse_fun d
          ; parens @@ d.parse_conditional d
@@ -566,6 +658,214 @@ let parse_list_constructing d =
      lift2 econstruct_list (parse_content <* separator) (self <|> parse_content))
 ;;
 
+(* Parsing of type annotations *)
+type type_dispatch =
+  { parse_list_type : type_dispatch -> typ Angstrom.t
+  ; parse_tuple_type : type_dispatch -> typ Angstrom.t
+  ; parse_arrow : type_dispatch -> typ Angstrom.t
+  ; parse_effect_type : type_dispatch -> typ Angstrom.t
+  ; parse_type : type_dispatch -> typ Angstrom.t
+  }
+
+let parse_ground_type =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *>
+  let parse_int = string "int" *> return int_typ in
+  let parse_bool = string "bool" *> return bool_typ in
+  let parse_char = string "char" *> return char_typ in
+  let parse_string = string "string" *> return string_typ in
+  let parse_unit = string "unit" *> return unit_typ in
+  choice [ parens self; parse_int; parse_bool; parse_char; parse_string; parse_unit ]
+;;
+
+let parse_list_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let parse_ground_type' =
+       parse_ground_type
+       >>= fun typ ->
+       remove_spaces *> option "" (string "list")
+       >>= function
+       | "" -> return (tvar (-1))
+       | _ ->
+         remove_spaces *> many (string ")") *> remove_spaces *> option "" (string "list")
+         >>= (function
+         | "" -> return typ
+         | _ -> fail "Not a ground type.")
+     in
+     choice
+       [ parens @@ td.parse_arrow td <* remove_spaces <* string "list"
+       ; parens @@ td.parse_tuple_type td <* remove_spaces <* string "list"
+       ; parse_ground_type'
+       ; self <* remove_spaces <* string "list"
+       ]
+     >>= fun typ ->
+     remove_spaces *> option "" (string "*")
+     >>= function
+     | "" ->
+       (match typ with
+       | TVar -1 -> fail "Not a list."
+       | _ -> return (tlist typ))
+     | _ -> fail "Not a list.")
+;;
+
+let parse_tuple_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> (sep_by1
+            (remove_spaces *> string "*" <* remove_spaces)
+            (choice
+               [ parens @@ td.parse_arrow td
+               ; parens self
+               ; td.parse_list_type td
+               ; parse_ground_type
+               ])
+         >>= fun typ_list ->
+         remove_spaces *> option "" (string "list")
+         >>= function
+         | "" ->
+           if Base.List.length typ_list > 1
+           then return (ttuple typ_list)
+           else fail "Not a tuple."
+         | _ -> fail "Not a tuple."))
+;;
+
+let parse_arrow td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift2
+           (fun left right -> TArr (left, right))
+           (choice
+              [ parens self
+              ; td.parse_list_type td
+              ; td.parse_tuple_type td
+              ; parse_ground_type
+              ])
+           (remove_spaces *> string "->" *> remove_spaces *> td.parse_type td))
+;;
+
+let parse_effect_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift
+           teffect
+           (choice
+              [ parens @@ td.parse_arrow td
+              ; parens @@ td.parse_tuple_type td
+              ; td.parse_list_type td
+              ; parse_ground_type
+              ]
+           <* remove_spaces
+           <* string "effect"))
+;;
+
+let parse_type td =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (choice
+        [ td.parse_arrow td
+        ; td.parse_effect_type td
+        ; td.parse_list_type td
+        ; td.parse_tuple_type td
+        ; parse_ground_type
+        ]
+     <|> parens self)
+;;
+
+let default_td =
+  { parse_list_type; parse_tuple_type; parse_arrow; parse_effect_type; parse_type }
+;;
+
+(* --------------------------- *)
+
+let parse_effect_declaration =
+  remove_spaces
+  *> string "effect"
+  *> remove_spaces
+  *> lift2
+       eeffect_declaration
+       parse_capitalized_entity
+       (remove_spaces *> string ":" *> remove_spaces *> parse_type default_td)
+;;
+
+let parse_effect_arg d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
+         ; parens @@ d.parse_binary_operation d
+         ; parens @@ d.parse_unary_operation d
+         ; d.parse_list d
+         ; parens @@ d.parse_perform d
+         ; parens @@ d.parse_application d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
+         ; parse_literal
+         ; parse_identifier
+         ]
+     in
+     lift2 eeffect_arg parse_capitalized_entity operand_parser)
+;;
+
+let parse_perform d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|> lift
+           eperform
+           (string "perform"
+           *> remove_spaces
+           *> (parse_effect_noarg <|> parse_effect_arg d)))
+;;
+
+let parse_continue d =
+  fix
+  @@ fun self ->
+  remove_spaces
+  *> (parens self
+     <|>
+     let operand_parser =
+       choice
+         [ parens @@ d.parse_tuple d
+         ; parens @@ d.parse_list_constructing d
+         ; parens @@ d.parse_binary_operation d
+         ; parens @@ d.parse_unary_operation d
+         ; d.parse_list d
+         ; parens @@ d.parse_perform d
+         ; parens @@ d.parse_application d
+         ; parens @@ d.parse_fun d
+         ; parens @@ d.parse_conditional d
+         ; parens @@ d.parse_matching d
+         ; parens @@ d.parse_let_in d
+         ; parens @@ d.parse_data_constructor d
+         ; parse_literal
+         ; parse_identifier
+         ]
+     in
+     lift econtinue (string "continue" *> remove_spaces *> operand_parser))
+;;
+
 (* ------- *)
 
 let parse_expression d =
@@ -575,6 +875,7 @@ let parse_expression d =
     ; d.parse_binary_operation d
     ; d.parse_unary_operation d
     ; d.parse_list d
+    ; d.parse_perform d
     ; d.parse_application d
     ; d.parse_fun d
     ; d.parse_conditional d
@@ -599,6 +900,9 @@ let default =
   ; parse_let_in
   ; parse_data_constructor
   ; parse_expression
+  ; parse_effect_arg
+  ; parse_perform
+  ; parse_continue
   }
 ;;
 
@@ -615,11 +919,17 @@ let parse_unary_operation = parse_unary_operation default
 let parse_list_constructing = parse_list_constructing default
 let parse_data_constructor = parse_data_constructor default
 let parse_expression = parse_expression default
+let parse_effect_arg = parse_effect_arg default
+let parse_perform = parse_perform default
+let parse_continue = parse_continue default
 
 (* Main parsing function *)
 let parse : input -> (expression list, error_message) result =
  fun program ->
-  parse_string ~consume:All (many parse_declaration <* remove_spaces) program
+  parse_string
+    ~consume:All
+    (many (parse_effect_declaration <|> parse_declaration) <* remove_spaces)
+    program
 ;;
 
 (* -------------------- TESTS -------------------- *)
@@ -1103,8 +1413,8 @@ let%test _ =
            , []
            , EMatchWith
                ( EIdentifier "res"
-               , [ EDataConstructor ("Some", [ EIdentifier "x" ]), EIdentifier "x"
-                 ; EDataConstructor ("None", []), ELiteral (LInt 0)
+               , [ EDataConstructor ("Some", Some (EIdentifier "x")), EIdentifier "x"
+                 ; EDataConstructor ("None", None), ELiteral (LInt 0)
                  ] ) )
        ]
 ;;
@@ -1119,7 +1429,7 @@ let%test _ =
            , EMatchWith
                ( EApplication
                    (EApplication (EIdentifier "f", EIdentifier "x"), EIdentifier "y")
-               , [ EDataConstructor ("Ok", [ EIdentifier "_" ]), ELiteral (LInt 1)
+               , [ EDataConstructor ("Ok", Some (EIdentifier "_")), ELiteral (LInt 1)
                  ; EIdentifier "_", ELiteral (LInt 0)
                  ] ) )
        ]
@@ -1137,8 +1447,8 @@ let%test _ =
                , EMatchWith
                    ( EIdentifier "list"
                    , [ ( EConstructList (EIdentifier "h", EIdentifier "_")
-                       , EDataConstructor ("Some", [ EIdentifier "h" ]) )
-                     ; EIdentifier "_", EDataConstructor ("None", [])
+                       , EDataConstructor ("Some", Some (EIdentifier "h")) )
+                     ; EIdentifier "_", EDataConstructor ("None", None)
                      ] ) ) )
        ]
 ;;
@@ -1155,8 +1465,8 @@ let%test _ =
                , EMatchWith
                    ( EIdentifier "list"
                    , [ ( EConstructList (EIdentifier "_", EIdentifier "t")
-                       , EDataConstructor ("Some", [ EIdentifier "t" ]) )
-                     ; EIdentifier "_", EDataConstructor ("None", [])
+                       , EDataConstructor ("Some", Some (EIdentifier "t")) )
+                     ; EIdentifier "_", EDataConstructor ("None", None)
                      ] ) ) )
        ]
 ;;
@@ -1269,9 +1579,9 @@ let%test _ =
            , EMatchWith
                ( ETuple [ EIdentifier "x"; EIdentifier "y"; EIdentifier "z" ]
                , [ ( ETuple
-                       [ EDataConstructor ("Error", [ EIdentifier "x" ])
-                       ; EDataConstructor ("Error", [ EIdentifier "y" ])
-                       ; EDataConstructor ("Error", [ EIdentifier "z" ])
+                       [ EDataConstructor ("Error", Some (EIdentifier "x"))
+                       ; EDataConstructor ("Error", Some (EIdentifier "y"))
+                       ; EDataConstructor ("Error", Some (EIdentifier "z"))
                        ]
                    , ELiteral (LInt 0) )
                  ; ( ETuple [ EIdentifier "_"; EIdentifier "_"; EIdentifier "_" ]
@@ -1313,6 +1623,134 @@ let%test _ =
                        ]
                    , ELiteral (LBool true) )
                  ; EIdentifier "_", ELiteral (LBool false)
+                 ] ) )
+       ]
+;;
+
+(* 36 *)
+let%test _ =
+  parse "effect EmptyListEffect: int list effect"
+  = Result.ok @@ [ EEffectDeclaration ("EmptyListEffect", TEffect (TList (TGround Int))) ]
+;;
+
+(* 37 *)
+let%test _ =
+  parse "effect SmallDiscount : int -> int effect"
+  = Result.ok
+    @@ [ EEffectDeclaration ("SmallDiscount", TArr (TGround Int, TEffect (TGround Int))) ]
+;;
+
+(* 38 *)
+let%test _ =
+  parse
+    "effect E: int -> int effect\n\n\
+    \     let helper x = match perform (E x) with\n\n\
+    \        | effect (E s) -> continue (s*s)\n\n\
+    \        | l -> l\n\n\
+    \     let main = match perform (E 5) with\n\n\
+    \        | effect (E s) -> continue (s*s)\n\n\
+    \        | l -> helper l"
+  = Result.ok
+    @@ [ EEffectDeclaration ("E", TArr (TGround Int, TEffect (TGround Int)))
+       ; EDeclaration
+           ( "helper"
+           , [ "x" ]
+           , EMatchWith
+               ( EPerform (EEffectArg ("E", EIdentifier "x"))
+               , [ ( EEffectPattern (EEffectArg ("E", EIdentifier "s"))
+                   , EContinue (EBinaryOperation (Mul, EIdentifier "s", EIdentifier "s"))
+                   )
+                 ; EIdentifier "l", EIdentifier "l"
+                 ] ) )
+       ; EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( EPerform (EEffectArg ("E", ELiteral (LInt 5)))
+               , [ ( EEffectPattern (EEffectArg ("E", EIdentifier "s"))
+                   , EContinue (EBinaryOperation (Mul, EIdentifier "s", EIdentifier "s"))
+                   )
+                 ; EIdentifier "l", EApplication (EIdentifier "helper", EIdentifier "l")
+                 ] ) )
+       ]
+;;
+
+(* 39 *)
+let%test _ =
+  parse
+    "effect EmptyListException : int effect\n\n\
+    \    let list_hd list = match list with \n\n\
+    \       | [] -> perform EmptyListException\n\n\
+    \       | hd :: _ -> hd\n\n\
+    \    let safe_list_hd l = match list_hd l with\n\n\
+    \      | effect EmptyListException -> 0, false\n\n\
+    \      | res -> res, true\n\
+    \     \n\
+    \     let main = safe_list_hd []"
+  = Result.ok
+    @@ [ EEffectDeclaration ("EmptyListException", TEffect (TGround Int))
+       ; EDeclaration
+           ( "list_hd"
+           , [ "list" ]
+           , EMatchWith
+               ( EIdentifier "list"
+               , [ EList [], EPerform (EEffectNoArg "EmptyListException")
+                 ; EConstructList (EIdentifier "hd", EIdentifier "_"), EIdentifier "hd"
+                 ] ) )
+       ; EDeclaration
+           ( "safe_list_hd"
+           , [ "l" ]
+           , EMatchWith
+               ( EApplication (EIdentifier "list_hd", EIdentifier "l")
+               , [ ( EEffectPattern (EEffectNoArg "EmptyListException")
+                   , ETuple [ ELiteral (LInt 0); ELiteral (LBool false) ] )
+                 ; EIdentifier "res", ETuple [ EIdentifier "res"; ELiteral (LBool true) ]
+                 ] ) )
+       ; EDeclaration ("main", [], EApplication (EIdentifier "safe_list_hd", EList []))
+       ]
+;;
+
+(* 40 *)
+let%test _ =
+  parse
+    "effect SmallDiscount : int -> int effect\n\n\
+    \    effect BigDiscount : int -> int effect\n\n\
+    \    let count_discount value = if value < 10000 then perform (SmallDiscount value) \
+     else perform (BigDiscount value)\n\n\
+    \    let main = match count_discount 8500 with\n\n\
+    \      | effect (SmallDiscount v) -> continue (v - v / 10)\n\n\
+    \      | effect (BigDiscount v) -> continue (v - v / 5)\n\n\
+    \      | v -> v"
+  = Result.ok
+    @@ [ EEffectDeclaration ("SmallDiscount", TArr (TGround Int, TEffect (TGround Int)))
+       ; EEffectDeclaration ("BigDiscount", TArr (TGround Int, TEffect (TGround Int)))
+       ; EDeclaration
+           ( "count_discount"
+           , [ "value" ]
+           , EIf
+               ( EBinaryOperation (LT, EIdentifier "value", ELiteral (LInt 10000))
+               , EPerform (EEffectArg ("SmallDiscount", EIdentifier "value"))
+               , EPerform (EEffectArg ("BigDiscount", EIdentifier "value")) ) )
+       ; EDeclaration
+           ( "main"
+           , []
+           , EMatchWith
+               ( EApplication (EIdentifier "count_discount", ELiteral (LInt 8500))
+               , [ ( EEffectPattern (EEffectArg ("SmallDiscount", EIdentifier "v"))
+                   , EContinue
+                       (EBinaryOperation
+                          ( Sub
+                          , EIdentifier "v"
+                          , EBinaryOperation (Div, EIdentifier "v", ELiteral (LInt 10)) ))
+                   )
+                 ; ( EEffectPattern (EEffectArg ("BigDiscount", EIdentifier "v"))
+                   , EContinue
+                       (EBinaryOperation
+                          ( Sub
+                          , EIdentifier "v"
+                          , EBinaryOperation (Div, EIdentifier "v", ELiteral (LInt 5)) ))
+                   )
+                 ; EIdentifier "v", EIdentifier "v"
                  ] ) )
        ]
 ;;
