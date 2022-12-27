@@ -1,4 +1,4 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Chizhov Anton *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
@@ -52,10 +52,10 @@ type substr_removal =
 [@@deriving fields, show { with_path = false }]
 
 type substitute_type =
-  | One (** [${name/pattern\[/string\]}] *)
-  | All (** [${name//pattern\[/string\]}] *)
-  | First (** [${name/#pattern\[/string\]}] *)
-  | Last (** [${name/%pattern\[/string\]}] *)
+  | One (** [${name/pattern\[/by\]}] *)
+  | All (** [${name//pattern\[/by\]}] *)
+  | First (** [${name/#pattern\[/by\]}] *)
+  | Last (** [${name/%pattern\[/by\]}] *)
 [@@deriving variants, show { with_path = false }]
 
 type substitute =
@@ -175,16 +175,26 @@ and var_assign =
     (* [varname=(var=single_arg [[var=single_arg]...] ]))] *)
 [@@deriving show { with_path = false }]
 
+and redir =
+  | RedirInput of int * single_arg (** [\[fd\]<single_arg] *)
+  | RedirOutput of int * single_arg (** [\[fd\]>single_arg] *)
+  | AppendOutput of int * single_arg (** [\[fd\]>>single_arg] *)
+  | DupInput of int * single_arg (** [\[fd\]<&single_arg] *)
+  | DupOutput of int * single_arg (** [\[fd\]>&single_arg] *)
+[@@deriving show { with_path = false }]
+
 (* [ [!] [var_assign [var_assign...]] [arg [arg...]] ] *)
 (* [ [!] [env_vars]                   [cmd]          ] *)
 and atom_operand =
   { invert : bool
   ; env_vars : var_assign list
   ; cmd : arg list
+  ; redirs : redir list
   }
 [@@deriving fields, show { with_path = false }]
 
 and operand =
+  | CompoundOperand of compound
   | AtomOperand of atom_operand (*     [atom_operand] *)
   | OrOperand of operand * operand (*  [atom_operand \|\| atom_operand] *)
   | AndOperand of operand * operand (* [atom_operand && atom_operand] *)
@@ -195,7 +205,7 @@ and pipe = Operands of operand list [@@deriving show { with_path = false }]
 
 and any_command =
   | Simple of pipe (* see pipe *)
-  | Compound of compound (* see compound *)
+  | Compound of compound * redir list (* see compound and redir *)
 [@@deriving show { with_path = false }]
 
 (* function name () { body } *)
@@ -247,11 +257,18 @@ let ifcompound x = IfCompound x
 let atomvariable x = AtomVariable x
 let indexedarray x = IndexedArray x
 let assocarray x = AssocArray x
+let compoundoperand x = CompoundOperand x
 let atomoperand x = AtomOperand x
 let oroperand x y = OrOperand (x, y)
 let andoperand x y = AndOperand (x, y)
 let simple x = Simple x
-let compound x = Compound x
+let compound (x, y) = Compound (x, y)
 let operands x = Operands x
+let redirinput x y = RedirInput (x, y)
+let rediroutput x y = RedirOutput (x, y)
+let appendoutput x y = AppendOutput (x, y)
+let redirinput x y = RedirInput (x, y)
+let dupinput x y = DupInput (x, y)
+let dupoutput x y = DupOutput (x, y)
 let command x = Command x
 let func x = Func x
