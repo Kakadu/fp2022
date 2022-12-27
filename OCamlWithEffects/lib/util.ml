@@ -1,6 +1,7 @@
 open Ast
 open Base
 
+(** Finds all identifiers in an expression. Used in pattern-matching inference *)
 let rec find_identifiers = function
   | EBinaryOperation (_, left_operand, right_operand) ->
     find_identifiers left_operand @ find_identifiers right_operand
@@ -17,8 +18,8 @@ let rec find_identifiers = function
   | EConstructList (operand, list) -> find_identifiers operand @ find_identifiers list
   | EDataConstructor (_, expression) ->
     (match expression with
-     | Some expression -> find_identifiers expression
-     | _ -> [])
+    | Some expression -> find_identifiers expression
+    | _ -> [])
   | EEffectPattern expression -> find_identifiers expression
   | EEffectArg (_, expression) -> find_identifiers expression
   | _ -> []

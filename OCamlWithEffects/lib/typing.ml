@@ -11,14 +11,14 @@ type ground_type =
 [@@deriving eq, show { with_path = false }]
 
 type typ =
-  | TVar of type_variable_number
-  | TArr of typ * typ
-  | TTuple of typ list
-  | TList of typ
-  | TGround of ground_type
-  | TADT of adt_type * typ
-  | TEffect of typ
-  | TContinue of typ
+  | TVar of type_variable_number (** 'a *)
+  | TArr of typ * typ (** string -> int *)
+  | TTuple of typ list (** int * int *)
+  | TList of typ (** 'a list *)
+  | TGround of ground_type (** int *)
+  | TADT of adt_type * typ (** (int, string) Result *)
+  | TEffect of typ (** (int -> char) effect *)
+  | TContinue of typ (** Enforces handler provision *)
 
 (* Ground types *)
 let int_typ = TGround Int

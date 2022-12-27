@@ -39,15 +39,15 @@ end = struct
     | Ok value -> f value last
  ;;
 
-  let fail e st = st, Base.Result.fail e
-  let return x last = last, Base.Result.return x
+  let fail error state = state, Base.Result.fail error
+  let return value last = last, Base.Result.return value
   let bind x ~f = x >>= f
 
   let ( >>| ) : 'a 'b. 'a t -> ('a -> 'b) -> 'b t =
-   fun x f st ->
-    match x st with
-    | st, Ok x -> st, Ok (f x)
-    | st, Result.Error e -> st, Result.Error e
+   fun x f state ->
+    match x state with
+    | state, Ok x -> state, Ok (f x)
+    | state, Error e -> state, Error e
  ;;
 
   module Syntax = struct
@@ -58,13 +58,13 @@ end = struct
     let fold_left map ~init ~f =
       Base.Map.fold map ~init ~f:(fun ~key ~data acc ->
         let open Syntax in
-        let* acc = acc in
+        let* acc in
         f key data acc)
     ;;
   end
 
   let fresh : int t = fun last -> last + 1, Result.Ok last
-  let run m = snd (m 0)
+  let run monad = snd (monad 0)
 end
 
 type fresh = int
@@ -83,8 +83,8 @@ module Type = struct
   let free_vars =
     let empty_set = Base.Set.empty (module Base.Int) in
     let rec helper acc = function
-      | TVar a -> Base.Set.add acc a
-      | TArr (a, b) -> helper (helper acc a) b
+      | TVar n -> Base.Set.add acc n
+      | TArr (left, right) -> helper (helper acc left) right
       | TTuple typ_list ->
         Base.List.fold_right
           typ_list
@@ -119,13 +119,13 @@ end = struct
   open R
   open R.Syntax
 
-  (* an association list. In real world replace it by Map *)
+  (* An association list. In real world replace it by Map *)
   type t = (fresh, typ, Base.Int.comparator_witness) Base.Map.t
 
   let empty = Base.Map.empty (module Base.Int)
 
   let mapping key value =
-    if Type.occurs_in key value then fail `Occurs_check else return (k, v)
+    if Type.occurs_in key value then fail `Occurs_check else return (key, value)
   ;;
 
   let singleton key value =
@@ -133,17 +133,17 @@ end = struct
     return @@ Base.Map.update empty key ~f:(fun _ -> value)
   ;;
 
-  let find_exn k subst = Base.Map.find_exn subst k
-  let find k subst = Base.Map.find subst k
-  let remove subst k = Base.Map.remove subst k
+  let find_exn key subst = Base.Map.find_exn subst key
+  let find key subst = Base.Map.find subst key
+  let remove subst key = Base.Map.remove subst key
 
   let apply s =
     let rec helper = function
-      | TVar b ->
-        (match find_exn b s with
-         | exception Base.Not_found_s _ -> tvar b
-         | x -> x)
-      | TArr (l, r) -> tarrow (helper l) (helper r)
+      | TVar n ->
+        (match find_exn n s with
+        | exception Base.Not_found_s _ -> tvar n
+        | x -> x)
+      | TArr (left, right) -> tarrow (helper left) (helper right)
       | TTuple typ_list -> ttuple @@ Base.List.map typ_list ~f:helper
       | TList typ -> tlist @@ helper typ
       | ground -> ground
@@ -163,15 +163,15 @@ end = struct
       compose subs1 subs2
     | TTuple typ_list_l, TTuple typ_list_r ->
       (match Base.List.zip typ_list_l typ_list_r with
-       | Base.List.Or_unequal_lengths.Unequal_lengths -> fail (`UnificationFailed (l, r))
-       | Base.List.Or_unequal_lengths.Ok zipped_list ->
-         Base.List.fold_right
-           zipped_list
-           ~f:(fun (x, y) subst ->
-             let* head_sub = unify x y in
-             let* subst = subst in
-             compose head_sub subst)
-           ~init:(return empty))
+      | Base.List.Or_unequal_lengths.Unequal_lengths -> fail (`UnificationFailed (l, r))
+      | Base.List.Or_unequal_lengths.Ok zipped_list ->
+        Base.List.fold_right
+          zipped_list
+          ~f:(fun (x, y) subst ->
+            let* head_sub = unify x y in
+            let* subst in
+            compose head_sub subst)
+          ~init:(return empty))
     | TList typ1, TList typ2 -> unify typ1 typ2
     | TADT (id1, typ1), TADT (id2, typ2) when id1 = id2 -> unify typ1 typ2
     | TEffect typ1, TEffect typ2 -> unify typ1 typ2
@@ -195,7 +195,7 @@ end = struct
 
   and compose_all ss =
     Base.List.fold_left ss ~init:(return empty) ~f:(fun acc subst ->
-      let* acc = acc in
+      let* acc in
       compose acc subst)
   ;;
 end
@@ -204,7 +204,7 @@ module VarSet = struct
   let fold_right f ini set =
     Base.Set.fold_right set ~init:ini ~f:(fun x acc ->
       let open R.Syntax in
-      let* acc = acc in
+      let* acc in
       f acc x)
   ;;
 end
@@ -260,9 +260,9 @@ let instantiate : scheme -> typ R.t =
 ;;
 
 let generalize : TypeEnv.t -> Type.t -> Scheme.t =
- fun env ty ->
-  let free = Base.Set.diff (Type.free_vars ty) (TypeEnv.free_vars env) in
-  free, ty
+ fun env typ ->
+  let free = Base.Set.diff (Type.free_vars typ) (TypeEnv.free_vars env) in
+  free, typ
 ;;
 
 let lookup_env e map =
@@ -284,64 +284,72 @@ let infer =
    fun env -> function
     | ELiteral literal ->
       (match literal with
-       | LInt _ -> return (Subst.empty, int_typ)
-       | LString _ -> return (Subst.empty, string_typ)
-       | LChar _ -> return (Subst.empty, char_typ)
-       | LBool _ -> return (Subst.empty, bool_typ)
-       | LUnit -> return (Subst.empty, unit_typ))
+      | LInt _ -> return (Subst.empty, int_typ)
+      | LString _ -> return (Subst.empty, string_typ)
+      | LChar _ -> return (Subst.empty, char_typ)
+      | LBool _ -> return (Subst.empty, bool_typ)
+      | LUnit -> return (Subst.empty, unit_typ))
     | EIdentifier identifier ->
       (match identifier with
-       | "_" ->
-         let* fresh_var = fresh_var in
-         return (Subst.empty, fresh_var)
-       | _ -> lookup_env identifier env)
+      | "_" ->
+        let* fresh_var in
+        return (Subst.empty, fresh_var)
+      | _ -> lookup_env identifier env)
     | EFun (arguments, body) ->
       (match arguments with
-       | [] -> helper env body
-       | hd :: tl ->
-         let* tv = fresh_var in
-         let env2 = TypeEnv.extend env hd (Base.Set.empty (module Base.Int), tv) in
-         let* s, ty = helper env2 (EFun (tl, body)) in
-         let trez = tarrow (Subst.apply s tv) ty in
-         return (s, trez))
+      | [] -> helper env body
+      | head :: tail ->
+        let* type_variable = fresh_var in
+        let env' =
+          TypeEnv.extend env head (Base.Set.empty (module Base.Int), type_variable)
+        in
+        let* subst, typ = helper env' (EFun (tail, body)) in
+        let result_type = tarrow (Subst.apply subst type_variable) typ in
+        return (subst, result_type))
     | EUnaryOperation (unary_operator, expression) ->
       (match unary_operator with
-       | Minus ->
-         let* s, t = helper env expression in
-         let* s2 = unify t int_typ in
-         let* final_subst = Subst.compose s2 s in
-         return (final_subst, int_typ)
-       | Not ->
-         let* s, t = helper env expression in
-         let* s2 = unify t bool_typ in
-         let* final_subst = Subst.compose s2 s in
-         return (final_subst, bool_typ))
+      | Minus ->
+        let* subst, typ = helper env expression in
+        let* subst' = unify typ int_typ in
+        let* final_subst = Subst.compose subst' subst in
+        return (final_subst, int_typ)
+      | Not ->
+        let* subst, typ = helper env expression in
+        let* subst' = unify typ bool_typ in
+        let* final_subst = Subst.compose subst' subst in
+        return (final_subst, bool_typ))
     | EBinaryOperation (binary_operator, left_operand, right_operand) ->
-      let* s_left, typ_left = helper env left_operand in
-      let* s_right, typ_right = helper env right_operand in
+      let* subst_left, typ_left = helper env left_operand in
+      let* subst_right, typ_right = helper env right_operand in
       (match binary_operator with
-       | Add | Sub | Mul | Div ->
-         let* s2 = unify typ_left int_typ in
-         let* s3 = unify typ_right int_typ in
-         let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
-         return (final_subst, int_typ)
-       | Eq | NEq | GT | GTE | LT | LTE ->
-         let* s2 = unify typ_left typ_right in
-         let* final_subst = Subst.compose_all [ s2; s_left; s_right ] in
-         return (final_subst, bool_typ)
-       | AND | OR ->
-         let* s2 = unify typ_left bool_typ in
-         let* s3 = unify typ_right bool_typ in
-         let* final_subst = Subst.compose_all [ s3; s2; s_left; s_right ] in
-         return (final_subst, bool_typ))
+      | Add | Sub | Mul | Div ->
+        let* subst' = unify typ_left int_typ in
+        let* subst'' = unify typ_right int_typ in
+        let* final_subst =
+          Subst.compose_all [ subst'; subst''; subst_left; subst_right ]
+        in
+        return (final_subst, int_typ)
+      | Eq | NEq | GT | GTE | LT | LTE ->
+        let* subst' = unify typ_left typ_right in
+        let* final_subst = Subst.compose_all [ subst'; subst_left; subst_right ] in
+        return (final_subst, bool_typ)
+      | AND | OR ->
+        let* subst' = unify typ_left bool_typ in
+        let* subst'' = unify typ_right bool_typ in
+        let* final_subst =
+          Subst.compose_all [ subst'; subst''; subst_left; subst_right ]
+        in
+        return (final_subst, bool_typ))
     | EApplication (left_operand, right_operand) ->
       let* subst_left, typ_left = helper env left_operand in
       let* subst_right, typ_right = helper (TypeEnv.apply subst_left env) right_operand in
-      let* tv = fresh_var in
-      let* subst' = unify (tarrow typ_right tv) (Subst.apply subst_right typ_left) in
-      let trez = Subst.apply subst' tv in
+      let* type_variable = fresh_var in
+      let* subst' =
+        unify (tarrow typ_right type_variable) (Subst.apply subst_right typ_left)
+      in
+      let result_type = Subst.apply subst' type_variable in
       let* final_subst = Subst.compose_all [ subst_left; subst_right; subst' ] in
-      return (final_subst, trez)
+      return (final_subst, result_type)
     | EIf (condition, true_branch, false_branch) ->
       let* subst_condition, typ_condition = helper env condition in
       let* subst_true_branch, typ_true_branch = helper env true_branch in
@@ -355,31 +363,31 @@ let infer =
       return (final_subst, Subst.apply final_subst typ_true_branch)
     | EList list ->
       (match list with
-       | [] ->
-         let* fresh_var = fresh_var in
-         return (Subst.empty, TList fresh_var)
-       | head :: tail ->
-         let* head_subst, head_typ = helper env head in
-         let rec substlist subst = function
-           | [] -> return subst
-           | elem :: tail ->
-             let* elem_subst, elem_typ = helper env elem in
-             let* subst' = unify elem_typ head_typ in
-             let* subst'' = Subst.compose_all [ subst; elem_subst; subst' ] in
-             substlist subst'' tail
-         in
-         let* final_subst = substlist head_subst tail in
-         return (final_subst, tlist @@ Subst.apply final_subst head_typ))
+      | [] ->
+        let* fresh_var in
+        return (Subst.empty, TList fresh_var)
+      | head :: tail ->
+        let* head_subst, head_typ = helper env head in
+        let rec substlist subst = function
+          | [] -> return subst
+          | elem :: tail ->
+            let* elem_subst, elem_typ = helper env elem in
+            let* subst' = unify elem_typ head_typ in
+            let* subst'' = Subst.compose_all [ subst; elem_subst; subst' ] in
+            substlist subst'' tail
+        in
+        let* final_subst = substlist head_subst tail in
+        return (final_subst, tlist @@ Subst.apply final_subst head_typ))
     | ETuple list ->
-      let rec substtuple subst = function
+      let rec subst_tuple subst = function
         | [] -> return (subst, [])
         | head :: tail ->
           let* head_subst, head_typ = helper env head in
           let* subst' = Subst.compose subst head_subst in
-          let* final_subst, tail_typ = substtuple subst' tail in
+          let* final_subst, tail_typ = subst_tuple subst' tail in
           return (final_subst, head_typ :: tail_typ)
       in
-      let* final_subst, typ_list = substtuple Subst.empty list in
+      let* final_subst, typ_list = subst_tuple Subst.empty list in
       return (final_subst, ttuple @@ List.map (Subst.apply final_subst) typ_list)
     | EConstructList (operand, list) ->
       let* operand_subst, operand_typ = helper env operand in
@@ -397,16 +405,16 @@ let infer =
       let* content_subst, content_typ =
         match constructor_name, content with
         | "None", None ->
-          let* fresh_var = fresh_var in
+          let* fresh_var in
           return (Subst.empty, fresh_var)
         | "Some", Some data -> helper env data
         | "Ok", Some data ->
           let* subst', typ = helper env data in
-          let* fresh_var = fresh_var in
+          let* fresh_var in
           return (subst', ttuple [ typ; fresh_var ])
         | "Error", Some data ->
           let* subst', typ = helper env data in
-          let* fresh_var = fresh_var in
+          let* fresh_var in
           return (subst', ttuple [ fresh_var; typ ])
         | _ -> fail `NotReachable
       in
@@ -420,15 +428,15 @@ let infer =
             | EDeclaration (id, _, _) | ERecursiveDeclaration (id, _, _) -> return id
             | _ -> fail `NotReachable
           in
-          let* fresh_var = fresh_var in
+          let* fresh_var in
           let env' =
             TypeEnv.extend env identifier (Base.Set.empty (module Base.Int), fresh_var)
           in
           let* elem_subst, elem_typ = helper env' elem in
-          let env2 = TypeEnv.apply elem_subst env' in
-          let generalized_type = generalize env2 elem_typ in
+          let env'' = TypeEnv.apply elem_subst env' in
+          let generalized_type = generalize env'' elem_typ in
           let* subst'' = Subst.compose subst elem_subst in
-          process_list subst'' (TypeEnv.extend env2 identifier generalized_type) tail
+          process_list subst'' (TypeEnv.extend env'' identifier generalized_type) tail
       in
       let* subst', env' = process_list Subst.empty env bindings_list in
       let* subst_expr, typ_expr = helper env' expression in
@@ -440,8 +448,8 @@ let infer =
       let bootstrap_env env case =
         let identifiers = Util.find_identifiers case in
         Base.List.fold_right identifiers ~init:(return env) ~f:(fun id acc ->
-          let* fresh_var = fresh_var in
-          let* acc = acc in
+          let* fresh_var in
+          let* acc in
           return @@ TypeEnv.extend acc id (Base.Set.empty (module Base.Int), fresh_var))
       in
       let* env' = bootstrap_env env (fst head) in
@@ -468,12 +476,8 @@ let infer =
             | TEffect _, _ -> fail `NoHandlerProvided
             | _, computation_type -> return computation_type
           in
-          (* print_typ (Subst.find_exn 3 subst);
-          print_typ (Subst.find_exn 1 subst); *)
-          (* Format.printf " ";
-          print_typ head_expression_type; *)
           let* subst''' = unify computation_type head_expression_type in
-          let* subst = subst in
+          let* subst in
           Subst.compose_all [ subst'''; subst''; subst; case_subst; computation_subst ])
       in
       let* final_subst = Subst.compose subst' matched_subst in
@@ -484,7 +488,7 @@ let infer =
     | EEffectDeclaration (_, typ) -> return (Subst.empty, typ)
     | EEffectNoArg name -> lookup_effect name env
     | EEffectArg (name, expression) ->
-      let* fresh_var = fresh_var in
+      let* fresh_var in
       let* subst, typ = helper env expression in
       let* _, effect_typ = lookup_effect name env in
       let* subst' = unify (tarrow typ fresh_var) effect_typ in
@@ -493,7 +497,7 @@ let infer =
       return (final_subst, trez)
     | EPerform expression ->
       let* subst, typ = helper env expression in
-      let* fresh_var = fresh_var in
+      let* fresh_var in
       let* subst' = unify typ (teffect fresh_var) in
       let* final_subst = Subst.compose subst subst' in
       return (final_subst, fresh_var)
@@ -501,7 +505,7 @@ let infer =
       let* subst, typ = helper env expression in
       return (subst, tcontinue typ)
     | EEffectPattern expression ->
-      let* fresh_var = fresh_var in
+      let* fresh_var in
       let* subst, typ = helper env expression in
       let* subst' = unify typ (TEffect fresh_var) in
       let* final_subst = Subst.compose subst subst' in
@@ -514,64 +518,37 @@ let check_types (program : expression list) =
   let rec helper environment = function
     | head :: tail ->
       (match head with
-       | EDeclaration (name, _, _) ->
-         let* _, function_type = infer environment head in
-         let generalized_type = generalize environment function_type in
-         helper (TypeEnv.extend environment name generalized_type) tail
-       | ERecursiveDeclaration (name, _, _) ->
-         let* tv = fresh_var in
-         let env =
-           TypeEnv.extend environment name (Base.Set.empty (module Base.Int), tv)
-         in
-         let* s1, t1 = infer env head in
-         let* s2 = unify (Subst.apply s1 tv) t1 in
-         let* s = Subst.compose s2 s1 in
-         let env = TypeEnv.apply s env in
-         let generalized_type = generalize env (Subst.apply s tv) in
-         helper (TypeEnv.extend environment name generalized_type) tail
-       | EEffectDeclaration (name, typ) ->
-         helper
-           (TypeEnv.extend environment name (Base.Set.empty (module Base.Int), typ))
-           tail
-       | _ -> fail `NotReachable)
+      | EDeclaration (name, _, _) ->
+        let* _, function_type = infer environment head in
+        let generalized_type = generalize environment function_type in
+        helper (TypeEnv.extend environment name generalized_type) tail
+      | ERecursiveDeclaration (name, _, _) ->
+        let* type_variable = fresh_var in
+        let env =
+          TypeEnv.extend environment name (Base.Set.empty (module Base.Int), type_variable)
+        in
+        let* subst, typ = infer env head in
+        let* subst' = unify (Subst.apply subst type_variable) typ in
+        let* final_subst = Subst.compose subst' subst in
+        let env = TypeEnv.apply final_subst env in
+        let generalized_type = generalize env (Subst.apply final_subst type_variable) in
+        helper (TypeEnv.extend environment name generalized_type) tail
+      | EEffectDeclaration (name, typ) ->
+        helper
+          (TypeEnv.extend environment name (Base.Set.empty (module Base.Int), typ))
+          tail
+      | _ -> fail `NotReachable)
     | _ -> return ()
   in
   helper TypeEnv.empty program
 ;;
 
-let w e = Result.map snd (run (infer TypeEnv.empty e))
+let run_inference expression = Result.map snd (run (infer TypeEnv.empty expression))
 
-let print_result e =
-  match w e with
+let print_result expression =
+  match run_inference expression with
   | Ok typ -> print_typ typ
   | Error x -> print_type_error x
-;;
-
-let test_program =
-  [ ERecursiveDeclaration
-      ( "factorial"
-      , [ "n"; "acc" ]
-      , EIf
-          ( EBinaryOperation (LTE, EIdentifier "n", ELiteral (LInt 1))
-          , EIdentifier "acc"
-          , EApplication
-              ( EApplication
-                  ( EIdentifier "factorial"
-                  , EBinaryOperation (Sub, EIdentifier "n", ELiteral (LInt 1)) )
-              , EBinaryOperation (Mul, EIdentifier "acc", EIdentifier "n") ) ) )
-  ; EDeclaration
-      ( "main"
-      , []
-      , EApplication
-          (EApplication (EIdentifier "factorial", ELiteral (LInt 5)), ELiteral (LInt 1))
-      )
-  ]
-;;
-
-let%test _ =
-  match run @@ check_types test_program with
-  | Ok _ -> true
-  | _ -> false
 ;;
 
 let%expect_test _ =
