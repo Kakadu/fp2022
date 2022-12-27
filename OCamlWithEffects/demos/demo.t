@@ -391,11 +391,11 @@
   > 
   > let helper x = match perform (E x) with
   >    | effect (E s) -> continue "hello"
-  >    | l -> l
+  >    | v -> v
   > 
   > let main = match perform (E 5) with
   >    | effect (E s) -> continue (s*s)
-  >    | l -> helper l
+  >    | v -> helper v
   > EOF
   Unification failed: type of the expression is string but expected type was int
   $ ./demo.exe <<-EOF
