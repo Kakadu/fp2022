@@ -27,8 +27,8 @@ let rec pp_value fmt =
   | VADT (name, argument) ->
     fprintf fmt "%s " name;
     (match argument with
-    | Some argument -> pp_value fmt argument
-    | None -> ())
+     | Some argument -> pp_value fmt argument
+     | None -> ())
   | VEffectArg (name, _) | VEffectNoArg name | VEffectDeclaration name ->
     fprintf fmt "effect %s" name
   | VFun _ -> fprintf fmt "<fun>"

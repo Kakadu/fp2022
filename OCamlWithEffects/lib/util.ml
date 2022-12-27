@@ -18,8 +18,8 @@ let rec find_identifiers = function
   | EConstructList (operand, list) -> find_identifiers operand @ find_identifiers list
   | EDataConstructor (_, expression) ->
     (match expression with
-    | Some expression -> find_identifiers expression
-    | _ -> [])
+     | Some expression -> find_identifiers expression
+     | _ -> [])
   | EEffectPattern expression -> find_identifiers expression
   | EEffectArg (_, expression) -> find_identifiers expression
   | _ -> []
