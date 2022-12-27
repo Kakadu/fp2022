@@ -1,7 +1,16 @@
 (library
  (name OCamlWithEffectsLib)
  (public_name OCamlWithEffects.Lib)
- (modules Ast Parser Interpret Printer Inferencer Typing Util Pprintast)
+ (modules
+  Ast
+  Parser
+  Interpret
+  Printer
+  Inferencer
+  Typing
+  Util
+  Pprintast
+  InterpreterPP)
  (modules_without_implementation ast)
  (libraries base angstrom)
  (preprocess
