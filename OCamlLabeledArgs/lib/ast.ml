@@ -65,3 +65,13 @@ type typ =
   | TVar of id
   | Arrow of typ * typ
 (* I'll probably have to add arg_label to arrow. FIXME: when implementing typechecking *)
+
+type command =
+  | Help
+  | Quit
+  | Use of string
+
+type toplevel =
+  | Definition of definition
+  | Expression of expr
+  | Command of command

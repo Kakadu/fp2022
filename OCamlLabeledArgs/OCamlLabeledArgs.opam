@@ -19,6 +19,7 @@ depends: [
   "odoc" {with-doc}
   "ocamlformat" {build}
   "base"
+  "stdio"
 ]
 build: [
   ["dune" "subst"] {dev}

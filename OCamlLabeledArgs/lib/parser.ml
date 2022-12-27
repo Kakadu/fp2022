@@ -7,28 +7,7 @@ open Ast
 (* -------------------- Basic syntax -------------------- *)
 
 (** A subset of OCaml keywords, that are used in our mini language *)
-let keywords =
-  [ "and"
-  ; "do"
-  ; "else"
-  ; "false"
-  ; "for"
-  ; "fun"
-  ; "function"
-  ; "if"
-  ; "in"
-  ; "let"
-  ; "mod"
-  ; "nonrec"
-  ; "of"
-  ; "rec"
-  ; "then"
-  ; "to"
-  ; "true"
-  ; "val"
-  ; "while"
-  ]
-;;
+let keywords = [ "else"; "false"; "fun"; "if"; "in"; "let"; "mod"; "rec"; "then"; "true" ]
 
 let is_keyword s = List.mem s keywords
 
@@ -115,10 +94,6 @@ let lt = ignored *> string "<" *> return (fun x y -> Binop (Lt, x, y))
 let ltq = ignored *> string "<=" *> return (fun x y -> Binop (Ltq, x, y))
 let gt = ignored *> string ">" *> return (fun x y -> Binop (Gt, x, y))
 let gtq = ignored *> string ">=" *> return (fun x y -> Binop (Gtq, x, y))
-
-(* let op_presedence =
-  [ eq <|> neq <|> lt <|> ltq <|> gt <|> gtq; plus <|> minus; mult <|> divide <|> _mod ]
-;; *)
 
 (* ----------------- Function arguments ---------------- *)
 
@@ -345,8 +320,44 @@ let type_d =
 let expr_parser = type_d.expr type_d
 let definition_parser = type_d.definition type_d
 
-(* ------------------------------------------------------ *)
-(* ------------------ Top-level parser ------------------ *)
-(* ------------------------------------------------------ *)
+(* ------------------ Top-level parsing ------------------ *)
 
+(** Should be called with specific parser *)
 let parse p s = parse_string ~consume:All p s
+
+(* TODO: filename parser, for now identifier is fine *)
+
+let toplevel_command_parser () =
+  string "#help" *> return (Command Help)
+  <|> string "#quit" *> return (Command Quit)
+  <|> (string "#use" *> identifier >>= fun filename -> return (Command (Use filename)))
+;;
+
+let toplevel_expr_parser () =
+  ignored *> expr_parser >>= fun expr -> return (Expression expr)
+;;
+
+let toplevel_defininition_parser () =
+  ignored *> definition_parser >>= fun definition -> return (Definition definition)
+;;
+
+let toplevel_parser () =
+  ignored
+  *> (*many1*)
+  choice
+    [ return () >>= toplevel_command_parser
+    ; return () >>= toplevel_expr_parser
+    ; return () >>= toplevel_defininition_parser
+    ]
+;;
+
+(*<|> return []*)
+
+(** Should only be called on top-level ast type *)
+let parse_toplevel s =
+  match parse_string ~consume:All (toplevel_parser ()) s with
+  | Result.Ok x -> Ok x
+  | Error e ->
+    Format.printf "%s" e;
+    Error e
+;;

@@ -77,3 +77,16 @@ type typ =
   | TUnit (** unit type *)
   | TVar of id (** representation of type variable 'id, needed for polymorphism *)
   | Arrow of typ * typ (** representation of function types *)
+
+(* ---------- Top-level tree ----------*)
+
+(** Top-level input *)
+type command =
+  | Help
+  | Quit
+  | Use of string
+
+type toplevel =
+  | Definition of definition
+  | Expression of expr
+  | Command of command
