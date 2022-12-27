@@ -40,36 +40,42 @@ let tcontinue typ = TContinue typ
 
 let rec pp_type fmt typ =
   let open Format in
+  let arrow_format typ =
+    match typ with
+    | TArr _ -> format_of_string "(%a)"
+    | _ -> format_of_string "%a"
+  in
   match typ with
   | TGround x ->
     (match x with
-    | Int -> fprintf fmt "int"
-    | String -> fprintf fmt "string"
-    | Char -> fprintf fmt "char"
-    | Bool -> fprintf fmt "bool"
-    | Unit -> fprintf fmt "unit")
-  | TTuple ts ->
+     | Int -> fprintf fmt "int"
+     | String -> fprintf fmt "string"
+     | Char -> fprintf fmt "char"
+     | Bool -> fprintf fmt "bool"
+     | Unit -> fprintf fmt "unit")
+  | TTuple value_list ->
     fprintf
       fmt
       "%a"
       (pp_print_list
          ~pp_sep:(fun _ _ -> fprintf fmt " * ")
-         (fun fmt ty -> pp_type fmt ty))
-      ts
-  | TList l -> fprintf fmt "%a list" pp_type l
-  | TArr (t1, t2) ->
-    let fmt : _ format =
-      match t1 with
-      | TArr _ -> "(%a) -> %a"
-      | _ -> "%a -> %a"
-    in
-    printf fmt pp_type t1 pp_type t2
+         (fun fmt typ -> pp_type fmt typ))
+      value_list
+  | TList typ -> fprintf fmt (arrow_format typ ^^ " list") pp_type typ
+  | TArr (typ_left, typ_right) ->
+    fprintf
+      fmt
+      (arrow_format typ_left ^^ " -> " ^^ arrow_format typ_right)
+      pp_type
+      typ_left
+      pp_type
+      typ_right
   | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
   | TADT (name, typ) ->
     pp_type fmt typ;
     fprintf fmt "%s" name
-  | TEffect typ -> fprintf fmt "%a effect" pp_type typ
-  | TContinue typ -> fprintf fmt "%a continuation" pp_type typ
+  | TEffect typ -> fprintf fmt (arrow_format typ ^^ " effect") pp_type typ
+  | TContinue typ -> fprintf fmt (arrow_format typ ^^ " continuation") pp_type typ
 ;;
 
 let print_typ typ =
