@@ -411,3 +411,12 @@
   > let main = ["0", "1", f "2"]
   > EOF
   Unification failed: type of the expression is string but expected type was int
+  $ ./demo.exe <<-EOF
+  > let rec remove_last list = match list with
+  > | [] -> []
+  > | [head] -> []
+  > | head :: tail -> head :: remove_last tail
+  > 
+  > let main = remove_last [1;2;3;4;5]
+  > EOF
+  [1; 2; 3; 4]
