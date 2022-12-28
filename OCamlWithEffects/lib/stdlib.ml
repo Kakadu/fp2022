@@ -64,6 +64,11 @@ let rec for_any predicate list = match list with
   | [] -> false
   | head :: tail -> if predicate head then true else for_any predicate tail
 
+let rec remove_last list = match list with
+  | [] -> []
+  | [head] -> []
+  | head :: tail -> head :: remove_last tail
+
 |}
 ;;
 
@@ -93,4 +98,16 @@ let snd pair = match pair with (_, y) -> y
 |}
 ;;
 
-let stdlib = [ list; integer; pair ]
+let queue =
+  {|
+
+let empty_queue = []
+
+let enqueue queue k = k :: queue
+
+let dequeue queue = remove_last queue
+
+|}
+;;
+
+let stdlib = [ list; integer; pair; queue ]
