@@ -9,11 +9,11 @@ type id = string [@@deriving eq, show { with_path = false }]
 type data_constructor_name = string [@@deriving eq, show { with_path = false }]
 
 type literal =
-  | LInt of int
-  | LString of string
-  | LChar of char
-  | LBool of bool
-  | LUnit
+  | LInt of int (** 42 *)
+  | LString of string (** "42" *)
+  | LChar of char (** '\n' *)
+  | LBool of bool (** true *)
+  | LUnit (** () *)
 [@@deriving eq, show { with_path = false }]
 
 type binary_operator =
