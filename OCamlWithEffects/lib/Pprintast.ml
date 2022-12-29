@@ -79,7 +79,7 @@ let rec pp_expression fmt =
   | EApplication (left_operand, right_operand) ->
     fprintf
       fmt
-      (get_format left_operand ^^ get_format right_operand)
+      (get_format left_operand ^^ " " ^^ get_format right_operand)
       pp_expression
       left_operand
       pp_expression
@@ -133,7 +133,7 @@ let rec pp_expression fmt =
          | _ -> fprintf fmt "Unreacheable");
        fprintf fmt "in %a" pp_expression expression)
   | EMatchWith (matched_expression, case_list) ->
-    fprintf fmt "match %a with " pp_expression matched_expression;
+    fprintf fmt "match %a with" pp_expression matched_expression;
     List.iter case_list ~f:(fun (case, action) ->
-      fprintf fmt "| %a -> %a" pp_expression case pp_expression action)
+      fprintf fmt " | %a -> %a" pp_expression case pp_expression action)
 ;;

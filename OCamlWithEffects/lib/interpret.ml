@@ -4,24 +4,11 @@ open List
 module type MONAD_FAIL = sig
   include Base.Monad.S2
 
+  val run : ('a, 'e) t -> ok:('a -> ('b, 'e) t) -> err:('e -> ('b, 'e) t) -> ('b, 'e) t
   val fail : 'e -> ('a, 'e) t
   val ( let* ) : ('a, 'e) t -> ('a -> ('b, 'e) t) -> ('b, 'e) t
   val ( *> ) : ('a, 'e) t -> ('a, 'e) t -> ('a, 'e) t
 end
-
-type error =
-  | UnboundValue of string (** Unbound value *)
-  | UnboundEffect of string (** Inbound effect *)
-  | Unreachable
-      (** Unreachable code. If this error is thrown then something went seriously wrong *)
-  | UnsupportedOperation (** Used unsupported operation *)
-  | Division_by_zero (** n / 0*)
-  | NotAFunction (** Unreachable when type inference is used *)
-  | TypeMismatch (** Unreachable when type inference is used *)
-  | MisusedWildcard (** Wildcard is in the right-hand expression *)
-  | NotAnEffect (** Perform was applied not to an effect *)
-  | PatternMatchingFailed (** The case is not matched *)
-  | NonExhaustivePatternMatching (** Pattern-matching is not exhaustive *)
 
 type rec_flag =
   | Recursive
@@ -48,6 +35,22 @@ and value =
   | VEffectArg of id * expression (** E 0 *)
   | VEffectDeclaration of id (** effect SmallDiscount : int -> int effect *)
   | VEffectPattern of expression (** | effect EmptyListEffect -> ... *)
+  | VEffectHandler of id * value
+
+type error =
+  | UnboundValue of string (** Unbound value *)
+  | UnboundEffect of string (** Inbound effect *)
+  | Unreachable
+      (** Unreachable code. If this error is thrown then something went seriously wrong *)
+  | UnsupportedOperation (** Used unsupported operation *)
+  | Division_by_zero (** n / 0*)
+  | NotAFunction (** Unreachable when type inference is used *)
+  | TypeMismatch (** Unreachable when type inference is used *)
+  | MisusedWildcard (** Wildcard is in the right-hand expression *)
+  | NotAnEffect (** Perform was applied not to an effect *)
+  | PatternMatchingFailed (** The case is not matched *)
+  | NonExhaustivePatternMatching (** Pattern-matching is not exhaustive *)
+  | ContinuationFailure of value
 
 module Environment (M : MONAD_FAIL) = struct
   open M
@@ -358,6 +361,11 @@ end = struct
             | Some value, Some expression ->
               compare_patterns value expression action environment
             | _ -> fail PatternMatchingFailed, environment, false)
+        | VEffectHandler (name, _), EEffectPattern pattern ->
+          (match pattern with
+           | (EEffectArg (id, _) | EEffectNoArg id) when id = name ->
+             eval action environment, environment, true
+           | _ -> fail PatternMatchingFailed, environment, false)
         | _ -> fail PatternMatchingFailed, environment, false
       in
       let* eval_matched_expression = eval matched_expression environment in
@@ -370,10 +378,7 @@ end = struct
           if success then result else helper tail
         | [] -> fail NonExhaustivePatternMatching
       in
-      helper
-        (Base.List.filter case_list ~f:(function
-          | EEffectPattern _, _ -> false
-          | _ -> true))
+      helper case_list
     | EEffectDeclaration (name, _) -> return (VEffectDeclaration name)
     | EEffectNoArg name -> return (VEffectNoArg name)
     | EEffectArg (name, expression) -> return @@ VEffectArg (name, expression)
@@ -382,12 +387,28 @@ end = struct
       (match eval_expression with
        | VEffectNoArg effect_name ->
          let* handler = find environment.effect_handlers effect_name in
-         eval handler environment
+         run
+           (eval handler environment)
+           ~ok:(fun value -> return (VEffectHandler (effect_name, value)))
+           ~err:
+             (function
+              | ContinuationFailure value -> return value
+              | error -> fail error)
        | VEffectArg (effect_name, argument) ->
          let* handler = find environment.effect_handlers effect_name in
-         eval (EApplication (handler, argument)) environment
+         run
+           (eval (EApplication (handler, argument)) environment)
+           ~ok:(fun value -> return (VEffectHandler (effect_name, value)))
+           ~err:
+             (function
+              | ContinuationFailure value -> return value
+              | error -> fail error)
        | _ -> fail NotAnEffect)
-    | EContinue expression -> eval expression environment
+    | EContinue expression ->
+      run
+        (eval expression environment)
+        ~ok:(fun value -> fail (ContinuationFailure value))
+        ~err:fail
     | EEffectPattern expression ->
       let* eval_expression = eval expression environment in
       return eval_expression
@@ -413,6 +434,12 @@ end
 
 module InterpretResult = Interpret (struct
   include Base.Result
+
+  let run x ~ok ~err =
+    match x with
+    | Ok v -> ok v
+    | Error e -> err e
+  ;;
 
   let ( let* ) monad f = bind monad ~f
   let ( *> ) l r = l >>= fun _ -> r

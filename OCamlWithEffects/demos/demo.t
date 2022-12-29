@@ -359,7 +359,35 @@
   > 
   > let main = safe_list_hd [12; 65; 94]
   > EOF
-  Effect appears in pattern-matching but handler was not provided.
+  (12, true)
+  $ ./demo.exe <<-EOF
+  > effect EmptyListException : int effect
+  > 
+  > let list_hd list = match list with
+  >    | [] -> perform EmptyListException
+  >    | hd :: _ -> hd
+  > 
+  > let safe_list_hd l = match list_hd l with
+  >   | effect EmptyListException -> 0, false
+  >   | res -> res, true
+  > 
+  > let main = safe_list_hd []
+  > EOF
+  (0, false)
+  $ ./demo.exe <<-EOF
+  > effect EmptyListException : int effect
+  > 
+  > let list_hd list = match list with
+  >    | [] -> perform EmptyListException
+  >    | hd :: _ -> hd
+  > 
+  > let safe_list_hd l = match list_hd l with
+  >   | effect EmptyListException -> continue (0, false)
+  >   | res -> res, true
+  > 
+  > let main = safe_list_hd []
+  > EOF
+  ((0, false), true)
   $ ./demo.exe <<-EOF
   > effect SmallDiscount : int -> int effect
   > 

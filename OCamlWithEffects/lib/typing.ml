@@ -18,7 +18,6 @@ type typ =
   | TGround of ground_type (** int *)
   | TADT of adt_type * typ (** (int, string) Result *)
   | TEffect of typ (** (int -> char) effect *)
-  | TContinue of typ (** Enforces handler provision *)
 
 (* Ground types *)
 let int_typ = TGround Int
@@ -35,7 +34,6 @@ let tlist typ = TList typ
 let tvar n = TVar n
 let tadt name typ = TADT (name, typ)
 let teffect typ = TEffect typ
-let tcontinue typ = TContinue typ
 (* ---------------------------- *)
 
 let rec pp_type fmt typ =
@@ -69,7 +67,6 @@ let rec pp_type fmt typ =
     pp_type fmt typ;
     fprintf fmt "%s" name
   | TEffect typ -> fprintf fmt (arrow_format typ ^^ " effect") pp_type typ
-  | TContinue typ -> fprintf fmt (arrow_format typ ^^ " continuation") pp_type typ
 ;;
 
 let print_typ typ =
