@@ -330,8 +330,7 @@ let parse_declaration d =
   *> string "let"
   *> take_while1 space_predicate
   *> option "" (string "rec" <* take_while1 space_predicate)
-  >>= fun parsed_rec ->
-  match parsed_rec with
+  >>= function
   | "rec" -> declaration_helper erecursivedeclaration d
   | _ -> declaration_helper edeclaration d
 ;;

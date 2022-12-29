@@ -42,8 +42,7 @@ let teffect typ = TEffect typ
 
 let rec pp_type fmt typ =
   let open Format in
-  let arrow_format typ =
-    match typ with
+  let arrow_format = function
     | TArr _ -> format_of_string "(%a)"
     | _ -> format_of_string "%a"
   in

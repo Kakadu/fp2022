@@ -36,8 +36,7 @@ let pp_unary_operator fmt = function
 ;;
 
 let rec pp_expression fmt =
-  let get_format expression =
-    match expression with
+  let get_format = function
     | ELiteral _ | EIdentifier _ -> format_of_string "%a"
     | _ -> format_of_string "(%a)"
   in
@@ -129,8 +128,7 @@ let rec pp_expression fmt =
      | [] -> fprintf fmt "Parsing error."
      | head :: tail ->
        fprintf fmt "%a" pp_expression head;
-       List.iter tail ~f:(fun declaration ->
-         match declaration with
+       List.iter tail ~f:(function
          | EDeclaration (name, id_list, expression)
          | ERecursiveDeclaration (name, id_list, expression) ->
            fprintf fmt "and %s %a = %a" name pp_id_list id_list pp_expression expression

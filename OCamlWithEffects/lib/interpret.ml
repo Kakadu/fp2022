@@ -372,8 +372,7 @@ end = struct
         | _ -> fail PatternMatchingFailed, environment, false
       in
       let* eval_matched_expression = eval matched_expression environment in
-      let rec helper lst =
-        match lst with
+      let rec helper = function
         | case :: tail ->
           let result, _, success =
             compare_patterns eval_matched_expression (fst case) (snd case) environment
