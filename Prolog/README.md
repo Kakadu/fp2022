@@ -1,97 +1,64 @@
-### An implementaion of Lambda mini-language
+### An implementaion of Prolog mini-language
 
 This is a homework for functional programming course.
 
 License: LGPL for implementation code + WTFPL for test examles in miniLanguage
 
-Author: Vasy Pupkin, vasya@pupkin.com
+Author: Ilya Shchuckin, theilia509@gmail.com
 
-Features done (append only):
+#### Description:
 
-- Parser  (for example)
-- interpreter of non-recursive functions (for example)
-- ...
+Even though this is a mini-language interpreter it still tries it's best to meet **ISO 13211-1:1995** which is a standart for prolog language. 
 
-Features in progress (and TODOs):
+REPL was heavily inspired by **swi-prolog**. The idea was to make it possible to automatically compare the outputs of the two. Unfortunately, it doesn't work well on complex examples as **swi-prolog** does a lot of sophisicated output transformations.
 
-- Interpreter of recursive functions is not yet ready  (for example)
-- TODO: make pretty-printing less memory consuming (for example)
-- ...
+#### Features done:
+- Basic parser  
+- Herbrand algorithm
+- Backtracking
+- Support of some builtin predicates:
+  - ```true/0```
+  - ```(==)/2```
+  - ```(,)/2```
+  - ```(!)/0```
+  - ```read/1```
+  - ```writeln/1``` (Non ISO)
+  - ```clause/2```
+- Simple REPL
+
+##### Repl
+  ```
+  $ ../REPL.exe ../demos/examples/Test7.pl <<"EOF"
+  ```
+  ```Prolog
+  > eliza([i, love, you], Response).
+  Response = [why, do, you, love, me, "?"].
+  ```
+  REPL takes a path to prolog text as an argument and waits for user to make a query.
 
 
-##### Замечания по стилю кодирования
+  ```
+  $ ../REPL.exe ../demos/examples/Test6.pl <<"EOF"
+  ```
+  ```Prolog
+  > clause(insect(I), T).
+  
+  I = ant,
+  T = true ;
+  > N
+  I = bee,
+  T = true.
+  ```
 
-- Если merge request не проходит CI -- проверяться не будет
-- Замечания должны быть откомментированы, иначе проверяться не будет.
-  - Если исправлены, должны быть поменчены как "исправлены"
-  - Если непонятны/некорректны, то это должно быть откомментировано соответствующим образом.
+  Interpreter will not try to search for every satisfying substituion at once. Instead it will provide (if possible) only one and wait for user to type ```N``` to start backtracking.
 
-  Такие суровые ограничения вводятся, чтобы замечания не игнорировались.
+#### Tests and examples:
 
-- Иимена типов и функций -- snake_case
-- Имена типов модулей и модулей -- CamelCase
-- Ворнинги должны быть пофикшены
-- Не стесняйтесь писать `if ... then ... else` вместо `match ... with true -> .. | false -> ...`
-- Не стесняйтесь писать гварды в мэтчинге, например
-```ocaml
-match ... with
-| x when f x -> ...
-| x          -> ...
-| ...
-```
-вместо
-```ocaml
-match ... with
-| x -> if f x then ... else ...
-| ...
-```
-- Вместо `fun x y -> match y with` лучше писать короче: `fun x -> function`
-- Используйте quoted string literals в тестах, чтобы не экранировать руками
-```
-─( 11:21:01 )─< command 1 >────────────────────────────
-utop # {|
-  int main () {
-    return 0;
-  }
-  |};;
-- : string = "\n  int main () {\n    return 0;\n  }\n  "
-```
-- Не надо писать
-```ocaml
-match ... with
-| x ->
-    Hashtbl.replace tbl key value |> fun () -> ...
-```
-Лучше
-```ocaml
-match ... with
-| x ->
-    let () = Hashtbl.replace tbl key value in
-    ...
-```
-или
-```ocaml
-match ... with
-| x -> (
-    Hashtbl.replace tbl key value;
-    ...
-  )
-```
-или даже
-```ocaml
-match ... with
-| x -> begin
-    Hashtbl.replace tbl key value;
-    ...
-  end
-```
-- Не надо писать
-```ocaml
-let x = if long_expression then true else false in ...
-```
-лучше
-```ocaml
-let x = long_expression in ...
-```
+- Parser tests can be found in ```lib/tests.ml```
+- Interpeter tests are located in ```demos/```
+  - ```repl.t``` contains test descriptions (prolog text path, input)
+  - ```examples/``` contains prolog texts that can be converted to databases and used for testing
 
-- 1
+
+#### Documentation: 
+This project has a quiet detailed documentation which can be generated and accessed by odoc.

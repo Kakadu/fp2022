@@ -1,8 +1,7 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Ilya Shchuckin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-(* TODO: implement parser here *)
 open Angstrom
 open Ast
 
@@ -36,7 +35,7 @@ let infix_operator (prior : int) =
   | 1200 -> ops (token ":-")
   | 1000 -> ops comma
   | 700 -> ops (token "==" <|> token "=")
-  | p -> failwith ("No such operator with priority: " ^ string_of_int p)
+  | p -> fail ("No such operator with priority: " ^ string_of_int p)
 ;;
 
 let prefix_operator = lift (fun op -> Operator op) (token "\\+")
@@ -97,7 +96,7 @@ let string =
     | _ -> false
   in
   lift
-    (fun str -> name_c ("\"" ^ str ^ "\""))
+    (fun str -> name_c (String.concat "" [ "\""; str; "\"" ]))
     (char '\"' *> take_while is_non_quote <* char '\"')
 ;;
 

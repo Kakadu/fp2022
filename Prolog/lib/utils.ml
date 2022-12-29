@@ -1,9 +1,10 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Ilya Shchuckin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
 
+(** [get_pi term] returns predicate indicator (7.1.6.6 in ISO) of [term]. *)
 let get_pi =
   let atom_indicator = function
     | Name str -> str
@@ -19,11 +20,12 @@ let get_pi =
   | Compound { atom; terms } -> atom_indicator atom, List.length terms
 ;;
 
-let str_of_pi pi =
-  match pi with
-  | str, n -> str ^ "/" ^ string_of_int n
+(** [str_of_pi pi] converts predicate indicator [pi] to string. *)
+let str_of_pi = function
+  | str, n -> String.concat "/" [ str; string_of_int n ]
 ;;
 
+(** [get_vars_from_term term] returns a list of variables that occur in [term]. *)
 let rec get_vars_from_term = function
   | Atomic _ -> []
   | Var str -> [ Var str ]
@@ -31,6 +33,8 @@ let rec get_vars_from_term = function
     List.fold_left (fun acc term -> acc @ get_vars_from_term term) [] terms
 ;;
 
+(** [apply_substitution term substitution] replaces variables in [term] 
+    with matching substitions from [substitution]. *)
 let rec apply_substitution term substitution =
   match term with
   | Var _ ->
@@ -44,4 +48,5 @@ let rec apply_substitution term substitution =
     Compound { atom; terms = new_terms }
 ;;
 
+(** Check whether a list is empty.  *)
 let is_empty list = List.length list == 0

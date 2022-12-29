@@ -1,6 +1,8 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Ilya Shchuckin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
+(** Contains some tests for the parser*)
 
 open Parser
 open Angstrom
@@ -19,6 +21,11 @@ let%expect_test _ =
 
 let%expect_test _ =
   expt_test pp_atom name "A";
+  [%expect {| Parsing error |}]
+;;
+
+let%expect_test _ =
+  expt_test pp_term term "cat";
   [%expect {| Parsing error |}]
 ;;
 
@@ -64,6 +71,57 @@ let%expect_test _ =
     {|
 Compound {atom = (Name "prove");
   terms = [Compound {atom = (Operator ","); terms = [(Var "B"); (Var "Bs")]}]}|}]
+;;
+
+let%expect_test _ =
+  expt_test pp_term term "A == B.";
+  [%expect {| Compound {atom = (Operator "=="); terms = [(Var "A"); (Var "B")]} |}]
+;;
+
+let%expect_test _ =
+  expt_test pp_term term "A :- B, C.";
+  [%expect
+    {|
+      Compound {atom = (Operator ":-");
+        terms =
+        [(Var "A");
+          Compound {atom = (Operator ","); terms = [(Var "B"); (Var "C")]}]} |}]
+;;
+
+let%expect_test _ =
+  expt_test pp_term term "A :- [].";
+  [%expect
+    {|
+      Compound {atom = (Operator ":-");
+        terms = [(Var "A"); (Atomic (Atom (Name "[]")))]} |}]
+;;
+
+let%expect_test _ =
+  expt_test pp_term term "A :- A == B, !.";
+  [%expect
+    {|
+      Compound {atom = (Operator ":-");
+        terms =
+        [(Var "A");
+          Compound {atom = (Operator ",");
+            terms =
+            [Compound {atom = (Operator "=="); terms = [(Var "A"); (Var "B")]};
+              (Atomic (Atom (Name "!")))]}
+          ]} |}]
+;;
+
+let%expect_test _ =
+  expt_test pp_term term "A :- A == B,\n  \n  \n  !.";
+  [%expect
+    {|
+      Compound {atom = (Operator ":-");
+        terms =
+        [(Var "A");
+          Compound {atom = (Operator ",");
+            terms =
+            [Compound {atom = (Operator "=="); terms = [(Var "A"); (Var "B")]};
+              (Atomic (Atom (Name "!")))]}
+          ]} |}]
 ;;
 
 (* let test_ok, test_fail =

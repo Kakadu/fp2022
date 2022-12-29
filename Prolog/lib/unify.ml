@@ -1,3 +1,9 @@
+(** Copyright 2021-2022, Ilya Shchuckin *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
+(** Contains Herbrand algorithm (7.3.2 in ISO)*)
+
 open Ast
 open Types
 open Utils
@@ -5,8 +11,13 @@ open Utils
 module Unify (M : MonadFail) = struct
   open M
 
+  (**/**)
+
   let eval_error x = fail (EvalError x)
 
+  (**/**)
+
+  (** [is_var_in_term term var] check if [var] is in a [term]. *)
   let rec is_var_in_term term var =
     match term with
     | Atomic _ -> false
@@ -16,10 +27,15 @@ module Unify (M : MonadFail) = struct
     | _ -> false
   ;;
 
-  let rec unify equations =
+  (** Herbrand algorithm (7.3.2. in ISO). 
+      Takes a list of pairs [(term1, term2)] (equations: term1 = term2) and tries to find 
+      the most general unifier of this list. Returns unifier if successful.  *)
+  let rec unify equations : unifier result =
     let fail (term1, term2) =
       eval_error
-        ("Not unifiable: \n" ^ show_term term1 ^ " with: \n" ^ show_term term2 ^ "\n")
+        (String.concat
+           ""
+           [ "Not unifiable: \n"; show_term term1; " with: \n"; show_term term2; "\n" ])
     in
     match equations with
     | ((term1, term2) as pair) :: tl ->

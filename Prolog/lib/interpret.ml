@@ -1,8 +1,8 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Ilya Shchuckin *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-(** Real monadic interpreter goes here *)
+(** Monadic interpreter *)
 
 open Ast
 open Utils
@@ -17,9 +17,16 @@ module Interpret (M : MonadFail) (C : Config) = struct
   open Unify (M)
   open Db (M)
 
+  (**/**)
+
   let critical x = fail (Critical x)
   let eval_error x = fail (EvalError x)
 
+  (**/**)
+
+  (** {2 Helpers} *)
+
+  (** [is_builtin goal] true if [goal] is a builtin predicate, false otherwise.*)
   let is_builtin (term : term) : bool =
     match get_pi term with
     | "true", 0 | "!", 0 | ",", 2 | "read", 1 | "==", 2 | "clause", 2 | "writeln", 1 ->
@@ -27,6 +34,8 @@ module Interpret (M : MonadFail) (C : Config) = struct
     | _ -> false
   ;;
 
+  (** [swap_vars sub] if pair [(Var x, Var y)] is in [sub], it will be replaced with [(Var y, Var x)]. 
+      This is helpfull when reconstructing the result. *)
   let swap_vars substitution =
     List.map
       (function
@@ -35,6 +44,24 @@ module Interpret (M : MonadFail) (C : Config) = struct
       substitution
   ;;
 
+  (** [filter_substitution sub vars] leaves in [sub] only those pairs, 
+      that contain variable from [vars] as the first element, e.g. [(Var x, something)], where [Var x] is in [vars]. *)
+  let rec filter_substitution sub (vars : term list) =
+    match vars with
+    | var :: tl ->
+      (match
+         try Ok (List.find (fun (head, _) -> equal_term head var) sub) with
+         | Not_found -> eval_error "no such variable in the unifier"
+       with
+       | Ok elem -> elem :: filter_substitution sub tl
+       | Error _ -> filter_substitution sub tl)
+    | _ -> []
+  ;;
+
+  (** {2 Evaluators} *)
+
+  (** Evaluates second branch in a conjuction. 
+      If it fails, it backtracks first branch choicepoints. *)
   let rec eval_right_branch r_branch substitution l_subs choicepoints l_choicepoints =
     let right_branch_result = eval (apply_substitution r_branch l_subs) l_subs [] in
     right_branch_result
@@ -54,6 +81,8 @@ module Interpret (M : MonadFail) (C : Config) = struct
     >>= fun (l_subs, r_choicepoints) ->
     eval_right_branch r_branch substitution l_subs choicepoints r_choicepoints
 
+  (** [eval_builtin goal substitution choicepoints] evaluates [goal] which is a 
+      variant of builtin predicate. *)
   and eval_builtin goal substitution choicepoints =
     let goal_pi = get_pi goal in
     let is_cut term = get_pi term = ("!", 0) in
@@ -64,8 +93,11 @@ module Interpret (M : MonadFail) (C : Config) = struct
       then return (substitution, choicepoints)
       else eval_error "terms are not equal"
     | ("read", 1), Compound { atom = _; terms = [ term ] } ->
-      let input = Parser.parse_query (input_line stdin) in
-      (match input with
+      (match In_channel.input_line In_channel.stdin with
+       | Some query_text -> return query_text
+       | None -> critical "Unexpected EOF")
+      >>= fun query_text ->
+      (match Parser.parse_query query_text with
        | Error _ -> critical "can't parse the input string"
        | Ok x ->
          unify [ x, term ]
@@ -100,7 +132,7 @@ module Interpret (M : MonadFail) (C : Config) = struct
                 >>= fun unificator -> unify ([ body, body2 ] @ unificator)
               with
               | Ok _ -> true
-              | Error _ -> false or acc)
+              | Error _ -> false || acc)
             false
             candidates
         in
@@ -114,6 +146,14 @@ module Interpret (M : MonadFail) (C : Config) = struct
     | _ ->
       critical
         ("This predicate was marked as builtin but is not implemented: " ^ fst goal_pi)
+
+  (** {2 Backtracking} *)
+  (** There are three types of choicepoints in the interpreter. 
+      - [Conjuction] - describes how to redo [(,)/2] predicate
+      - [Clause] - describes how to redo [clause/2] predicate
+      - [Choicepoint] - describes how to redo a goal evaluation 
+      via picking another unifiable from the database.
+  *)
 
   and backtrack_clause_builtin clause choicepoints =
     match clause with
@@ -177,13 +217,18 @@ module Interpret (M : MonadFail) (C : Config) = struct
          eval_error "No more candidates left for predicat")
     | _ -> critical "wrong choicepoint type was passed to backtrack_choicepoint"
 
-  and backtrack choicepoints =
-    match choicepoints with
+  (** [backtrack choicepoints] starts backtracking from 
+      the most recent choicepoint in [choicepoints].*)
+  and backtrack = function
     | (Clause _ as x) :: choicepoints_tl -> backtrack_clause_builtin x choicepoints_tl
     | (Conjuction _ as x) :: choicepoints_tl -> backtrack_conjuction x choicepoints_tl
     | (Choicepoint _ as x) :: choicepoints_tl -> backtrack_choicepoint x choicepoints_tl
     | _ -> eval_error "No more choicepoints"
 
+  (** {2 Run} *)
+
+  (** [eval goal substitution choicepoints] tries to satisfy the [goal]. 
+      If successful returns updated substituion and choicepoints.*)
   and eval goal substitution choicepoints =
     if debug
     then (
@@ -199,18 +244,8 @@ module Interpret (M : MonadFail) (C : Config) = struct
       backtrack choicepoints
   ;;
 
-  let rec filter_substitution sub (vars : term list) =
-    match vars with
-    | var :: tl ->
-      (match
-         try Ok (List.find (fun (head, _) -> equal_term head var) sub) with
-         | Not_found -> eval_error "no such variable in the unifier"
-       with
-       | Ok elem -> elem :: filter_substitution sub tl
-       | Error _ -> filter_substitution sub tl)
-    | _ -> []
-  ;;
-
+  (** This function is the one that can be returned as the result of [run] function. 
+      It allows to start backtracking if user needs more suitable sets of variables. *)
   let rec run_backtrack filter_sub choicepoints =
     match backtrack choicepoints with
     | Ok (subs, choicepoints) ->
@@ -224,6 +259,9 @@ module Interpret (M : MonadFail) (C : Config) = struct
     | Error x -> Error x
   ;;
 
+  (** [run query] executes [query]. 
+      Returns pair of substitions and optionally a function, 
+      that will start backtracking when called. *)
   let run query =
     let query_term = Parser.parse_query query in
     match query_term with

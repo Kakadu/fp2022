@@ -1,3 +1,7 @@
+(** Copyright 2021-2022, Ilya Shchuckin *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Prolog_lib
 open Core
 open Types
@@ -15,13 +19,12 @@ let print_error err =
 ;;
 
 let rec try_read_and_continue get_next =
-  try
-    let user_input = input_line stdin in
+  match In_channel.input_line In_channel.stdin with
+  | Some user_input ->
     if Base.equal_string user_input "N"
     then get_next_variables get_next
     else Caml.Format.printf "\n"
-  with
-  | End_of_file -> ()
+  | None -> ()
 
 and get_next_variables get_next =
   match get_next () with
@@ -66,12 +69,11 @@ and run_query program_text query_text opts =
 ;;
 
 let rec run_next_query program_text opts =
-  try
-    let query_text = input_line stdin in
+  match In_channel.input_line In_channel.stdin with
+  | Some query_text ->
     run_query program_text query_text opts;
     run_next_query program_text opts
-  with
-  | End_of_file -> ()
+  | None -> ()
 ;;
 
 let () =

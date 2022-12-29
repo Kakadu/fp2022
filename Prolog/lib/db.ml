@@ -1,3 +1,9 @@
+(** Copyright 2021-2022, Ilya Shchuckin *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
+(** Defines database (7.5 in ISO) *)
+
 open Ast
 open Types
 open Utils
@@ -7,12 +13,18 @@ module Db (M : MonadFail) = struct
   open M
   open Unify (M)
 
+  (**/**)
+
   let critical x = fail (Critical x)
   let eval_error x = fail (EvalError x)
 
+  (**/**)
+
+  (** [term_to_clause term] converts term to a clause *)
   let term_to_clause term =
     let fail term =
-      critical ("Can't convert term " ^ Ast.show_term term ^ " to clause")
+      critical
+        (String.concat "" [ "Can't convert term "; Ast.show_term term; "to clause" ])
     in
     match term with
     | Compound { atom; terms } when Ast.equal_atom atom (Operator ":-") ->
@@ -24,25 +36,38 @@ module Db (M : MonadFail) = struct
     | _ -> fail term
   ;;
 
-  let rec terms_to_clauses terms =
-    match terms with
+  (** [terms_to_clauses terms] converts list of terms to a list of clauses *)
+  let rec terms_to_clauses = function
     | hd :: tl -> lift2 (fun r1 r2 -> r1 :: r2) (term_to_clause hd) (terms_to_clauses tl)
     | _ -> return []
   ;;
 
+  (** [rename_clause_vars head body] gives new names to variables in a clause. 
+      Helps to avoid conflicts in substitutions. *)
   let rename_clause_vars head body =
     let vars = get_vars_from_term head @ get_vars_from_term body in
-    let substitution =
-      List.map
-        (fun v ->
-          match v with
-          | Var s -> Var s, Var (s ^ "__" ^ string_of_float (Sys.time () *. 1000000.))
-          | _ -> failwith "Var list cannot have non-var terms in it")
-        vars
-    in
+    List.fold_left
+      (fun acc -> function
+        | Var _ -> acc
+        | _ -> critical "Var list cannot have non-var terms in it")
+      (Ok "")
+      vars
+    *> return
+         (List.map
+            (function
+             | Var s ->
+               ( Var s
+               , Var
+                   (String.concat
+                      ""
+                      [ s; "__"; string_of_float (Sys.time () *. 1000000.) ]) )
+             | _ -> Var "_", Var "_")
+            vars)
+    >>| fun substitution ->
     apply_substitution head substitution, apply_substitution body substitution
   ;;
 
+  (** [prepare text] converts prolog text to the database. *)
   let prepare (program_text : string) : db result =
     let terms = Parser.parse_program program_text in
     match terms with
@@ -50,11 +75,13 @@ module Db (M : MonadFail) = struct
     | Ok db -> terms_to_clauses db
   ;;
 
-  let rec search db goal =
+  (** [search db goal] searches in db for a term that can be unified with goal. *)
+  let rec search (db : db) goal =
     let goal_pi = get_pi goal in
     match db with
     | { head; goal = clause_goal } :: tl ->
-      let head, clause_goal = rename_clause_vars head clause_goal in
+      rename_clause_vars head clause_goal
+      >>= fun (head, clause_goal) ->
       if get_pi head = goal_pi
       then (
         let unifiable =
