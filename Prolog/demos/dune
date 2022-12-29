@@ -1,0 +1,12 @@
+(cram
+ (deps
+  ../REPL.exe
+  examples/Test.pl
+  examples/Test2.pl
+  examples/Test3.pl
+  examples/Test4.pl
+  examples/Test5.pl
+  examples/Test6.pl
+  examples/Test7.pl
+  examples/unicamp/p01.pl
+  examples/unicamp/p05.pl))

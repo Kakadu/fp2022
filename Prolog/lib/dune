@@ -1,0 +1,8 @@
+(library
+ (name prolog_lib)
+ (public_name Prolog.Lib)
+ (modules Ast Interpret Unify Parser utils Tests Db Print Types)
+ (libraries base angstrom)
+ (preprocess
+  (pps ppx_expect ppx_variants_conv ppx_deriving.show ppx_deriving.eq))
+ (inline_tests))
