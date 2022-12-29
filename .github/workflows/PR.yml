@@ -38,11 +38,22 @@ jobs:
       - name: Installing a linter
         run: opam install zanuda --yes
 
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v6
+      - name: Get Ref brach name
+        run: |
+          echo "${{ steps.branch-name.outputs.ref_branch }}"
+
+      #- run: git remote -vvv
+      #- run: git branch -vvv
+
+        #  Outputs: "main"
       ############# Detecting and compiling fp2022
       # Smart link about setting environment variables
       # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
       - run: |
-          ./detect_latest.sh >> $GITHUB_ENV
+          sh -x ./detect_latest_pr.sh "pull/${{ steps.branch-name.outputs.ref_branch }}" >> $GITHUB_ENV
           echo "${{ env.latest }}"
 
       - name: Installing dependencies
