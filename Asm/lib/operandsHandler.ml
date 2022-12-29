@@ -45,11 +45,12 @@ let dword_reg_list_len = List.length dword_reg_name_list
 
 (* Functions to check if the id belongs to a register of particular size *)
 let reg_id_is_byte_reg reg_id = reg_id < byte_reg_list_len
-let reg_id_is_dword_reg reg_id = reg_id >= byte_reg_list_len + word_reg_list_len
 
 let reg_id_is_word_reg reg_id =
-  (not (reg_id_is_byte_reg reg_id)) && not (reg_id_is_dword_reg reg_id)
+  reg_id >= byte_reg_list_len && reg_id < byte_reg_list_len + word_reg_list_len
 ;;
+
+let reg_id_is_dword_reg reg_id = reg_id >= byte_reg_list_len + word_reg_list_len
 
 (* Convert register id to 'a reg *)
 let int_to_byte_reg reg_id =
