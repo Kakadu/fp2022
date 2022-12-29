@@ -110,4 +110,24 @@ let dequeue queue = remove_last queue
 |}
 ;;
 
-let stdlib = [ list; integer; pair; queue ]
+let effect =
+  {|
+
+  effect Get : int effect
+
+  effect Set : int -> unit effect
+
+  let get = perform Get
+
+  let set value = perform (Set value)
+
+  let run main =
+    match main () with
+      | effect Get -> continue 42
+      | effect (Set y) -> continue ()
+      | value -> value
+
+|}
+;;
+
+let stdlib = [ list; integer; pair; queue; effect ]
