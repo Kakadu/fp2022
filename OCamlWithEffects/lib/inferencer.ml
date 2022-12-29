@@ -76,7 +76,7 @@ module Type = struct
     | TVar b -> b = v
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> Base.List.exists typ_list ~f:(occurs_in v)
-    | TList typ | TADT (_, typ) | TEffect typ | TContinue typ -> occurs_in v typ
+    | TList typ | TADT (_, typ) | TEffect typ -> occurs_in v typ
     | TGround _ -> false
   ;;
 
@@ -90,7 +90,7 @@ module Type = struct
           typ_list
           ~f:(fun t s -> Base.Set.union s (helper empty_set t))
           ~init:acc
-      | TList typ | TADT (_, typ) | TEffect typ | TContinue typ -> helper acc typ
+      | TList typ | TADT (_, typ) | TEffect typ -> helper acc typ
       | TGround _ -> acc
     in
     helper empty_set
@@ -175,7 +175,6 @@ end = struct
     | TList typ1, TList typ2 -> unify typ1 typ2
     | TADT (id1, typ1), TADT (id2, typ2) when id1 = id2 -> unify typ1 typ2
     | TEffect typ1, TEffect typ2 -> unify typ1 typ2
-    | TContinue typ1, TContinue typ2 -> unify typ1 typ2
     | _ -> fail @@ `UnificationFailed (l, r)
 
   and extend k v s =
@@ -454,28 +453,17 @@ let infer =
       in
       let* env' = bootstrap_env env (fst head) in
       let* _, head_expression_type = helper env' (snd head) in
-      let head_expression_type =
-        match head_expression_type with
-        | TContinue typ -> typ
-        | typ -> typ
-      in
       let* subst' =
         Base.List.fold_right case_list ~init:(return Subst.empty) ~f:(fun case subst ->
           let* env'' = bootstrap_env env (fst case) in
           let* case_subst, case_type = helper env'' (fst case) in
-          let new_case_type =
+          let case_type =
             match case_type with
             | TEffect case_type -> case_type
             | case_type -> case_type
           in
-          let* subst'' = unify new_case_type matched_type in
+          let* subst'' = unify case_type matched_type in
           let* computation_subst, computation_type = helper env'' (snd case) in
-          let* computation_type =
-            match case_type, computation_type with
-            | TEffect _, TContinue computation_type -> return computation_type
-            | TEffect _, _ -> fail `NoHandlerProvided
-            | _, computation_type -> return computation_type
-          in
           let* subst''' = unify computation_type head_expression_type in
           let* subst = subst in
           Subst.compose_all [ subst'''; subst''; subst; case_subst; computation_subst ])
@@ -503,7 +491,7 @@ let infer =
       return (final_subst, fresh_var)
     | EContinue expression ->
       let* subst, typ = helper env expression in
-      return (subst, tcontinue typ)
+      return (subst, typ)
     | EEffectPattern expression ->
       let* fresh_var = fresh_var in
       let* subst, typ = helper env expression in

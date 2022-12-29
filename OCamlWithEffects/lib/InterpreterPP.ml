@@ -33,6 +33,7 @@ let rec pp_value fmt =
     fprintf fmt "effect %s" name
   | VFun _ -> fprintf fmt "<fun>"
   | VEffectPattern _ -> fprintf fmt "effect pattern"
+  | VEffectHandler (name, value) -> fprintf fmt "%s %a" name pp_value value
 ;;
 
 let print_value value =
@@ -61,6 +62,7 @@ let pp_error fmt = function
   | PatternMatchingFailed -> fprintf fmt "Runtime error: pattern-matching failed."
   | NonExhaustivePatternMatching ->
     fprintf fmt "Runtime error: this pattern-matching is not exhaustive."
+  | ContinuationFailure value -> fprintf fmt "Continuation failure %a" pp_value value
 ;;
 
 let print_error error =
