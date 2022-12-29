@@ -199,7 +199,7 @@ let data_line_parser =
   let var =
     trim word >>= fun x ->
     let w = String.uppercase_ascii x in
-    if (not (is_reg w)) & not (is_mnemonic w) then return w
+    if (not (is_reg w)) & not (is_mnemonic w) then return x
     else fail "Var's name must not be equal the name of reg or datatype"
   in
   let sep = trim @@ char ',' in
@@ -227,199 +227,307 @@ type 'a parse_rez = Parsed of 'a | Failed of string
 let eval str = match parse str with Ok v -> Parsed v | Error msg -> Failed msg
 
 (*******************************************tests*******************************************)
-(* let test_p p str expr =
-     match parse_string ~consume:All p str with
-     | Ok v -> v = expr
-     | Error _ -> false
+let test_p p str expr =
+  match parse_string ~consume:All p str with
+  | Ok v -> v = expr
+  | Error _ -> false
 
-   let pr_opt p str = Result.get_ok @@ parse_string ~consume:All p str
+let pr_opt p str = Result.get_ok @@ parse_string ~consume:All p str
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0");
-     [%expect {|(Const "0")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0");
+  [%expect {|(Const (ASMConst "0"))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0xa");
-     [%expect {|(Const "0xa")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0xa");
+  [%expect {|(Const (ASMConst "0xa"))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "    0xa   ");
-     [%expect {|(Const "0xa")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "    0xa   ");
+  [%expect {|(Const (ASMConst "0xa"))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "rax");
-     [%expect {|(Reg64 "RAX")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "rax");
+  [%expect.unreachable]
+  [@@expect.uncaught_exn
+    {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "eax");
-     [%expect {|(Reg32 "EAX")|}]
+  (Invalid_argument "result is Error _")
+  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
+  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
+  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
+  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 250, characters 28-47
+  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "rAx");
-     [%expect {|(Reg64 "RAX")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "var");
+  [%expect {| (Var (ASMVar "VAR")) |}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "%var");
-     [%expect {|(Var "var")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "vAr");
+  [%expect {| (Var (ASMVar "VAR")) |}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "%vAr");
-     [%expect {|(Var "vAr")|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "labl");
+  [%expect {|(Var (ASMVar "LABL"))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "labl");
-     [%expect {|(Lab (Label "labl"))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "lAbl");
+  [%expect {|(Var (ASMVar "LABL"))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "lAbl");
-     [%expect {|(Lab (Label "lAbl"))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 + 0x0");
+  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 + 0x0");
-     [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 + var");
+  [%expect {| (Add (Const (ASMConst "0")) (Var (ASMVar "VAR"))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 + rax");
-     [%expect {|(Add ((Const "0"), (Reg64 "RAX")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0+0x0");
+  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 + %var");
-     [%expect {|(Add ((Const "0"), (Var "var")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0      +     0x0");
+  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0+0x0");
-     [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 + (0x0)");
+  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0      +     0x0");
-     [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 + (    0x0   )   ");
+  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 + (0x0)");
-     [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "(0 + (0x0))");
+  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 + (    0x0   )   ");
-     [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 + 1 * 2");
+  [%expect
+    {|(Add (Const (ASMConst "0")) (Mul (Const (ASMConst "1")) (Const (ASMConst "2"))))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "(0 + (0x0))");
-     [%expect {|(Add ((Const "0"), (Const "0x0")))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 * 1 + 2");
+  [%expect
+    {|(Add (Mul (Const (ASMConst "0")) (Const (ASMConst "1"))) (Const (ASMConst "2")))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 + 1 * 2");
-     [%expect {|(Add ((Const "0"), (Mul ((Const "1"), (Const "2")))))|}]
+let%expect_test _ =
+  print_string @@ show_expr (pr_opt expr "0 * (1 + 2)");
+  [%expect
+    {|(Mul (Const (ASMConst "0")) (Add (Const (ASMConst "1")) (Const (ASMConst "2"))))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 * 1 + 2");
-     [%expect {|(Add ((Mul ((Const "0"), (Const "1"))), (Const "2")))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "ret");
+  [%expect {|(Command (RET))|}]
 
-   let%expect_test _ =
-     print_string @@ show_expr (pr_opt expr_parser "0 * (1 + 2)");
-     [%expect {|(Mul ((Const "0"), (Add ((Const "1"), (Const "2")))))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "rEt");
+  [%expect {|(Command (RET))|}]
 
-   let%expect_test _ =
-     print_string @@ show_code_section (pr_opt code_line_parser "ret");
-     [%expect {|(Command (Args0 (Mnemonic "RET")))|}]
+let%expect_test _ =
+  print_string
+  @@ show_code_section (pr_opt code_line_parser "       \nret    \n\n");
+  [%expect {|(Command (RET))|}]
 
-   let%expect_test _ =
-     print_string @@ show_code_section (pr_opt code_line_parser "rEt");
-     [%expect {|(Command (Args0 (Mnemonic "RET")))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "inc rax");
+  [%expect {|(Command (INC (Reg (Reg64 "RAX"))))|}]
 
-   let%expect_test _ =
-     print_string
-     @@ show_code_section (pr_opt code_line_parser "       \nret    \n\n");
-     [%expect {|(Command (Args0 (Mnemonic "RET")))|}]
+let%expect_test _ =
+  print_string
+  @@ show_code_section
+       (pr_opt code_line_parser "    inc                  rax           ");
+  [%expect {|(Command (INC (Reg (Reg64 "RAX"))))|}]
 
-   let%expect_test _ =
-     print_string @@ show_code_section (pr_opt code_line_parser "inc rax");
-     [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1");
+  [%expect
+    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
 
-   let%expect_test _ =
-     print_string
-     @@ show_code_section
-          (pr_opt code_line_parser "    inc                  rax           ");
-     [%expect {|(Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))))|}]
+let%expect_test _ =
+  print_string
+  @@ show_code_section (pr_opt code_line_parser "mov rax,         1        ");
+  [%expect
+    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_code_section (pr_opt code_line_parser "inc rax + 1");
-     [%expect
-       {|(Command (Args1 ((Mnemonic "INC"), (Add ((Reg64 "RAX"), (Const "1"))))))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov \nrax, \n1\n");
+  [%expect
+    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_var (pr_opt data_line_parser "a: dd 1");
-     [%expect {|(Variable ("a", (DataType "DD"), ["1"]))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1 + 1");
+  [%expect
+    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Add (Const (ASMConst "1")) (Const (ASMConst "1")))))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_var (pr_opt data_line_parser "a: dd 1, 2");
-     [%expect {|(Variable ("a", (DataType "DD"), ["1"; "2"]))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, rax");
+  [%expect {| (Command (MOV (RegToReg (Reg64 "RAX") (Reg64 "RAX")))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_var (pr_opt data_line_parser "a:   dd    1   ,     2");
-     [%expect {|(Variable ("a", (DataType "DD"), ["1"; "2"]))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, rbx");
+  [%expect {| (Command (MOV (RegToReg (Reg64 "RAX") (Reg64 "RBX")))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_var (pr_opt data_line_parser "a: dD 1");
-     [%expect {|(Variable ("a", (DataType "DD"), ["1"]))|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, eax");
+  [%expect.unreachable]
+  [@@expect.uncaught_exn
+    {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
 
-   let%expect_test _ =
-     print_string @@ show_var (pr_opt data_line_parser "A: dd 1");
-     [%expect {|(Variable ("A", (DataType "DD"), ["1"]))|}]
+  (Invalid_argument "result is Error _")
+  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
+  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
+  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
+  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 377, characters 36-76
+  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .code");
-     [%expect {|(Code [])|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, ebx");
+  [%expect.unreachable]
+  [@@expect.uncaught_exn
+    {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .text");
-     [%expect {|(Code [])|}]
+  (Invalid_argument "result is Error _")
+  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
+  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
+  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
+  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 393, characters 36-76
+  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .data");
-     [%expect {|(Data [])|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "shl rax, 1");
+  [%expect {| (Command (SHL (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .code ret");
-     [%expect {|(Code [(Command (Args0 (Mnemonic "RET")))])|}]
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "shl rax, rax");
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .code   ret   ");
-     [%expect {|(Code [(Command (Args0 (Mnemonic "RET")))])|}]
+  (Invalid_argument "result is Error _")
+  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
+  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
+  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
+  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 413, characters 36-76
+  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .code inc rax inc rax");
-     [%expect
-       {|
-         (Code
-            [(Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))));
-              (Command (Args1 ((Mnemonic "INC"), (Reg64 "RAX"))))])|}]
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a dd 1");
+  [%expect {| (Variable ("a", DD, ["1"])) |}]
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .data a: dd 1");
-     [%expect {|(Data [(Variable ("a", (DataType "DD"), ["1"]))])|}]
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a dd 1, 2");
+  [%expect {| (Variable ("a", DD, ["1"; "2"])) |}]
 
-   let%expect_test _ =
-     print_string @@ show_dir (pr_opt sec_parser "section .data a: dd 1 b: dd 2");
-     [%expect
-       {|
-       (Data
-          [(Variable ("a", (DataType "DD"), ["1"]));
-            (Variable ("b", (DataType "DD"), ["2"]))])|}]
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a   dd    1   ,     2");
+  [%expect {| (Variable ("a", DD, ["1"; "2"])) |}]
 
-   let%expect_test _ =
-     print_string
-     @@ show_ast (pr_opt parser "section .data a: dd 1 section .text ret");
-     [%expect
-       {|
-       [(Data [(Variable ("a", (DataType "DD"), ["1"]))]);
-         (Code [(Command (Args0 (Mnemonic "RET")))])] |}]
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "a dD 1");
+  [%expect {| (Variable ("a", DD, ["1"])) |}]
 
-   let%expect_test _ =
-     print_string
-     @@ show_ast
-          (pr_opt parser "section .data a: dd 1 section .data section .text ret");
-     [%expect
-       {|
-       [(Data [(Variable ("a", (DataType "DD"), ["1"]))]); (Data []);
-         (Code [(Command (Args0 (Mnemonic "RET")))])]|}]
-*)
+let%expect_test _ =
+  print_string @@ show_var (pr_opt data_line_parser "A dd 1");
+  [%expect {| (Variable ("A", DD, ["1"])) |}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code");
+  [%expect {|
+    Code [
+    ]|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .text");
+  [%expect {|
+    Code [
+    ]|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .data");
+  [%expect {|
+    Data [
+    ]|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code ret");
+  [%expect {|
+    Code [
+    		(Command (RET));
+    ]|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code   ret   ");
+  [%expect {|
+    Code [
+    		(Command (RET));
+    ]|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .code inc rax inc rax");
+  [%expect
+    {|
+         Code [
+         		(Command (INC (Reg (Reg64 "RAX"))));
+         		(Command (INC (Reg (Reg64 "RAX"))));
+         ]|}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .data a dd 1");
+  [%expect {|
+    Data [
+    		(Variable ("a", DD, ["1"]))
+    ] |}]
+
+let%expect_test _ =
+  print_string @@ show_dir (pr_opt sec_parser "section .data a dd 1 b dd 2");
+  [%expect
+    {|
+    Data [
+    		(Variable ("a", DD, ["1"]))
+    		(Variable ("b", DD, ["2"]))
+    ] |}]
+
+let%expect_test _ =
+  print_string
+  @@ show_ast (pr_opt parser "section .data a dd 1 section .text ret");
+  [%expect
+    {|
+    (Ast [
+    	Data [
+    		(Variable ("a", DD, ["1"]))
+    ];
+    	Code [
+    		(Command (RET));
+    ];
+    ] |}]
+
+let%expect_test _ =
+  print_string
+  @@ show_ast
+       (pr_opt parser "section .data a dd 1 section .data section .text ret");
+  [%expect
+    {|
+    (Ast [
+    	Data [
+    		(Variable ("a", DD, ["1"]))
+    ];
+    	Data [
+    ];
+    	Code [
+    		(Command (RET));
+    ];
+    ] |}]
