@@ -27,7 +27,8 @@ SPDX-License-Identifier: CC0-1.0
   > demo_inputs/demo_input.mly
   > INT DIV INT PLUS INT MULTY INT EOL
   The file was successfully parsed.
-   [ main :  [ expr :  INT   [ expr' :  DIV   [ expr :  INT   [ expr' :  PLUS   [ expr :  INT   [ expr' :  MULTY   [ expr :  INT  ]  ]  ]  ]  ]  ]  ]   EOL  ] 
+   [ main :  [ expr :  INT   [ expr' :  DIV   [ expr :  INT   [ expr' :  PLUS   
+   [ expr :  INT   [ expr' :  MULTY   [ expr :  INT  ]  ]  ]  ]  ]  ]  ]   EOL  ] 
   $ ./demoInterpret.exe <<-EOF
   > demo_inputs/demo_input.mly
   > INT DIV 
