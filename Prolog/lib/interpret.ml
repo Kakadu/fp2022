@@ -30,8 +30,8 @@ module Interpret (M : MonadFail) (C : Config) = struct
   let swap_vars substitution =
     List.map
       (function
-        | Var x, Var y -> Var y, Var x
-        | x -> x)
+       | Var x, Var y -> Var y, Var x
+       | x -> x)
       substitution
   ;;
 
@@ -66,10 +66,11 @@ module Interpret (M : MonadFail) (C : Config) = struct
     | ("read", 1), Compound { atom = _; terms = [ term ] } ->
       let input = Parser.parse_query (input_line stdin) in
       (match input with
-      | Error _ -> critical "can't parse the input string"
-      | Ok x ->
-        unify [ x, term ]
-        >>= fun res -> unify (res @ substitution) >>= fun res -> return (res, choicepoints))
+       | Error _ -> critical "can't parse the input string"
+       | Ok x ->
+         unify [ x, term ]
+         >>= fun res ->
+         unify (res @ substitution) >>= fun res -> return (res, choicepoints))
     | ("writeln", 1), Compound { atom = _; terms = [ term ] } ->
       Caml.Format.printf "%s\n" (str_of_term term);
       return (substitution, choicepoints)
@@ -118,20 +119,20 @@ module Interpret (M : MonadFail) (C : Config) = struct
     match clause with
     | Clause { goal; substitution; candidates; head = head1; body = body1 } ->
       (match candidates with
-      | { head = head2; goal = body2 } :: tl ->
-        unify [ head2, head1 ]
-        >>= fun head_unificator ->
-        unify [ body2, body1 ]
-        >>= fun body_unificator ->
-        unify (head_unificator @ body_unificator @ substitution)
-        >>| fun sub ->
-        ( sub
-        , if is_empty tl
-          then choicepoints
-          else
-            Clause { goal; substitution; candidates = tl; head = head1; body = body1 }
-            :: choicepoints )
-      | _ -> eval_error "no more candidates")
+       | { head = head2; goal = body2 } :: tl ->
+         unify [ head2, head1 ]
+         >>= fun head_unificator ->
+         unify [ body2, body1 ]
+         >>= fun body_unificator ->
+         unify (head_unificator @ body_unificator @ substitution)
+         >>| fun sub ->
+         ( sub
+         , if is_empty tl
+           then choicepoints
+           else
+             Clause { goal; substitution; candidates = tl; head = head1; body = body1 }
+             :: choicepoints )
+       | _ -> eval_error "no more candidates")
     | _ -> critical "wrong choicepoint type was passed to backtrack_clause_builtin"
 
   and backtrack_conjuction conjuction choicepoints =
@@ -157,23 +158,23 @@ module Interpret (M : MonadFail) (C : Config) = struct
         >>= fun new_sub -> eval new_body new_sub choicepoints
       in
       (match candidates with
-      | [ { head; goal = clause_goal } ] ->
-        (match try_backtrack head clause_goal choicepoints with
-        | Ok x -> return x
-        | Error x ->
-          debug_print goal;
-          Error x)
-      | { head; goal = clause_goal } :: tl ->
-        let choicepoints =
-          Choicepoint { goal; substitution; candidates = tl } :: choicepoints
-        in
-        try_backtrack head clause_goal choicepoints
-        <|> fun () ->
-        debug_print goal;
-        backtrack choicepoints
-      | _ ->
-        debug_print goal;
-        eval_error "No more candidates left for predicat")
+       | [ { head; goal = clause_goal } ] ->
+         (match try_backtrack head clause_goal choicepoints with
+          | Ok x -> return x
+          | Error x ->
+            debug_print goal;
+            Error x)
+       | { head; goal = clause_goal } :: tl ->
+         let choicepoints =
+           Choicepoint { goal; substitution; candidates = tl } :: choicepoints
+         in
+         try_backtrack head clause_goal choicepoints
+         <|> fun () ->
+         debug_print goal;
+         backtrack choicepoints
+       | _ ->
+         debug_print goal;
+         eval_error "No more candidates left for predicat")
     | _ -> critical "wrong choicepoint type was passed to backtrack_choicepoint"
 
   and backtrack choicepoints =
@@ -205,8 +206,8 @@ module Interpret (M : MonadFail) (C : Config) = struct
          try Ok (List.find (fun (head, _) -> equal_term head var) sub) with
          | Not_found -> eval_error "no such variable in the unifier"
        with
-      | Ok elem -> elem :: filter_substitution sub tl
-      | Error _ -> filter_substitution sub tl)
+       | Ok elem -> elem :: filter_substitution sub tl
+       | Error _ -> filter_substitution sub tl)
     | _ -> []
   ;;
 
@@ -242,14 +243,14 @@ module Interpret (M : MonadFail) (C : Config) = struct
         | Error _ -> unifier
       in
       (match eval root_goal [] [] with
-      | Ok (subs, choicepoints) ->
-        let search_tree_depleted = is_empty choicepoints in
-        if not search_tree_depleted
-        then
-          return
-            (InterpretationResult
-               (filter_sub subs, Some (fun () -> run_backtrack filter_sub choicepoints)))
-        else return (InterpretationResult (filter_sub subs, None))
-      | Error x -> fail x)
+       | Ok (subs, choicepoints) ->
+         let search_tree_depleted = is_empty choicepoints in
+         if not search_tree_depleted
+         then
+           return
+             (InterpretationResult
+                (filter_sub subs, Some (fun () -> run_backtrack filter_sub choicepoints)))
+         else return (InterpretationResult (filter_sub subs, None))
+       | Error x -> fail x)
   ;;
 end

@@ -29,10 +29,10 @@ and get_next_variables get_next =
     Caml.Format.printf ";\n";
     Print.print_substitution subs;
     (match get_next with
-    | Some get_next ->
-      Caml.Format.printf " ";
-      try_read_and_continue get_next
-    | None -> Caml.Format.printf ".\n")
+     | Some get_next ->
+       Caml.Format.printf " ";
+       try_read_and_continue get_next
+     | None -> Caml.Format.printf ".\n")
   | Error _ -> Caml.Format.printf ".\n"
 
 and run_query program_text query_text opts =
@@ -51,18 +51,18 @@ and run_query program_text query_text opts =
         end)
     in
     (match I.run query_text with
-    | Ok (InterpretationResult (subs, get_next)) ->
-      let no_substitutions = Utils.is_empty subs in
-      if no_substitutions
-      then Caml.Format.printf "true.\n"
-      else (
-        Print.print_substitution subs;
-        match get_next with
-        | Some get_next ->
-          Caml.Format.printf " ";
-          try_read_and_continue get_next
-        | None -> Caml.Format.printf ".\n")
-    | Error err -> print_error err)
+     | Ok (InterpretationResult (subs, get_next)) ->
+       let no_substitutions = Utils.is_empty subs in
+       if no_substitutions
+       then Caml.Format.printf "true.\n"
+       else (
+         Print.print_substitution subs;
+         match get_next with
+         | Some get_next ->
+           Caml.Format.printf " ";
+           try_read_and_continue get_next
+         | None -> Caml.Format.printf ".\n")
+     | Error err -> print_error err)
 ;;
 
 let rec run_next_query program_text opts =

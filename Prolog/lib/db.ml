@@ -17,8 +17,8 @@ module Db (M : MonadFail) = struct
     match term with
     | Compound { atom; terms } when Ast.equal_atom atom (Operator ":-") ->
       (match terms with
-      | [ head; goal ] -> return { head; goal }
-      | _ -> fail term)
+       | [ head; goal ] -> return { head; goal }
+       | _ -> fail term)
     | Compound _ -> return { head = term; goal = Atomic (Atom (Name "true")) }
     | Atomic _ -> return { head = term; goal = Atomic (Atom (Name "true")) }
     | _ -> fail term

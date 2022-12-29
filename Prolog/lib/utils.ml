@@ -35,9 +35,9 @@ let rec apply_substitution term substitution =
   match term with
   | Var _ ->
     (match substitution with
-    | (head, body) :: _ when equal_term head term -> body
-    | _ :: tl -> apply_substitution term tl
-    | _ -> term)
+     | (head, body) :: _ when equal_term head term -> body
+     | _ :: tl -> apply_substitution term tl
+     | _ -> term)
   | Atomic _ -> term
   | Compound { atom; terms } ->
     let new_terms = List.map (fun term -> apply_substitution term substitution) terms in
