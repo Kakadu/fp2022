@@ -51,3 +51,8 @@ SPDX-License-Identifier: CC0-1.0
   > MULTY INT INT EOL
   The file was successfully parsed.
   REJECT
+  $ ./demoInterpret.exe <<-EOF
+  > demo_inputs/demo_input1.mly
+  > PLUS
+  Some error in parse part
+  [1]

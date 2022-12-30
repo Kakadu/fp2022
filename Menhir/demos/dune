@@ -15,4 +15,7 @@
   ./demoParse.exe
   ./demoInterpret.exe
   ./demo_inputs/demo_input.mly
-  ./demo_inputs/demo_input1.mly))
+  ./demo_inputs/demo_input1.mly
+  ./demo_inputs/demo_input2.mly
+  ./demo_inputs/demo_input3.mly
+  ./demo_inputs/demo_input4.mly))
