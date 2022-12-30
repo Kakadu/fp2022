@@ -82,10 +82,26 @@ let rec get_nonterm_names helper = function
   | _ -> []
 ;;
 
+(* If the rule is not subject to left recursion, we can not fix it to have fewer rules. *)
+let is_nonterm_subject_lr name =
+  List.exists (fun rule ->
+    let lhs, rhs = rule in
+    String.equal lhs name && String.equal (get_h_string_list rhs) name)
+;;
+
 let lr_grammar_fix g =
   let nonterm_names = get_nonterm_names "" g in
   let rec fix = function
-    | h :: tl -> get_new_A_with_A' g h @ fix tl
+    | h :: tl ->
+      if is_nonterm_subject_lr h g
+      then get_new_A_with_A' g h @ fix tl
+      else
+        List.filter
+          (fun rule ->
+            let lhs, _ = rule in
+            String.equal lhs h)
+          g
+        @ fix tl
     | _ -> []
   in
   fix nonterm_names
