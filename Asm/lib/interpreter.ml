@@ -384,3 +384,45 @@ let%test _ =
     (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
     [ 6; 4; 6; 8 ]
 ;;
+
+(* Calculate (1, 2, 3) x ((4, 5, 6), (7, 8, 9), (10, 11, 12)).
+   The answer is located in 3 first dwords of xmm0 *)
+let%test _ =
+  let program =
+    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 1)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 1)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm0")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 2)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm1")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 3)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 3)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 3)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm2")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 4)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 5)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 6)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm3")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 7)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 8)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 9)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm4")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 10)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 11)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 12)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm5")))
+    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm3")))
+    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm1", reg_name_to_xmm_reg "xmm4")))
+    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm2", reg_name_to_xmm_reg "xmm5")))
+    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm1")))
+    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm2")))
+    ]
+  in
+  let final_xmm_reg_map = (eval_whole program).xmm_reg_map in
+  List.equal
+    ( = )
+    (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
+    [ 48; 54; 60; 0 ]
+;;

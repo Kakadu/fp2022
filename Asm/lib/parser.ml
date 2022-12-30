@@ -571,3 +571,68 @@ let%test _ =
 let%test _ = fail_ast {|mov xmm0, xmm1|}
 let%test _ = fail_ast {|movdqa ax|}
 let%test _ = fail_ast {|mulpd xmm3, 4|}
+
+(* Calculate (1, 2, 3) x ((4, 5, 6), (7, 8, 9), (10, 11, 12)) *)
+let%test _ =
+  ok_ast
+    {| mov eax, 1
+       mov ebx, 1
+       mov ecx, 1
+       movdqa xmm0
+       mov eax, 2
+       mov ebx, 2
+       mov ecx, 2
+       movdqa xmm1
+       mov eax, 3
+       mov ebx, 3
+       mov ecx, 3
+       movdqa xmm2
+       mov eax, 4
+       mov ebx, 5
+       mov ecx, 6
+       movdqa xmm3
+       mov eax, 7
+       mov ebx, 8
+       mov ecx, 9
+       movdqa xmm4
+       mov eax, 10
+       mov ebx, 11
+       mov ecx, 12
+       movdqa xmm5
+       mulpd xmm0, xmm3
+       mulpd xmm1, xmm4
+       mulpd xmm2, xmm5
+       addpd xmm0, xmm1
+       addpd xmm0, xmm2
+    |}
+    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 1)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 1)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm0")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 2)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm1")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 3)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 3)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 3)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm2")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 4)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 5)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 6)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm3")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 7)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 8)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 9)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm4")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 10)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 11)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 12)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm5")))
+    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm3")))
+    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm1", reg_name_to_xmm_reg "xmm4")))
+    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm2", reg_name_to_xmm_reg "xmm5")))
+    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm1")))
+    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm2")))
+    ]
+;;
