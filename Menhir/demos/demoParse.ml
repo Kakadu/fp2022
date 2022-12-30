@@ -21,7 +21,15 @@ let rec print_grammar = function
 let () =
   let path = read_command () in
   let text = Interpret.read_all_file_text (Unix.openfile path [] 0) in
-  let tokens, start_rule, grammar = Menhir_lib.Interpret.parse' text in
+  let tokens, start_rule, grammar =
+    try Menhir_lib.Interpret.parse' text with
+    | Interpret.NoSeparator s ->
+      print_endline s;
+      exit 1
+    | Lexer.InvalidToken (l, s) ->
+      Format.printf "InvalidToken error: line %s at %s" l s;
+      exit 1
+  in
   Format.printf "List of tokens: ";
   List.iter (fun x -> Format.printf "%s " x) tokens;
   Format.printf "\nStart rule: %s" start_rule;
