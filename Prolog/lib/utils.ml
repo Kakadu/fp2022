@@ -49,4 +49,4 @@ let rec apply_substitution term substitution =
 ;;
 
 (** Check whether a list is empty.  *)
-let is_empty list = List.length list == 0
+let is_empty list = list = []
