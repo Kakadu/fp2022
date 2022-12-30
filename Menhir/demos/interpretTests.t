@@ -1,6 +1,7 @@
 Copyright 2021-2022, Artur Gagin
 SPDX-License-Identifier: CC0-1.0
 
+Correct grammar tests.
   $ ./demoInterpret.exe <<-EOF
   > demo_inputs/demo_input.mly
   > LBRACE INT RBRACE EOL
@@ -51,6 +52,7 @@ SPDX-License-Identifier: CC0-1.0
   > MULTY INT INT EOL
   The file was successfully parsed.
   REJECT
+Test with grammar error.
   $ ./demoInterpret.exe <<-EOF
   > demo_inputs/demo_input1.mly
   > PLUS
