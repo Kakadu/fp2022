@@ -187,7 +187,7 @@ let gen_dcommand_one_arg_p =
   gen_dcommand_p (dreg_p <|> dconst_p) cmd_one_arg_str_to_command
 ;;
 
-(* Generate a parser of two-args word command *)
+(* Generate a parser of two-args dword command *)
 let gen_dcommand_two_args_p =
   gen_dcommand_p (dregreg_p <|> dregconst_p) cmd_two_args_str_to_command
 ;;
