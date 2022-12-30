@@ -9,11 +9,13 @@ open Utils
 type byte
 type word
 type dword
+type xmm
 
 (* Needed for pretty printing *)
 val pp_byte : Format.formatter -> byte -> unit
 val pp_word : Format.formatter -> word -> unit
 val pp_dword : Format.formatter -> dword -> unit
+val pp_xmm : Format.formatter -> xmm -> unit
 
 (* Operand types *)
 type 'a reg [@@deriving show { with_path = false }]
@@ -34,9 +36,11 @@ val int_to_dword_reg : int -> dword reg
 val byte_reg_name_list : string list
 val word_reg_name_list : string list
 val dword_reg_name_list : string list
+val xmm_reg_name_list : string list
 val reg_name_to_byte_reg : string -> byte reg
 val reg_name_to_word_reg : string -> word reg
 val reg_name_to_dword_reg : string -> dword reg
+val reg_name_to_xmm_reg : string -> xmm reg
 
 (* Get internal register id by its name *)
 val reg_name_to_id : string -> int
@@ -51,3 +55,8 @@ val reg_val_get : 'a reg -> int IntMap.t -> int
 (* If the value to set is too big, only the last bytes are considered.
      E.g. if we try to set "ah" to 0xABC, it will be set to 0xBC *)
 val reg_val_set : 'a reg -> int -> int IntMap.t -> int IntMap.t
+
+(* Special case of get and set for xmm registers since their values are int lists,
+   so they require a separate reg_map *)
+val xmm_reg_val_get : xmm reg -> int list IntMap.t -> int list
+val xmm_reg_val_set : xmm reg -> int list -> int list IntMap.t -> int list IntMap.t

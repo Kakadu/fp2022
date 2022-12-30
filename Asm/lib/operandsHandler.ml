@@ -8,10 +8,12 @@ open Utils
 type byte
 type word
 type dword
+type xmm
 
 let pp_byte fmt _ = Format.fprintf fmt "byte"
 let pp_word fmt _ = Format.fprintf fmt "word"
 let pp_dword fmt _ = Format.fprintf fmt "dword"
+let pp_xmm fmt _ = Format.fprintf fmt "xmm"
 
 type 'a reg = int [@@deriving show { with_path = false }]
 type 'a const = int [@@deriving show { with_path = false }]
@@ -37,11 +39,13 @@ let int_to_dword_const x =
 let byte_reg_name_list = [ "ah"; "al"; "bh"; "bl"; "ch"; "cl"; "dh"; "dl" ]
 let word_reg_name_list = [ "ax"; "bx"; "cx"; "dx" ]
 let dword_reg_name_list = [ "eax"; "ebx"; "ecx"; "edx" ]
+let xmm_reg_name_list = [ "xmm0"; "xmm1"; "xmm2"; "xmm3"; "xmm4"; "xmm5"; "xmm6"; "xmm7" ]
 
 (* Lengths of each of the lists just to avoid calculating them everytime we need them *)
 let byte_reg_list_len = List.length byte_reg_name_list
 let word_reg_list_len = List.length word_reg_name_list
 let dword_reg_list_len = List.length dword_reg_name_list
+let xmm_reg_list_len = List.length xmm_reg_name_list
 
 (* Functions to check if the id belongs to a register of particular size *)
 let reg_id_is_byte_reg reg_id = reg_id < byte_reg_list_len
@@ -50,7 +54,14 @@ let reg_id_is_word_reg reg_id =
   reg_id >= byte_reg_list_len && reg_id < byte_reg_list_len + word_reg_list_len
 ;;
 
-let reg_id_is_dword_reg reg_id = reg_id >= byte_reg_list_len + word_reg_list_len
+let reg_id_is_dword_reg reg_id =
+  reg_id >= byte_reg_list_len + word_reg_list_len
+  && reg_id < byte_reg_list_len + word_reg_list_len + dword_reg_list_len
+;;
+
+let reg_id_is_xmm_reg reg_id =
+  reg_id >= byte_reg_list_len + word_reg_list_len + dword_reg_list_len
+;;
 
 (* Convert register id to 'a reg *)
 let int_to_byte_reg reg_id =
@@ -71,7 +82,16 @@ let int_to_dword_reg reg_id =
   else failwith (Printf.sprintf "Register with id %d is not a dword register" reg_id)
 ;;
 
-let all_reg_name_list = byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list
+let int_to_xmm_reg reg_id =
+  if reg_id_is_xmm_reg reg_id
+  then reg_id
+  else failwith (Printf.sprintf "Register with id %d is not an xmm register" reg_id)
+;;
+
+let all_reg_name_list =
+  byte_reg_name_list @ word_reg_name_list @ dword_reg_name_list @ xmm_reg_name_list
+;;
+
 let reg_to_id : 'a reg -> int = Fun.id
 let const_val : 'a const -> int = Fun.id
 
@@ -84,6 +104,7 @@ let reg_name_to_id reg_name =
 let reg_name_to_byte_reg reg_name = reg_name |> reg_name_to_id |> int_to_byte_reg
 let reg_name_to_word_reg reg_name = reg_name |> reg_name_to_id |> int_to_word_reg
 let reg_name_to_dword_reg reg_name = reg_name |> reg_name_to_id |> int_to_dword_reg
+let reg_name_to_xmm_reg reg_name = reg_name |> reg_name_to_id |> int_to_xmm_reg
 
 (* Get id of a corresponding primary register, e.g. for id of "ch" this
      function returns id of "ecx" *)
@@ -125,6 +146,27 @@ let reg_val_set reg value reg_map =
       lor (((value land 0xFF) lsl 8) lor (primary_value land 0xFF))
   in
   IntMap.add primary_id value_to_set reg_map
+;;
+
+let xmm_reg_val_get xmm_reg xmm_reg_map =
+  let xmm_reg_id = reg_to_id xmm_reg in
+  IntMap.find xmm_reg_id xmm_reg_map
+;;
+
+let xmm_reg_val_set xmm_reg xmm_value xmm_reg_map =
+  let validate =
+    if List.length xmm_value != 4
+    then failwith "Value of an xmm register must be a list of 4 integers"
+    else
+      List.iter
+        (fun x ->
+          if not (int_is_dword_const x)
+          then failwith "All elements of xmm register value list must be 32-bit long")
+        xmm_value
+  in
+  let xmm_reg_id = reg_to_id xmm_reg in
+  validate;
+  IntMap.add xmm_reg_id xmm_value xmm_reg_map
 ;;
 
 module RegMapTest = struct
