@@ -84,6 +84,7 @@ let gen_reg_name_p reg_name_list = choice (List.map string reg_name_list)
 let breg_name_p = gen_reg_name_p byte_reg_name_list <?> "breg_name_p"
 let wreg_name_p = gen_reg_name_p word_reg_name_list <?> "wreg_name_p"
 let dreg_name_p = gen_reg_name_p dword_reg_name_list <?> "dreg_name_p"
+let xreg_name_p = gen_reg_name_p xmm_reg_name_list <?> "xreg_name_p"
 
 (****************************************************************************************)
 (* Generate parser for register names that returns Reg (...) *)
@@ -95,6 +96,7 @@ let gen_reg_p reg_name_p reg_name_to_t_reg =
 let breg_p = gen_reg_p breg_name_p reg_name_to_byte_reg <?> "breg_p"
 let wreg_p = gen_reg_p wreg_name_p reg_name_to_word_reg <?> "wreg_p"
 let dreg_p = gen_reg_p dreg_name_p reg_name_to_dword_reg <?> "dreg_p"
+let xreg_p = gen_reg_p xreg_name_p reg_name_to_xmm_reg <?> "xreg_p"
 
 (****************************************************************************************)
 (* Generate parser for two registers that returns RegReg (...) *)
@@ -109,6 +111,7 @@ let gen_regreg_p reg_p =
 let bregreg_p = gen_regreg_p breg_p <?> "bregreg_p"
 let wregreg_p = gen_regreg_p wreg_p <?> "wregreg_p"
 let dregreg_p = gen_regreg_p dreg_p <?> "dregreg_p"
+let xregreg_p = gen_regreg_p xreg_p <?> "xregreg_p"
 
 (****************************************************************************************)
 (* Generate parser for register and constant that returns RegConst (...) *)
@@ -193,6 +196,18 @@ let gen_dcommand_two_args_p =
 ;;
 
 (****************************************************************************************)
+(* Generate a parser of an xmm command *)
+let gen_xcommand_p operand_p cmd_str_to_command cmd_str =
+  gen_command_p operand_p (fun x -> XCommand (cmd_str_to_command cmd_str x)) cmd_str
+;;
+
+(* Generate a parser of one-arg xmm command *)
+let gen_xcommand_one_arg_p = gen_xcommand_p xreg_p xcmd_one_arg_str_to_command
+
+(* Generate a parser of two-args xmm command *)
+let gen_xcommand_two_args_p = gen_xcommand_p xregreg_p xcmd_two_args_str_to_command
+
+(****************************************************************************************)
 (* The following parsers are intended to parse a one-line command *)
 
 (* Parse label declaration (e.g. "l1:") *)
@@ -220,6 +235,13 @@ let dcommand_p =
   <?> "dcommand_p"
 ;;
 
+let xcommand_p =
+  choice
+    (List.map gen_xcommand_one_arg_p xcmd_one_arg_list
+    @ List.map gen_xcommand_two_args_p xcmd_two_args_list)
+  <?> "xcommand_p"
+;;
+
 let scommand_p = choice (List.map gen_scommand_p scmd_list) <?> "scommand_p"
 
 (****************************************************************************************)
@@ -227,7 +249,9 @@ let scommand_p = choice (List.map gen_scommand_p scmd_list) <?> "scommand_p"
    We want dcommand_p to be the first so that all one-arg commands that take
    constants are parsed the same, i.e. "mul 5" should be parsed as DCommand.
    Otherwise, "mul 5" will be parsed as BCommand and "mul 500" will be parsed as WCommand *)
-let instr_p = choice [ dcommand_p; wcommand_p; bcommand_p; scommand_p; lcommand_p ]
+let instr_p =
+  choice [ dcommand_p; wcommand_p; bcommand_p; xcommand_p; scommand_p; lcommand_p ]
+;;
 
 (* Parse the whole NASM program *)
 let program_p =
@@ -521,3 +545,29 @@ let%test _ =
     ; LCommand "end"
     ]
 ;;
+
+let%test _ =
+  ok_ast
+    {| mov eax, 1
+       mov ebx, 2
+       mov ecx, 3
+       mov edx, 4
+       movdqa xmm0
+       mov eax, 5
+       movdqa xmm7
+       addpd xmm0, xmm7
+    |}
+    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 3)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "edx", int_to_dword_const 4)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm0")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 5)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm7")))
+    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm7")))
+    ]
+;;
+
+let%test _ = fail_ast {|mov xmm0, xmm1|}
+let%test _ = fail_ast {|movdqa ax|}
+let%test _ = fail_ast {|mulpd xmm3, 4|}

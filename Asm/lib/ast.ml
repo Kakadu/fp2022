@@ -30,6 +30,9 @@ type 'a command =
   | Jne of string operand_single
   | Call of string operand_single
   | Ret
+  | Movdqa of xmm operand_single
+  | Addpd of xmm operands_double
+  | Mulpd of xmm operands_double
 [@@deriving show { with_path = false }]
 
 type instruction =
@@ -41,6 +44,8 @@ type instruction =
   | WCommand of word command
   (* Command with dword-size operands *)
   | DCommand of dword command
+  (* Command with xmm registers *)
+  | XCommand of xmm command
   (* Command with a label/string operand.
      Our type system prevents us from having
      SCommand (Inc (...)) or SCommand (Je (Reg (...))) *)
@@ -56,6 +61,8 @@ module CmdHandler = struct
   let cmd_zero_args_list = [ "ret" ]
   let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]
   let cmd_two_args_list = [ "mov"; "add"; "sub"; "cmp" ]
+  let xcmd_one_arg_list = [ "movdqa" ]
+  let xcmd_two_args_list = [ "addpd"; "mulpd" ]
   let scmd_list = [ "jmp"; "je"; "jne"; "call" ]
 
   let cmd_zero_args_str_to_command = function
@@ -76,6 +83,17 @@ module CmdHandler = struct
     | "add" -> fun x -> Add x
     | "sub" -> fun x -> Sub x
     | "cmp" -> fun x -> Cmp x
+    | str -> failwith ("Unknown command " ^ str)
+  ;;
+
+  let xcmd_one_arg_str_to_command = function
+    | "movdqa" -> fun x -> Movdqa x
+    | str -> failwith ("Unknown command " ^ str)
+  ;;
+
+  let xcmd_two_args_str_to_command = function
+    | "addpd" -> fun x -> Addpd x
+    | "mulpd" -> fun x -> Mulpd x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
