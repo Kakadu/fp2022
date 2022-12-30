@@ -54,25 +54,25 @@ let print_help () =
   match Sys.argv with
   | [| _; "help" |] ->
     print_endline
-      "USAGE: dune exec ./REPL.exe menhir-interpret <path-to-file>\n\n\
-       YOUR FILE SHOULD HAVE A SYNTAX SIMILAR TO THE FOLLOWING EXAMPLE:\n\
-       \t /* USE ONLY UPPERCASE LETTERS IN NONTERM NAMES */\n\
-       \t /* USE ONLY LOWERCASE LETTERS IN TERM NAMES */\n\
-       \t /* FOLLOW THIS EXAMPLE */\n\
-       \t %token TOKEN_1\n\
-       \t ...\n\
-       \t %token TOKEN_n\n\
-       \t %start starttoken\n\n\
-       \t %%\n\n\
-       \t starttoken: /* nonterm_1 */\n\
-       \t | <TOKEN_i/nonterm_j>; ...; <TOKEN_i/nonterm_j>\n\
-       \t ...\n\
-       \t | ...\n\n\
-       \t ...\n\n\
-       \t nonterm_k:\n\
-       \t | ...\n\
-       \t ...\n\
-       \t | ...\n";
+      {|USAGE: dune exec ./REPL.exe menhir-interpret <path-to-file>
+       YOUR FILE SHOULD HAVE A SYNTAX SIMILAR TO THE FOLLOWING EXAMPLE:
+        /* USE ONLY UPPERCASE LETTERS IN NONTERM NAMES */
+        /* USE ONLY LOWERCASE LETTERS IN TERM NAMES */
+        /* FOLLOW THIS EXAMPLE */
+          %token TOKEN_1
+          ...
+          %token TOKEN_n
+          %start starttoken
+          %%
+          starttoken: /* nonterm_1 */
+          | <TOKEN_i/nonterm_j>; ...; <TOKEN_i/nonterm_j>
+          ...
+          | ...
+          ...
+          nonterm_k:
+          | ...
+          ...
+          | ...|};
     exit 0
   | _ -> ()
 ;;
@@ -87,24 +87,43 @@ let () =
   Arg.parse speclist anon_fun usage;
   print_help ();
   check_errors ();
-  try
-    let text = Interpret.read_all_file_text (Unix.openfile !input_file [] 0) in
-    match Interpret.get_parser_and_tree_parser text with
-    | Ok (parser, tree_parser) ->
-      print_endline "\tAuthor: @lastdesire";
-      print_endline "\tTutor: @Kakadu";
-      print_endline "> Write sentences and parser will try to interprete it:";
-      print_endline " * ACCEPT: your sentence was successfully parsed;";
-      print_endline
-        " * OVERSHOOT: the end of your sentence was reached before it could be accepted";
-      print_endline " * REJECT: the sentence was not accepted;";
-      print_endline
-        "> Menhir Reference Manual: https://gallium.inria.fr/~fpottier/menhir/manual.html";
-      print_endline "> To exit you can type 'exit'.";
-      repl_tokens_list parser tree_parser
-    | Error e -> raise (ParseProcessError e)
-  with
-  | Unix.Unix_error _ ->
-    raise
-      (OpenFileError ("Please, check path on correctness, can't open file: " ^ !input_file))
+  let text =
+    try Interpret.read_all_file_text (Unix.openfile !input_file [] 0) with
+    | Unix.Unix_error _ ->
+      raise
+        (OpenFileError
+           ("Please, check path on correctness, can't open file: " ^ !input_file))
+  in
+  let parser, tree_parser =
+    try Interpret.get_parser_and_tree_parser text with
+    | Lexer.InvalidToken (l, s) ->
+      raise
+        (ParseProcessError
+           (Format.sprintf
+              "Lexer Error: line %s at: %s. You can use command 'dune exec ./REPL.exe \
+               help' for get more information about required syntax."
+              l
+              s))
+    (* Error from lexer. *)
+    | Parser.Error ->
+      (* Error from parser. *)
+      raise
+        (ParseProcessError
+           "Parse Error: make sure you write nonterms with lowercase letters only and \
+            terms with uppercase only (don't use any other symbols). You can use command \
+            'dune exec ./REPL.exe help' for get more information about required syntax.")
+      (* Only in this situation we have parse error, in other case there is InvalidToken exception. *)
+    | Interpret.NoSeparator s -> raise (ParseProcessError s)
+  in
+  print_endline "\tAuthor: @lastdesire";
+  print_endline "\tTutor: @Kakadu";
+  print_endline "> Write sentences and parser will try to interprete it:";
+  print_endline " * ACCEPT: your sentence was successfully parsed;";
+  print_endline
+    " * OVERSHOOT: the end of your sentence was reached before it could be accepted";
+  print_endline " * REJECT: the sentence was not accepted;";
+  print_endline
+    "> Menhir Reference Manual: https://gallium.inria.fr/~fpottier/menhir/manual.html";
+  print_endline "> To exit you can type 'exit'.";
+  repl_tokens_list parser tree_parser
 ;;

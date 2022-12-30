@@ -305,23 +305,7 @@ open Parser
 let get_parser_and_tree_parser text =
   (* tokens, start rule, grammar *)
   let parse_result = parse' text in
-  try Ok (gen_parser text parse_result, gen_tree_parser text parse_result) with
-  | InvalidToken (l, s) ->
-    Error
-      (Format.sprintf
-         "Lexer Error: line %s at: %s. You can use command 'dune exec ./REPL.exe help' \
-          for get more information about required syntax."
-         l
-         s)
-  (* Error from lexer. *)
-  | Error ->
-    (* Error from parser. *)
-    Error
-      "Parse Error: make sure you write nonterms with lowercase letters only and terms \
-       with uppercase only (don't use any other symbols). You can use command 'dune exec \
-       ./REPL.exe help' for get more information about required syntax."
-    (* Only in this situation we have parse error, in other case there is InvalidToken exception. *)
-  | NoSeparator s -> Error s
+  gen_parser text parse_result, gen_tree_parser text parse_result
 ;;
 
 (* TESTS *)
@@ -345,87 +329,67 @@ let test_text =
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "PLUS"; "INT"; "INT"; "EOL" ] in
-    res
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "PLUS"; "INT"; "INT"; "EOL" ] in
+  res
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (_, tree_parser) ->
-    tree_parser [ "PLUS"; "INT"; "INT"; "EOL" ]
-    = " [ main :  [ expr :  PLUS   [ expr :  INT  ]   [ expr :  INT  ]  ]   EOL  ] "
-  | _ -> false
+  let _, tree_parser = get_parser_and_tree_parser test_text in
+  tree_parser [ "PLUS"; "INT"; "INT"; "EOL" ]
+  = " [ main :  [ expr :  PLUS   [ expr :  INT  ]   [ expr :  INT  ]  ]   EOL  ] "
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "EOL" ] in
-    res
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "EOL" ] in
+  res
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (_, tree_parser) -> tree_parser [ "EOL" ] = " [ main :  EOL  ] "
-  | _ -> false
+  let _, tree_parser = get_parser_and_tree_parser test_text in
+  tree_parser [ "EOL" ] = " [ main :  EOL  ] "
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
-    not res (* OVERSHOOT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
+  not res (* OVERSHOOT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "HELLOWORLD" ] in
-    not res (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "HELLOWORLD" ] in
+  not res (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ =
-      parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
-    in
-    res
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ] in
+  res
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (_, tree_parser) ->
-    tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
-    = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   \
-       [ expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
-  | _ -> false
+  let _, tree_parser = get_parser_and_tree_parser test_text in
+  tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
+  = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   [ \
+     expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, return_code =
-      parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
-    in
-    (not res) && return_code = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, return_code =
+    parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
+  in
+  (not res) && return_code = 0 (* REJECT *)
 ;;
 
 let test_text = "%token PLU#!@#!KLS"
 
 let%test _ =
   try
-    match get_parser_and_tree_parser test_text with
-    | Ok (_, _) -> false
-    | _ -> false
+    let _ = get_parser_and_tree_parser test_text in
+    false
   with
   | NoSeparator _ -> true (* Not found %% *)
   | _ -> false
@@ -435,11 +399,11 @@ let test_text = "%token PLU#!@#!KLS %%"
 
 let%test _ =
   try
-    match get_parser_and_tree_parser test_text with
-    | Ok (_, _) -> false
-    | _ -> false
+    let _ = get_parser_and_tree_parser test_text in
+    false
   with
   | InvalidToken (_, s) -> String.equal s "#!@#!KLS"
+  | _ -> false
 ;;
 
 (* Lexer error *)
@@ -498,59 +462,45 @@ let test_text =
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] in
-    (not res) && ret = -1 (* OVERSHOOT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] in
+  (not res) && ret = -1 (* OVERSHOOT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 (* TESTS WITH GRAMMAR SUBJECT TO LEFT RECURSION *)
@@ -575,53 +525,39 @@ expr:
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "INT" ] in
-    (not res) && ret = -1 (* OVERSHOOT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "INT" ] in
+  (not res) && ret = -1 (* OVERSHOOT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "INT"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "INT"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "INT"; "PLUS"; "INT"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "INT"; "PLUS"; "INT"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "INT"; "MUL"; "INT"; "PLUS"; "INT"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "INT"; "MUL"; "INT"; "PLUS"; "INT"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ =
-      parser [ "LBRACE"; "INT"; "PLUS"; "INT"; "MUL"; "INT"; "RBRACE"; "EOL" ]
-    in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "LBRACE"; "INT"; "PLUS"; "INT"; "MUL"; "INT"; "RBRACE"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "RBRACE" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "RBRACE" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let test_text = {|
@@ -636,49 +572,37 @@ main:
 |}
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "Y" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "Y" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "X" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "X" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, ret = parser [ "EOL" ] in
-    (not res) && ret = 0 (* REJECT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, ret = parser [ "EOL" ] in
+  (not res) && ret = 0 (* REJECT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "X"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "X"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "X"; "EOL"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "X"; "EOL"; "EOL" ] in
+  res (* ACCEPT *)
 ;;
 
 let%test _ =
-  match get_parser_and_tree_parser test_text with
-  | Ok (parser, _) ->
-    let res, _ = parser [ "X"; "EOL"; "EOL"; "EOL" ] in
-    res (* ACCEPT *)
-  | _ -> false
+  let parser, _ = get_parser_and_tree_parser test_text in
+  let res, _ = parser [ "X"; "EOL"; "EOL"; "EOL" ] in
+  res (* ACCEPT *)
 ;;

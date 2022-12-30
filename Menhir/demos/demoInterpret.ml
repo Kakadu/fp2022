@@ -12,19 +12,18 @@ let read_command () =
 let () =
   let path = read_command () in
   let text = Interpret.read_all_file_text (Unix.openfile path [] 0) in
-  try
-    match Interpret.get_parser_and_tree_parser text with
-    | Ok (parser, tree_parser) ->
-      print_endline "The file was successfully parsed.";
-      let token_list = String.split_on_char ' ' (read_command ()) in
-      let b, ret = parser token_list in
-      if b
-      then print_endline (tree_parser token_list)
-      else if ret = 0
-      then print_endline "REJECT"
-      else print_endline "OVERSHOOT"
+  let parser, tree_parser =
+    try Interpret.get_parser_and_tree_parser text with
     | _ ->
-      print_endline "Error instead of Ok result in get_parser_and_tree_parser function."
-  with
-  | _ -> print_endline "Some error."
+      print_endline "Some error in parse part";
+      exit 1
+  in
+  print_endline "The file was successfully parsed.";
+  let token_list = String.split_on_char ' ' (read_command ()) in
+  let b, ret = parser token_list in
+  if b
+  then print_endline (tree_parser token_list)
+  else if ret = 0
+  then print_endline "REJECT"
+  else print_endline "OVERSHOOT"
 ;;
