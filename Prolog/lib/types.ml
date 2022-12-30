@@ -86,8 +86,7 @@ type choicepoint =
       ; substitution : unifier
       }
   | Clause of
-      { goal : term
-      ; substitution : unifier
+      { substitution : unifier
       ; candidates : clause list
       ; head : term
       ; body : term

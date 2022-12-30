@@ -24,14 +24,31 @@ module Interpret (M : MonadFail) (C : Config) = struct
 
   (**/**)
 
+  type builtin_predicate =
+    | True
+    | Cut
+    | Read of term
+    | Writeln of term
+    | Identical of term * term
+    | Clause_p of term * term
+    | Conjuction_p of term * term
+
   (** {2 Helpers} *)
 
-  (** [is_builtin goal] true if [goal] is a builtin predicate, false otherwise.*)
-  let is_builtin (term : term) : bool =
-    match get_pi term with
-    | "true", 0 | "!", 0 | ",", 2 | "read", 1 | "==", 2 | "clause", 2 | "writeln", 1 ->
-      true
-    | _ -> false
+  (** [is_builtin goal] returns builtin predicate if [goal] matches with builtin predicate*)
+  let is_builtin (term : term) =
+    match term with
+    | Atomic (Atom (Name "true")) -> `Builtin True
+    | Atomic (Atom (Name "!")) -> `Builtin Cut
+    | Compound { atom = Name "read"; terms = [ term ] } -> `Builtin (Read term)
+    | Compound { atom = Name "writeln"; terms = [ term ] } -> `Builtin (Writeln term)
+    | Compound { atom = Name "clause"; terms = [ term1; term2 ] } ->
+      `Builtin (Clause_p (term1, term2))
+    | Compound { atom = Operator ","; terms = [ term1; term2 ] } ->
+      `Builtin (Conjuction_p (term1, term2))
+    | Compound { atom = Operator "=="; terms = [ term1; term2 ] } ->
+      `Builtin (Identical (term1, term2))
+    | _ -> `NotBuiltin
   ;;
 
   (** [swap_vars sub] if pair [(Var x, Var y)] is in [sub], it will be replaced with [(Var y, Var x)]. 
@@ -84,15 +101,25 @@ module Interpret (M : MonadFail) (C : Config) = struct
   (** [eval_builtin goal substitution choicepoints] evaluates [goal] which is a 
       variant of builtin predicate. *)
   and eval_builtin goal substitution choicepoints =
-    let goal_pi = get_pi goal in
+    (* let goal_pi = get_pi goal in *)
     let is_cut term = get_pi term = ("!", 0) in
-    match goal_pi, goal with
-    | ("true", 0), _ | ("!", 0), _ -> return (substitution, choicepoints)
-    | ("==", 2), Compound { atom = _; terms = [ term1; term2 ] } ->
+    match goal with
+    | True | Cut -> return (substitution, choicepoints)
+    | Conjuction_p (left_branch, right_branch) when is_cut left_branch ->
+      eval right_branch substitution []
+      >>= fun (unifier, _) -> return (unifier, choicepoints)
+    | Conjuction_p (left_branch, right_branch) when is_cut right_branch ->
+      eval left_branch substitution []
+      >>= fun (unifier, _) -> return (unifier, choicepoints)
+    | Conjuction_p (left_branch, right_branch) ->
+      eval left_branch substitution []
+      >>= fun (l_subs, l_choicepoints) ->
+      eval_right_branch right_branch substitution l_subs choicepoints l_choicepoints
+    | Identical (term1, term2) ->
       if equal_term term1 term2
       then return (substitution, choicepoints)
       else eval_error "terms are not equal"
-    | ("read", 1), Compound { atom = _; terms = [ term ] } ->
+    | Read term ->
       (match In_channel.input_line In_channel.stdin with
        | Some query_text -> return query_text
        | None -> critical "Unexpected EOF")
@@ -103,49 +130,34 @@ module Interpret (M : MonadFail) (C : Config) = struct
          unify [ x, term ]
          >>= fun res ->
          unify (res @ substitution) >>= fun res -> return (res, choicepoints))
-    | ("writeln", 1), Compound { atom = _; terms = [ term ] } ->
+    | Writeln term ->
       Caml.Format.printf "%s\n" (str_of_term term);
       return (substitution, choicepoints)
-    | (",", 2), Compound { atom = _; terms = [ left_branch; right_branch ] }
-      when is_cut left_branch ->
-      eval right_branch substitution []
-      >>= fun (unifier, _) -> return (unifier, choicepoints)
-    | (",", 2), Compound { atom = _; terms = [ left_branch; right_branch ] }
-      when is_cut right_branch ->
-      eval left_branch substitution []
-      >>= fun (unifier, _) -> return (unifier, choicepoints)
-    | (",", 2), Compound { atom = _; terms = [ left_branch; right_branch ] } ->
-      eval left_branch substitution []
-      >>= fun (l_subs, l_choicepoints) ->
-      eval_right_branch right_branch substitution l_subs choicepoints l_choicepoints
-    | ("clause", 2), Compound { atom = _; terms = [ head; body ] } ->
-      if is_builtin head
-      then eval_error "Can't unify clause with builtins"
-      else
-        search db head
-        >>= fun candidates ->
-        let unifiable =
-          List.fold_left
-            (fun (acc : bool) { head = head2; goal = body2 } ->
-              match
-                unify [ head, head2 ]
-                >>= fun unificator -> unify ([ body, body2 ] @ unificator)
-              with
-              | Ok _ -> true
-              | Error _ -> false || acc)
-            false
-            candidates
-        in
-        if not unifiable
-        then eval_error "Can't unify clauses"
-        else (
-          let choicepoints =
-            Clause { goal; substitution; candidates; head; body } :: choicepoints
-          in
-          backtrack choicepoints)
-    | _ ->
-      critical
-        ("This predicate was marked as builtin but is not implemented: " ^ fst goal_pi)
+    | Clause_p (head, body) ->
+      (match is_builtin head with
+       | `Builtin _ -> eval_error "Can't unify clause with builtins"
+       | `NotBuiltin ->
+         search db head
+         >>= fun candidates ->
+         let unifiable =
+           List.fold_left
+             (fun (acc : bool) { head = head2; goal = body2 } ->
+               match
+                 unify [ head, head2 ]
+                 >>= fun unificator -> unify ([ body, body2 ] @ unificator)
+               with
+               | Ok _ -> true
+               | Error _ -> false || acc)
+             false
+             candidates
+         in
+         if not unifiable
+         then eval_error "Can't unify clauses"
+         else (
+           let choicepoints =
+             Clause { substitution; candidates; head; body } :: choicepoints
+           in
+           backtrack choicepoints))
 
   (** {2 Backtracking} *)
   (** There are three types of choicepoints in the interpreter. 
@@ -157,7 +169,7 @@ module Interpret (M : MonadFail) (C : Config) = struct
 
   and backtrack_clause_builtin clause choicepoints =
     match clause with
-    | Clause { goal; substitution; candidates; head = head1; body = body1 } ->
+    | Clause { substitution; candidates; head = head1; body = body1 } ->
       (match candidates with
        | { head = head2; goal = body2 } :: tl ->
          unify [ head2, head1 ]
@@ -170,7 +182,7 @@ module Interpret (M : MonadFail) (C : Config) = struct
          , if is_empty tl
            then choicepoints
            else
-             Clause { goal; substitution; candidates = tl; head = head1; body = body1 }
+             Clause { substitution; candidates = tl; head = head1; body = body1 }
              :: choicepoints )
        | _ -> eval_error "no more candidates")
     | _ -> critical "wrong choicepoint type was passed to backtrack_clause_builtin"
@@ -235,9 +247,9 @@ module Interpret (M : MonadFail) (C : Config) = struct
       Caml.Format.printf "Goal: %s\n" (str_of_term goal);
       Print.print_substitution substitution;
       Caml.Format.printf "\n\n");
-    if is_builtin goal
-    then eval_builtin goal substitution choicepoints
-    else
+    match is_builtin goal with
+    | `Builtin goal -> eval_builtin goal substitution choicepoints
+    | `NotBuiltin ->
       search db goal
       >>= fun candidates ->
       let choicepoints = Choicepoint { goal; substitution; candidates } :: choicepoints in
