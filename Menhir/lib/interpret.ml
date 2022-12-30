@@ -93,14 +93,13 @@ let lr_grammar_fix g =
   fix nonterm_names
 ;;
 
-(* useless rules: A -> A or A -> epsilon *)
-let rec delete_useless_rules = function
-  | (lhs, rhs) :: tl ->
-    (match rhs with
-     | a :: [] when String.equal lhs a -> delete_useless_rules tl
-     | [] -> delete_useless_rules tl
-     | _ -> (lhs, rhs) :: delete_useless_rules tl)
-  | _ -> []
+(* useless rules: A -> A *)
+let delete_useless_rules =
+  List.filter (fun rule ->
+    let lhs, rhs = rule in
+    match rhs with
+    | a :: [] when String.equal lhs a -> false
+    | _ -> true)
 ;;
 
 let grammar_fix g = lr_grammar_fix (delete_useless_rules g)
