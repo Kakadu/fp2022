@@ -267,18 +267,16 @@ module Interpret (M : MonadFail) (C : Config) = struct
     match query_term with
     | Error _ -> critical "Cannot parse the query"
     | Ok root_goal ->
-      let filter_sub unifier =
-        let unifier = unifier in
-        match unify unifier with
+      let filter_sub sub =
+        match unify sub with
         | Ok unifier ->
-          let unifier = unifier in
           if not debug
           then
             filter_substitution
               (unifier @ swap_vars unifier)
               (get_vars_from_term root_goal)
           else unifier @ swap_vars unifier
-        | Error _ -> unifier
+        | Error _ -> sub
       in
       (match eval root_goal [] [] with
        | Ok (subs, choicepoints) ->
