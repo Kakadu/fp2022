@@ -18,7 +18,7 @@ module Interpreter = struct
 
   (* Generate a map from label commands to suffixes of the instruction list.
      When jumping to label, we will obtain the instructions that we should
-     executed from this map. *)
+     execute from this map. *)
   let gen_label_map whole_program =
     let rec helper m = function
       | [] -> m
