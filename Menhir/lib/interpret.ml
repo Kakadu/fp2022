@@ -47,28 +47,26 @@ let get_tl_string_list = function
   | _ -> []
 ;;
 
-let rec get_alphas g name =
-  match g with
+let rec get_alphas name = function
   | (lhs, rhs) :: tl
     when String.equal lhs name && String.equal (get_h_string_list rhs) name ->
-    get_tl_string_list rhs :: get_alphas tl name
-  | _ :: tl -> get_alphas tl name
+    get_tl_string_list rhs :: get_alphas name tl
+  | _ :: tl -> get_alphas name tl
   | _ -> []
 ;;
 
-let rec get_bettas g name =
-  match g with
-  | (lhs, rhs) :: tl
-    when String.equal lhs name && not (String.equal (get_h_string_list rhs) name) ->
-    rhs :: get_bettas tl name
-  | _ :: tl -> get_bettas tl name
-  | _ -> []
+let rec get_bettas name =
+  List.filter_map (fun rule ->
+    let lhs, rhs = rule in
+    if String.equal lhs name && not (String.equal (get_h_string_list rhs) name)
+    then Some rhs
+    else None)
 ;;
 
 let get_new_A_with_A' g a_name =
   let a_name' = a_name ^ "'" in
-  let b = get_bettas g a_name in
-  let a = get_alphas g a_name in
+  let b = get_bettas a_name g in
+  let a = get_alphas a_name g in
   let new_a =
     List.map (fun x -> a_name, x @ [ a_name' ]) b @ List.map (fun x -> a_name, x) b
   in
@@ -300,7 +298,6 @@ let gen_parser = try_apply_start_nonterm
 let gen_tree_parser = parse_tree
 
 open Lexer
-open Parser
 
 let get_parser_and_tree_parser text =
   (* tokens, start rule, grammar *)
