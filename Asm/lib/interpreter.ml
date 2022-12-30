@@ -9,6 +9,7 @@ open OperandsHandler
 module Interpreter = struct
   type state_t =
     { reg_map : int IntMap.t
+    ; xmm_reg_map : int list IntMap.t
     ; stack : int ListStack.t
     ; flags : int
     ; label_map : instruction list StringMap.t
@@ -99,9 +100,39 @@ module Interpreter = struct
     | RegConst (r, c) -> reg_val_get r reg_map - const_val c
   ;;
 
-  (* Eval B-, W- or DCommand *)
-  let eval_bwdcommand state =
+  let eval_movdqa state = function
+    | Reg r ->
+      xmm_reg_val_set
+        r
+        [ reg_val_get (reg_name_to_dword_reg "eax") state.reg_map
+        ; reg_val_get (reg_name_to_dword_reg "ebx") state.reg_map
+        ; reg_val_get (reg_name_to_dword_reg "ecx") state.reg_map
+        ; reg_val_get (reg_name_to_dword_reg "edx") state.reg_map
+        ]
+        state.xmm_reg_map
+    | _ -> failwith "Movdqa command operand must be a register"
+  ;;
+
+  let eval_addpd state = function
+    | RegReg (r1, r2) ->
+      let r1_val = xmm_reg_val_get r1 state.xmm_reg_map in
+      let r2_val = xmm_reg_val_get r2 state.xmm_reg_map in
+      xmm_reg_val_set r1 (List.map2 ( + ) r1_val r2_val) state.xmm_reg_map
+    | _ -> failwith "Addpd command operands must both be a registers"
+  ;;
+
+  let eval_mulpd state = function
+    | RegReg (r1, r2) ->
+      let r1_val = xmm_reg_val_get r1 state.xmm_reg_map in
+      let r2_val = xmm_reg_val_get r2 state.xmm_reg_map in
+      xmm_reg_val_set r1 (List.map2 ( * ) r1_val r2_val) state.xmm_reg_map
+    | _ -> failwith "Mulpd command operands must both be a registers"
+  ;;
+
+  (* Eval B-, W-, D- or Xommand *)
+  let eval_bwdxcommand state =
     let eval_helper eval_op x = { state with reg_map = eval_op state.reg_map x } in
+    let eval_xmm_helper eval_op x = { state with xmm_reg_map = eval_op state x } in
     function
     | Mov x -> eval_helper eval_mov x
     | Add x -> eval_helper eval_add x
@@ -111,6 +142,9 @@ module Interpreter = struct
     | Push x -> eval_push state x
     | Pop x -> eval_pop state x
     | Cmp x -> { state with flags = eval_cmp state.reg_map x }
+    | Movdqa x -> eval_xmm_helper eval_movdqa x
+    | Addpd x -> eval_xmm_helper eval_addpd x
+    | Mulpd x -> eval_xmm_helper eval_mulpd x
     | _ -> state
   ;;
 
@@ -146,9 +180,10 @@ module Interpreter = struct
        | BCommand Ret ->
          (match eval_ret state with
           | state, instrs -> eval state instrs)
-       | BCommand x -> eval (eval_bwdcommand state x) tl
-       | WCommand x -> eval (eval_bwdcommand state x) tl
-       | DCommand x -> eval (eval_bwdcommand state x) tl
+       | BCommand x -> eval (eval_bwdxcommand state x) tl
+       | WCommand x -> eval (eval_bwdxcommand state x) tl
+       | DCommand x -> eval (eval_bwdxcommand state x) tl
+       | XCommand x -> eval (eval_bwdxcommand state x) tl
        | SCommand x ->
          (match eval_scommand state tl x with
           | state, instrs -> eval state instrs))
@@ -157,14 +192,17 @@ module Interpreter = struct
   let eval_whole whole_program =
     let initial_label_map = gen_label_map whole_program in
     (* Each of dword registers is associated with 0 initial value *)
-    let initial_reg_map =
+    let gen_initial_reg_map init reg_name_list =
       List.fold_left
-        (fun map reg_name -> IntMap.add (reg_name_to_id reg_name) 0 map)
+        (fun map reg_name -> IntMap.add (reg_name_to_id reg_name) init map)
         IntMap.empty
-        dword_reg_name_list
+        reg_name_list
     in
+    let initial_reg_map = gen_initial_reg_map 0 dword_reg_name_list in
+    let initial_xmm_reg_map = gen_initial_reg_map [ 0; 0; 0; 0 ] xmm_reg_name_list in
     let initial_state =
       { reg_map = initial_reg_map
+      ; xmm_reg_map = initial_xmm_reg_map
       ; stack = ListStack.empty
       ; flags = 0
       ; label_map = initial_label_map
@@ -326,4 +364,23 @@ let%test _ =
   in
   let final_reg_map = (eval_whole program).reg_map in
   reg_val_get (reg_name_to_dword_reg "ebx") final_reg_map = 34
+;;
+
+let%test _ =
+  let program =
+    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 2)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 3)))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "edx", int_to_dword_const 4)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm0")))
+    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 5)))
+    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm7")))
+    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm7")))
+    ]
+  in
+  let final_xmm_reg_map = (eval_whole program).xmm_reg_map in
+  List.equal
+    ( = )
+    (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
+    [ 6; 4; 6; 8 ]
 ;;

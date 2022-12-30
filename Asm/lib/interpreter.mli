@@ -13,6 +13,9 @@ module Interpreter : sig
          Note that we won't have registers like "ax" here since their value can be
          obtained from "eax". So, the map only contains "primary" registers, i.e.
          ones that are not part of the others *)
+    ; xmm_reg_map : int list IntMap.t
+        (* Map from xmm register ids to lists of 4 elements that represent
+           their values *)
     ; stack : int ListStack.t (* Program stack in an oridnary sense *)
     ; flags : int
         (* Updated after each cmp command. Negative if the left
