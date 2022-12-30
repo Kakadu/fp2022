@@ -28,8 +28,7 @@ let file_text_where_only_rules text =
     (String.length text - end_position_of_mly_tokens text)
 ;;
 
-(*>>>>>>>>>>>>>>>>>>>>>>>>> elimination of left recursion <<<<<<<<<<<<<<<<<<<<<<<<<*)
-
+(*--------------------- elimination of left recursion -----------------------*)
 (*
   1. Let's write down all the rules of output from A in the form:
     A -> Aa_1 |...|Aa_n|b_1|...|b_m, where
@@ -106,7 +105,7 @@ let rec delete_useless_rules = function
 
 let grammar_fix g = lr_grammar_fix (delete_useless_rules g)
 
-(*>>>>>>>>>>>>>>>>>>>>>>>>> +++++++++++++++++++++++++++++ <<<<<<<<<<<<<<<<<<<<<<<<<*)
+(*---------------------------------------------------------------------------*)
 
 (* tokens, start_rule, grammar *)
 let parse' text : string list * string * grammar =
