@@ -16,6 +16,7 @@ let () =
     try Interpret.get_parser_and_tree_parser text with
     | _ ->
       print_endline "Some error in parse part";
+      (* These errors we check in demoParse.ml *)
       exit 1
   in
   print_endline "The file was successfully parsed.";

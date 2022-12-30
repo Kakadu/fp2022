@@ -9,8 +9,7 @@ let read_command () =
   | End_of_file -> ""
 ;;
 
-let rec print_grammar g =
-  match g with
+let rec print_grammar = function
   | (lhs, rhs) :: tl ->
     Format.printf "%s: " lhs;
     List.iter (fun x -> Format.printf "%s; " x) rhs;
