@@ -47,15 +47,15 @@ let get_tl_string_list = function
   | _ -> []
 ;;
 
-let rec get_alphas name = function
-  | (lhs, rhs) :: tl
-    when String.equal lhs name && String.equal (get_h_string_list rhs) name ->
-    get_tl_string_list rhs :: get_alphas name tl
-  | _ :: tl -> get_alphas name tl
-  | _ -> []
+let get_alphas name =
+  List.filter_map (fun rule ->
+    let lhs, rhs = rule in
+    if String.equal lhs name && String.equal (get_h_string_list rhs) name
+    then Some (get_tl_string_list rhs)
+    else None)
 ;;
 
-let rec get_bettas name =
+let get_bettas name =
   List.filter_map (fun rule ->
     let lhs, rhs = rule in
     if String.equal lhs name && not (String.equal (get_h_string_list rhs) name)
