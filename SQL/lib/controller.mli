@@ -3,24 +3,30 @@
 open Type
 
 (* Create a table. *)
-val create :
-  database -> string -> string list -> data_type list -> database
+val create : database -> string -> string list -> data_type list -> database
 
 (* Select some entries in a table based on a filter function. *)
-val select :
-  database -> string -> string list -> (string list * string list -> bool) -> unit
+val select
+  :  database
+  -> string
+  -> string list
+  -> (string list * string list -> bool)
+  -> unit
 
 (* Insert one entry into the table. *)
-val insert :
-  database -> string -> string list -> terminal list -> database
+val insert : database -> string -> string list -> terminal list -> database
 
 (* Delete some entries in a table based on a filter function. *)
-val delete :
-  database -> string -> (string list * string list -> bool) -> database
+val delete : database -> string -> (string list * string list -> bool) -> database
 
 (* Update some entires in a table based on a fileter function. *)
-val update :
-  database -> string -> string list -> terminal list -> (string list * string list -> bool) -> database
+val update
+  :  database
+  -> string
+  -> string list
+  -> terminal list
+  -> (string list * string list -> bool)
+  -> database
 
 (* Drops the table [table_name] from the database. *)
 val drop : database -> string -> database

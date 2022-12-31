@@ -71,20 +71,20 @@ type 'a tree =
   | Leaf of (int * 'a)
   | Node of (int * 'a * 'a tree * 'a tree)
 
-type column = {
-  field_name : string;
-  data_type : data_type;
-  data : string tree;
-}
+type column =
+  { field_name : string
+  ; data_type : data_type
+  ; data : string tree
+  }
 
-type table = {
-  table_name : string;
-  columns : column tree;
-  num_rows : int;
-}
+type table =
+  { table_name : string
+  ; columns : column tree
+  ; num_rows : int
+  }
 
-type database = {
-  database_name : string;
-  tables : table tree;
-  num_tables : int;
-}
+type database =
+  { database_name : string
+  ; tables : table tree
+  ; num_tables : int
+  }

@@ -1,6 +1,7 @@
 (* Parser analyzes and executes commands based on the ouput of the tokenizer *)
 
 open Type
+
 exception Malformed of string
 exception Empty
 
@@ -12,15 +13,10 @@ val parse_query : database -> token list -> database
 
 (* parse a create database command to send to controller_create to create a table *)
 val parse_create : database -> token list -> database
-
 val parse_insert : database -> token list -> database
-
 val parse_delete : database -> token list -> database
-
 val parse_update : database -> token list -> database
-
 val parse_select : database -> token list -> database
-
 val parse_drop : database -> token list -> database
 
 (* partial function that takes condition expression and a pair_data
@@ -37,7 +33,12 @@ val parse_save : database -> token list -> database
 val expressions_or : expr_type list -> expr_type list list
 
 (* Evaluate AND relationships *)
-val and_condition_evaluater : expr_type -> expr_type -> expr_type -> (expr_type * expr_type) list -> bool
+val and_condition_evaluater
+  :  expr_type
+  -> expr_type
+  -> expr_type
+  -> (expr_type * expr_type) list
+  -> bool
 
 (* Evaluate OR relationships *)
 val evaluate_or : expr_type list list -> (expr_type * expr_type) list -> bool
