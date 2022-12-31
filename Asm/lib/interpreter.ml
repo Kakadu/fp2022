@@ -209,6 +209,7 @@ module Interpreter = struct
       ; cstack = ListStack.empty
       }
     in
+    validate_ast whole_program;
     eval initial_state whole_program
   ;;
 end
@@ -425,4 +426,13 @@ let%test _ =
     ( = )
     (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
     [ 48; 54; 60; 0 ]
+;;
+
+let%test _ =
+  let program = [ WCommand (Inc (Const (int_to_word_const 7))) ] in
+  try
+    ignore (eval_whole program);
+    false
+  with
+  | Failure _ -> true
 ;;

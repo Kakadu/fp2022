@@ -52,10 +52,18 @@ type instruction =
   | SCommand of string command
 [@@deriving show { with_path = false }]
 
-(* For now the AST may contain invalid instructions like Inc (Const 5).
-   It should be fixed, probably by scanning the AST after parsing and
-   producing an error if an invalid instruction is found *)
 type ast = instruction list [@@deriving show { with_path = false }]
+
+(* Scan through the AST and check if it contains invalid instructions that are
+   prevented by the type system or by parser *)
+let validate_ast program =
+  let validate_instr = function
+    | BCommand (Inc (Const _)) | WCommand (Inc (Const _)) | DCommand (Inc (Const _)) ->
+      failwith "Inc command operand must be a register"
+    | _ -> ()
+  in
+  List.iter ~f:validate_instr program
+;;
 
 module CmdHandler = struct
   let cmd_zero_args_list = [ "ret" ]
