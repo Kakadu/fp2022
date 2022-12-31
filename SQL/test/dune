@@ -1,0 +1,3 @@
+(tests
+ (names main save_test expr_test tree_test)
+ (libraries SQL ounit2))

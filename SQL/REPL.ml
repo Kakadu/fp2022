@@ -1,56 +1,29 @@
-open Base
-open Lambda_lib
+open SQL
 
-let run_repl _ =
-  Caml.Format.eprintf "OCaml-style toplevel (ocamlc, utop) is not implemented"
-;;
-
-let run_single eval =
-  let open Lambda_lib in
-  let text = Stdio.In_channel.(input_all stdin) |> String.rstrip in
-  let ast = Parser.parse text in
-  match ast with
-  | Error e -> Caml.Format.printf "Error: %a\n%!" Parser.pp_error e
-  | Result.Ok ast ->
-    Caml.Format.printf "Parsed result: %a\n%!" Printast.pp_named ast;
-    (match eval ast with
-     | rez -> Caml.Format.printf "Evaluated result: %a\n%!" Printast.pp_named rez)
-;;
-
-type strategy =
-  | CBN
-  | CBV
-  | NO
-  | AO
-
-type opts =
-  { mutable batch : bool
-  ; mutable stra : strategy
-  }
-
-let () =
-  let opts = { batch = false; stra = CBN } in
-  let open Caml.Arg in
-  parse
-    [ ( "-"
-      , Unit (fun () -> opts.batch <- true)
-      , "Read from stdin single program, instead of running full REPL" )
-    ; "-cbv", Unit (fun () -> opts.stra <- CBV), "Call-by-value strategy"
-    ; "-cbn", Unit (fun () -> opts.stra <- CBN), "Call-by-name strategy"
-    ; "-no", Unit (fun () -> opts.stra <- NO), "Normal Order strategy"
-    ; "-ao", Unit (fun () -> opts.stra <- NO), "Applicative Order strategy"
-    ]
-    (fun _ ->
-      Caml.Format.eprintf "Positioned arguments are not supported\n";
-      Caml.exit 1)
-    "Read-Eval-Print-Loop for Utyped Lambda Calculus";
-  let eval =
-    Lambda.apply_strat
-      (match opts.stra with
-       | NO -> Lambda.nor_strat
-       | CBV -> Lambda.cbv_strat
-       | AO -> Lambda.ao_strat
-       | CBN -> Lambda.cbn_strat)
+let main () =
+  let _ =
+    ANSITerminal.print_string [ ANSITerminal.green ]
+      "\n\nStart using the database.\n";
+    print_endline "Please enter commands below.\n";
+    print_string "> ";
+    let rec recursive_parse db =
+      try
+        let line = read_line () in
+        let current_db = Parser.parse db line in
+        print_string "\n> ";
+        recursive_parse current_db
+      with
+      | Parser.Malformed m ->
+          print_endline m;
+          print_string "\n> ";
+          recursive_parse db
+      | Parser.Empty ->
+          print_endline "The command cannot be empty. \n";
+          print_string "\n> ";
+          recursive_parse db
+    in
+    recursive_parse (Rep.create_empty_database "parent")
   in
-  (if opts.batch then run_single else run_repl) eval
-;;
+  ()
+
+let () = main ();
