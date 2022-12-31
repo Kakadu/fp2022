@@ -18,6 +18,10 @@ module Interpret (M : MONADERROR) = struct
     | _ -> fail (RuntimeError "could not compare values")
   ;;
 
+  let upd_env name value (env : environment) : environment =
+    IdMap.add name (ref value) env
+  ;;
+
   let rec eval e (env : environment) =
     match e with
     | Const c -> eval_const c
@@ -76,33 +80,43 @@ module Interpret (M : MONADERROR) = struct
     eval r env
     >>= fun r_val -> compare_values l_val r_val >>= fun c -> return (VBool (op c 0))
 
-  (* TODO: decide how to match argument labels *)
   and eval_app fu label arg env =
     eval fu env
     >>= fun closure_val ->
     match closure_val with
-    | VClosure (env_of_fu, ArgNoLabel, None, name, fu_body) ->
+    | VClosure (fu_env, ArgNoLabel, None, name, fu_body) ->
+      eval arg env >>= fun arg_val -> eval fu_body (upd_env name arg_val fu_env)
+    | VClosure (fu_env, ArgLabeled l, None, name, fu_body) ->
       eval arg env
-      >>= fun arg_val -> eval fu_body (IdMap.add name (ref arg_val) env_of_fu)
-    | VClosure (env_of_fu, ArgLabeled l, None, name, fu_body) ->
-      eval arg env >>= fun arg_val -> eval fu_body (IdMap.add l (ref arg_val) env_of_fu)
-    | VClosure (env_of_fu, ArgOptional l, None, name, fu_body) ->
-      eval arg env >>= fun arg_val -> eval fu_body (IdMap.add l (ref arg_val) env_of_fu)
-    | VClosure (env_of_fu, ArgOptional l, Some e, name, fu_body) ->
-      eval arg env >>= fun arg_val -> eval fu_body (IdMap.add l (ref arg_val) env_of_fu)
-    | _ -> fail (RuntimeError "this is not a function")
+      >>= fun arg_val -> eval fu_body (upd_env l arg_val (upd_env name arg_val fu_env))
+    | VClosure (fu_env, ArgOptional l, None, name, fu_body) ->
+      eval arg env
+      >>= fun arg_val -> eval fu_body (upd_env l arg_val (upd_env name arg_val fu_env))
+    | VClosure (fu_env, ArgOptional l, Some e, name, fu_body) ->
+      (match label with
+       | ArgLabeled apply_l ->
+         (if compare_string apply_l l = 0 then eval arg env else eval e env)
+         >>= fun arg_val -> eval fu_body (upd_env l arg_val (upd_env name arg_val fu_env))
+       | _ ->
+         eval e env
+         >>= fun arg_val ->
+         eval_app fu_body label arg (upd_env l arg_val (upd_env name arg_val fu_env)))
+    | _ -> fail (RuntimeError "This is not a function. It can not be applied.")
 
   and eval_let name body exp env =
-    eval body env >>= fun body_val -> eval exp (IdMap.add name (ref body_val) env)
+    eval body env >>= fun body_val -> eval exp (upd_env name body_val env)
 
   and eval_letrec name body exp env =
-    let new_env = IdMap.add name (ref VUndef) env in
+    let new_env = upd_env name VUndef env in
     eval body new_env
     >>= fun body_val ->
     match IdMap.find name new_env with
     | exception Not_found -> fail (RuntimeError "Couldn't update environment")
-    | _ ->
-      let new_env = IdMap.add name (ref body_val) new_env in
+    | v ->
+      (* FIXME: use of assignment, because Map.add for some reason doesn't erase
+         the previous binding in the IdMap *)
+      (* let new_env = IdMap.add name (ref body_val) new_env in *)
+      v := body_val;
       eval exp new_env
   ;;
 end

@@ -4,6 +4,7 @@
 
 open Format
 open Ast
+open Errors
 
 let pp_expr =
   let op_to_str = function
@@ -73,4 +74,18 @@ let pp_value =
     | VClosure _ -> fprintf ppf "<fun>"
   in
   printer
+;;
+
+let pp_error =
+  let printer ppf = function
+    | ParseError s -> fprintf ppf "Parser error: %s\n" s
+    | TypeError s ->
+      fprintf ppf "Type error: %s\n" s (* TODO: better type error handling *)
+    | RuntimeError s -> fprintf ppf "Runtime error: %s\n" s
+  in
+  printer
+;;
+
+let pp_env ppf (env : environment) =
+  IdMap.iter (fun name value -> Format.fprintf ppf "%s : %a\n" name pp_value !value) env
 ;;

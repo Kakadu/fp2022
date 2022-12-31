@@ -132,24 +132,31 @@ let rec desugar_lambda exp = function
 
 let desugar_let exp in_exp names include_rec =
   let desugar_to_tuple exp in_exp = function
-    | [] -> failwith "Error desugaring let" (* FIXME: error handling *)
-    | [ a ] -> a, exp, in_exp
-    | a :: args -> a, desugar_lambda exp args, in_exp
+    | [] -> fail "Error desugaring let"
+    | [ a ] -> return (a, exp, in_exp)
+    | a :: args -> return (a, desugar_lambda exp args, in_exp)
   in
-  let a, new_exp, new_in_exp = desugar_to_tuple exp in_exp names in
+  desugar_to_tuple exp in_exp names
+  >>= fun res ->
+  let a, new_exp, new_in_exp = res in
   if include_rec
-  then LetRec (a.name, new_exp, new_in_exp)
-  else Let (a.name, new_exp, new_in_exp)
+  then return (LetRec (a.name, new_exp, new_in_exp))
+  else return (Let (a.name, new_exp, new_in_exp))
 ;;
 
 let desugar_def args exp include_rec =
-  let a, exp =
+  let inner =
     match args with
-    | [] -> failwith "Error desugaring letdef" (* FIXME: error handling *)
-    | [ a ] -> a, exp
-    | _a :: _args -> _a, desugar_lambda exp _args
+    | [] -> fail "Error desugaring let"
+    | [ a ] -> return (a, exp)
+    | _a :: _args -> return (_a, desugar_lambda exp _args)
   in
-  if include_rec then a.name, LetRec (a.name, exp, Var a.name) else a.name, exp
+  inner
+  >>= fun res ->
+  let a, exp = res in
+  if include_rec
+  then return (a.name, LetRec (a.name, exp, Var a.name))
+  else return (a.name, exp)
 ;;
 
 (* Helper type for representing application arguments, that might be labeled *)
@@ -237,8 +244,14 @@ let type_d =
     choice
       [ parens self
       ; (ignored *> var_parser
-        >>= fun n -> many1 app_argument_parser >>= fun args -> return (desugar_app n args)
-        )
+        <* required_ws
+        >>= fun n ->
+        (* FIXME: Multiple argument parsing like
+        "f x y" parses as App (f, App (x, y)) instead of App (App (f, x), y), but
+        with extra parentheses "f (x) (y)" it's alright.
+        I want many1 to be greedy here and eat as much of the input as possible, which it doesn't.
+        Not sure how to fix it just yet. *)
+        many1 app_argument_parser >>= fun args -> return (desugar_app n (List.rev args)))
       ]
     <?> "app_parser"
   in
@@ -270,8 +283,8 @@ let type_d =
         ignored *> keyword "in" *~> d.expr d
         >>= fun in_exp ->
         match _rec with
-        | "" -> return (desugar_let exp in_exp var_list false)
-        | "rec" -> return (desugar_let exp in_exp var_list true)
+        | "" -> desugar_let exp in_exp var_list false
+        | "rec" -> desugar_let exp in_exp var_list true
         | _ -> fail "Error in parsing let")
       ]
     <?> "let_parser"
@@ -288,8 +301,8 @@ let type_d =
         ignored *> string "=" *~> d.expr d
         >>= fun exp ->
         match _rec with
-        | "" -> return (desugar_def var_list exp false)
-        | "rec" -> return (desugar_def var_list exp true)
+        | "" -> desugar_def var_list exp false
+        | "rec" -> desugar_def var_list exp true
         | _ -> fail "Error in parsing letdef")
       ]
     <?> "def_parser"
@@ -325,7 +338,7 @@ let definition_parser = type_d.definition type_d
 (** Should be called with specific parser *)
 let parse p s = parse_string ~consume:All p s
 
-(* TODO: filename parser, for now identifier is fine *)
+(* TODO: filename parser *)
 
 let toplevel_command_parser () =
   string "#help" *> return (Command Help)
@@ -343,15 +356,15 @@ let toplevel_defininition_parser () =
 
 let toplevel_parser () =
   ignored
-  *> (*many1*)
-  choice
-    [ return () >>= toplevel_command_parser
-    ; return () >>= toplevel_expr_parser
-    ; return () >>= toplevel_defininition_parser
-    ]
+  *> many1
+       (choice
+          [ return () >>= toplevel_command_parser
+          ; return () >>= toplevel_expr_parser
+          ; return () >>= toplevel_defininition_parser
+          ]
+       <* option "" (ignored *> string ";;"))
+  <|> return []
 ;;
-
-(*<|> return []*)
 
 (** Should only be called on top-level ast type *)
 let parse_toplevel s =
