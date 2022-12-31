@@ -74,76 +74,72 @@ type dir = Code of code_section list | Data of var list
 type ast = Ast of dir list
 
 let show_reg : type a. a reg -> string = function
-  | Reg8 x -> String.concat "" [ "(Reg8 \""; x; "\")" ]
-  | Reg16 x -> String.concat "" [ "(Reg16 \""; x; "\")" ]
-  | Reg32 x -> String.concat "" [ "(Reg32 \""; x; "\")" ]
-  | Reg64 x -> String.concat "" [ "(Reg64 \""; x; "\")" ]
-  | Reg128 x -> String.concat "" [ "(Reg128 \""; x; "\")" ]
+  | Reg8 x -> Printf.sprintf {|(Reg8 "%s")|} x
+  | Reg16 x -> Printf.sprintf {|(Reg16 "%s")|} x
+  | Reg32 x -> Printf.sprintf {|(Reg32 "%s")|} x
+  | Reg64 x -> Printf.sprintf {|(Reg64 "%s")|} x
+  | Reg128 x -> Printf.sprintf {|(Reg128 "%s")|} x
 
-let show_dyn_reg (Dyn x) = String.concat "" [ "(Dyn "; show_reg x; ")" ]
+let show_dyn_reg (Dyn x) = Printf.sprintf {|(Dyn "%s")|} (show_reg x)
 
 let show_label : label -> string = function
-  | ASMLabel x -> String.concat "" [ "(ASMLabel \""; x; "\")" ]
+  | ASMLabel x -> Printf.sprintf {|(ASMLabel "%s")|} x
 
 let show_const : const -> string = function
-  | ASMConst x -> String.concat "" [ "(ASMConst \""; x; "\")" ]
+  | ASMConst x -> Printf.sprintf {|(ASMConst "%s")|} x
 
 let show_asmvar : asmvar -> string = function
-  | ASMVar x -> String.concat "" [ "(ASMVar \""; x; "\")" ]
+  | ASMVar x -> Printf.sprintf {|(ASMVar "%s")|} x
 
 let rec show_expr : expr -> string = function
-  | Add (x, y) ->
-      String.concat "" [ "(Add "; show_expr x; " "; show_expr y; ")" ]
-  | Sub (x, y) ->
-      String.concat "" [ "(Sub "; show_expr x; " "; show_expr y; ")" ]
-  | Mul (x, y) ->
-      String.concat "" [ "(Mul "; show_expr x; " "; show_expr y; ")" ]
-  | Div (x, y) ->
-      String.concat "" [ "(Div "; show_expr x; " "; show_expr y; ")" ]
-  | Const x -> String.concat "" [ "(Const "; show_const x; ")" ]
-  | Var x -> String.concat "" [ "(Var "; show_asmvar x; ")" ]
+  | Add (x, y) -> Printf.sprintf {|(Add (%s, %s))|} (show_expr x) (show_expr y)
+  | Sub (x, y) -> Printf.sprintf {|(Sub (%s, %s))|} (show_expr x) (show_expr y)
+  | Mul (x, y) -> Printf.sprintf {|(Mul (%s, %s))|} (show_expr x) (show_expr y)
+  | Div (x, y) -> Printf.sprintf {|(Div (%s, %s))|} (show_expr x) (show_expr y)
+  | Const x -> Printf.sprintf {|(Const %s)|} (show_const x)
+  | Var x -> Printf.sprintf {|(Var %s)|} (show_asmvar x)
 
 let show_double_arg = function
   | RegToReg (x, y) ->
-      String.concat "" [ "(RegToReg "; show_reg x; " "; show_reg y; ")" ]
+      Printf.sprintf {|(RegToReg (%s, %s))|} (show_reg x) (show_reg y)
   | RegToExpr (x, y) ->
-      String.concat "" [ "(RegToExpr "; show_reg x; " "; show_expr y; ")" ]
+      Printf.sprintf {|(RegToExpr (%s, %s))|} (show_reg x) (show_expr y)
 
 let show_single_arg = function
-  | Reg x -> String.concat "" [ "(Reg "; show_reg x; ")" ]
-  | Label x -> String.concat "" [ "(Label "; show_label x; ")" ]
+  | Reg x -> Printf.sprintf {|(Reg %s)|} (show_reg x)
+  | Label x -> Printf.sprintf {|(Label %s)|} (show_label x)
 
 let show_mnemonic : mnemonic -> string = function
   | RET -> "(RET)"
   | SYSCALL -> "(SYSCALL)"
-  | PUSH x -> String.concat "" [ "(PUSH "; show_single_arg x; ")" ]
-  | POP x -> String.concat "" [ "(POP "; show_single_arg x; ")" ]
-  | INC x -> String.concat "" [ "(INC "; show_single_arg x; ")" ]
-  | DEC x -> String.concat "" [ "(DEC "; show_single_arg x; ")" ]
-  | NOT x -> String.concat "" [ "(NOT "; show_single_arg x; ")" ]
-  | NEG x -> String.concat "" [ "(NEG "; show_single_arg x; ")" ]
-  | JMP x -> String.concat "" [ "(JMP "; show_single_arg x; ")" ]
-  | JE x -> String.concat "" [ "(JE "; show_single_arg x; ")" ]
-  | JNE x -> String.concat "" [ "(JNE "; show_single_arg x; ")" ]
-  | JZ x -> String.concat "" [ "(JZ "; show_single_arg x; ")" ]
-  | JG x -> String.concat "" [ "(JG "; show_single_arg x; ")" ]
-  | JGE x -> String.concat "" [ "(JGE "; show_single_arg x; ")" ]
-  | JL x -> String.concat "" [ "(JL "; show_single_arg x; ")" ]
-  | JLE x -> String.concat "" [ "(JLE "; show_single_arg x; ")" ]
-  | MOV x -> String.concat "" [ "(MOV "; show_double_arg x; ")" ]
-  | ADD x -> String.concat "" [ "(ADD "; show_double_arg x; ")" ]
-  | SUB x -> String.concat "" [ "(SUB "; show_double_arg x; ")" ]
-  | IMUL x -> String.concat "" [ "(IMUL "; show_double_arg x; ")" ]
-  | AND x -> String.concat "" [ "(AND "; show_double_arg x; ")" ]
-  | XOR x -> String.concat "" [ "(XOR "; show_double_arg x; ")" ]
-  | OR x -> String.concat "" [ "(OR "; show_double_arg x; ")" ]
-  | SHL x -> String.concat "" [ "(SHL "; show_double_arg x; ")" ]
-  | SHR x -> String.concat "" [ "(SHR "; show_double_arg x; ")" ]
-  | CMP x -> String.concat "" [ "(CMP "; show_double_arg x; ")" ]
+  | PUSH x -> Printf.sprintf {|(PUSH %s)|} (show_single_arg x)
+  | POP x -> Printf.sprintf {|(POP %s)|} (show_single_arg x)
+  | INC x -> Printf.sprintf {|(INC %s)|} (show_single_arg x)
+  | DEC x -> Printf.sprintf {|(DEC %s)|} (show_single_arg x)
+  | NOT x -> Printf.sprintf {|(NOT %s)|} (show_single_arg x)
+  | NEG x -> Printf.sprintf {|(NEG %s)|} (show_single_arg x)
+  | JMP x -> Printf.sprintf {|(JMP %s)|} (show_single_arg x)
+  | JE x -> Printf.sprintf {|(JE %s)|} (show_single_arg x)
+  | JNE x -> Printf.sprintf {|(JNE %s)|} (show_single_arg x)
+  | JZ x -> Printf.sprintf {|(JZ %s)|} (show_single_arg x)
+  | JG x -> Printf.sprintf {|(JG %s)|} (show_single_arg x)
+  | JGE x -> Printf.sprintf {|(JGE %s)|} (show_single_arg x)
+  | JL x -> Printf.sprintf {|(JL %s)|} (show_single_arg x)
+  | JLE x -> Printf.sprintf {|(JLE %s)|} (show_single_arg x)
+  | MOV x -> Printf.sprintf {|(MOV %s)|} (show_double_arg x)
+  | ADD x -> Printf.sprintf {|(ADD %s)|} (show_double_arg x)
+  | SUB x -> Printf.sprintf {|(SUB %s)|} (show_double_arg x)
+  | IMUL x -> Printf.sprintf {|(IMUL %s)|} (show_double_arg x)
+  | AND x -> Printf.sprintf {|(AND %s)|} (show_double_arg x)
+  | XOR x -> Printf.sprintf {|(XOR %s)|} (show_double_arg x)
+  | OR x -> Printf.sprintf {|(OR %s)|} (show_double_arg x)
+  | SHL x -> Printf.sprintf {|(SHL %s)|} (show_double_arg x)
+  | SHR x -> Printf.sprintf {|(SHR %s)|} (show_double_arg x)
+  | CMP x -> Printf.sprintf {|(CMP %s)|} (show_double_arg x)
 
 let show_code_section : code_section -> string = function
-  | Command x -> String.concat "" [ "(Command "; show_mnemonic x; ")" ]
-  | Id x -> String.concat "" [ "(Id "; show_label x; ")" ]
+  | Command x -> Printf.sprintf {|(Command %s)|} (show_mnemonic x)
+  | Id x -> Printf.sprintf {|(Id %s)|} (show_label x)
 
 let show_dir : dir -> string = function
   | Code x ->
