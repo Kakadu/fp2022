@@ -44,7 +44,7 @@ module Interpret (M : MONADERROR) = struct
   type var =
     | Flag of bool  (** EFLAGS *)
     | Reg64 of int64  (** not so large registers *)
-    | Reg128 of string  (** large registers *)
+    | Reg128 of int64 * int64  (** large registers *)
     | Const of string  (** global consts *)
   [@@deriving show { with_path = false }]
 
@@ -64,14 +64,14 @@ module Interpret (M : MONADERROR) = struct
       ("RBP", Reg64 0L);
       ("RSI", Reg64 0L);
       ("RDI", Reg64 0L);
-      ("XMM0", Reg128 "0");
-      ("XMM1", Reg128 "0");
-      ("XMM2", Reg128 "0");
-      ("XMM3", Reg128 "0");
-      ("XMM4", Reg128 "0");
-      ("XMM5", Reg128 "0");
-      ("XMM6", Reg128 "0");
-      ("XMM7", Reg128 "0");
+      ("XMM0", Reg128 (0L, 0L));
+      ("XMM1", Reg128 (0L, 0L));
+      ("XMM2", Reg128 (0L, 0L));
+      ("XMM3", Reg128 (0L, 0L));
+      ("XMM4", Reg128 (0L, 0L));
+      ("XMM5", Reg128 (0L, 0L));
+      ("XMM6", Reg128 (0L, 0L));
+      ("XMM7", Reg128 (0L, 0L));
     ]
 
   let is_jmp = function
@@ -81,180 +81,174 @@ module Interpret (M : MONADERROR) = struct
   (** insert elements from list to map *)
   let prep = function [] -> MapVar.empty | l -> MapVar.of_seq (List.to_seq l)
 
-  let ch x y =
-    let cmp a b =
-      match (a, b) with
-      | Ast.Var _, _ | _, Ast.Var _ -> true
-      | a, b -> compare_expr a b == 0
-    in
-    let rec helper = function
-      | Ast.Add (l, r) | Ast.Sub (l, r) | Ast.Mul (l, r) | Ast.Div (l, r) ->
-          helper l >>= fun l ->
-          helper r >>= fun r ->
-          if cmp l r then return l else error "Different bitregs op"
-      | Ast.Reg128 _ -> return @@ Ast.Reg128 ""
-      | Ast.Reg64 _ -> return @@ Ast.Reg64 ""
-      | Ast.Reg32 _ -> return @@ Ast.Reg32 ""
-      | Ast.Reg16 _ -> return @@ Ast.Reg16 ""
-      | Ast.Reg8 _ -> return @@ Ast.Reg8 ""
-      | _ -> return @@ Ast.Var ""
-    in
-    helper x >>= fun x ->
-    helper y >>= fun y -> return @@ cmp x y
-
-  let rec t_ch = function
-    | Ast.Command (Ast.Args2 (Ast.Mnemonic cmd, a, b)) :: tl ->
-        ch a b >>= fun cond ->
-        if cond then t_ch tl
-        else error @@ cmd ^ " cant operate with two different types of regs"
-    | _ :: tl -> t_ch tl
-    | [] -> return true
-
-  (** calculate a expression, f function that takes values of registers or constans from map or calcuclate integer constants from expression *)
-  let rec ev f = function
-    | Add (l, r) ->
-        ev f l >>= fun l ->
-        ev f r >>= fun r -> return (add l r)
-    | Sub (l, r) ->
-        ev f l >>= fun l ->
-        ev f r >>= fun r -> return (sub l r)
-    | Mul (l, r) ->
-        ev f l >>= fun l ->
-        ev f r >>= fun r -> return (mul l r)
-    | Div (l, r) ->
-        ev f r >>= fun r ->
-        if r = 0L then error "Division by zero"
-        else ev f l >>= fun l -> return (div l r)
-    | const -> f const
-
-  (** return value of 64bit register named 'name' *)
-  let find_reg64_cont env name =
-    return (MapVar.find name env) >>= function
+  let full_name : type a. a reg -> string t = function
+    | Reg8 x -> return (Printf.sprintf "R%cX" x.[1])
+    | Reg16 x -> return (Printf.sprintf "R%s" x)
+    | Reg32 x -> return (Printf.sprintf "R%c%c" x.[1] x.[2])
     | Reg64 x -> return x
-    | _ -> error "not a R64"
+    | _ -> error "Isnt reg64 or less"
 
-  (** return value of flag named 'name' *)
-  let find_flag_cont env name =
+  let find_r : type a. var MapVar.t -> a reg -> Int64.t M.t =
+    let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false in
+    fun env reg ->
+      full_name reg >>= fun name ->
+      return (MapVar.find name env) >>= function
+      | Reg64 x -> (
+          match reg with
+          | Reg8 name ->
+              return
+              @@
+              if rreg name then logand x 0xFFL
+              else shift_left (logand x 0xFFFFL) 8
+          | Reg16 _ -> return @@ logand x 0xFFFFL
+          | Reg32 _ -> return @@ logand x 0xFFFFFFFFL
+          | Reg64 _ -> return x
+          | _ -> error "Isnt reg64 or less")
+      | _ -> error "Isnt reg64 or less"
+
+  let find_v env name =
     return (MapVar.find name env) >>= function
-    | Flag flag -> return flag
-    | _ -> error "not a flag"
+    | Const x -> return @@ of_string x
+    | _ -> error "Isnt const"
 
-  let find_eflags env =
-    find_flag_cont env "ZF" >>= fun z ->
-    find_flag_cont env "SF" >>= fun s ->
-    find_flag_cont env "OF" >>= fun o -> return (z, s, o)
+  let find_f env f =
+    return (MapVar.find f env) >>= function
+    | Flag x -> return x
+    | _ -> error "Isnt flag"
 
-  (** change value of register by function f *)
-  let change_reg64 env f name =
-    find_reg64_cont env name >>= fun reg ->
-    return @@ MapVar.add name (Reg64 (f reg)) env
+  let rec ev : var MapVar.t -> expr -> Int64.t M.t =
+   fun env -> function
+    | Add (l, r) ->
+        ev env l >>= fun l ->
+        ev env r >>= fun r -> return (add l r)
+    | Sub (l, r) ->
+        ev env l >>= fun l ->
+        ev env r >>= fun r -> return (sub l r)
+    | Mul (l, r) ->
+        ev env l >>= fun l ->
+        ev env r >>= fun r -> return (mul l r)
+    | Div (l, r) ->
+        ev env r >>= fun r ->
+        if r = 0L then error "Division by zero"
+        else ev env l >>= fun l -> return (div l r)
+    | Const (ASMConst x) -> return @@ of_string x
+    | Var (ASMVar x) -> find_v env x
 
-  (** change value of flag on 'v' *)
-  let change_flag env v name = return @@ MapVar.add name (Flag v) env
+  (*
 
-  (** interpret command and return map and stack *)
-  let inter_one_args_cmd env st arg1 =
-    let helper fu = change_reg64 env fu arg1 >>= fun env -> return (env, st) in
-    function
-    | "INC" -> helper (fun x -> add x 1L)
-    | "DEC" -> helper (fun x -> sub x 1L)
-    | "NOT" -> helper neg
-    | "NEG" -> helper (fun x -> add (neg x) 1L)
-    | "PUSH" ->
-        find_reg64_cont env arg1 >>= fun v -> return (env, (arg1, Reg64 v) :: st)
-    | "POP" ->
-        return
-          (MapVar.add arg1 (List.assoc arg1 st) env, List.remove_assoc arg1 st)
-    (* | "CALL"  *)
-    | x -> error (x ^ " is not implemented yet")
+     (** change value of register by function f *)
+     let change_reg64 env f name =
+       find_reg64_cont env name >>= fun reg ->
+       return @@ MapVar.add name (Reg64 (f reg)) env
 
-  (** interpret command and return map *)
-  let inter_zero_args_cmd env = function
-    | "RET" -> return env
-    | "SYSCALL" | _ -> error "Not implemented yet"
+     (** change value of flag on 'v' *)
+     let change_flag env v name = return @@ MapVar.add name (Flag v) env
 
-  (** interpret command and return map *)
-  let inter_two_args_cmd env arg1 arg2 cmd =
-    let f = function
-      | Ast.Const c -> return @@ of_string c
-      | Ast.Reg64 reg_name -> find_reg64_cont env reg_name
-      | _ -> error "Vars not implemented"
-    in
-    let helper fu = change_reg64 env fu arg1 in
-    ev f arg2 >>= fun arg2 ->
-    match cmd with
-    | "MOV" -> helper (fun _ -> arg2)
-    | "ADD" -> helper (fun x -> add x arg2)
-    | "SUB" -> helper (fun x -> sub x arg2)
-    | "IMUL" -> helper (fun x -> mul x arg2)
-    | "CMP" ->
-        find_reg64_cont env arg1 >>= fun arg1 ->
-        change_flag env (arg1 = arg2) "ZF" >>= fun env ->
-        change_flag env (arg1 < arg2) "SF"
-    | "AND" -> helper (fun x -> logand x arg2)
-    | "XOR" -> helper (fun x -> logxor x arg2)
-    | "OR" -> helper (fun x -> logor x arg2)
-    | "SHL" -> helper (fun x -> shift_left x (to_int arg2))
-    | "SHR" -> helper (fun x -> shift_right x (to_int arg2))
-    (* | "ADDPD" | "SUBPD" | "MULPD" | "MOVAPD" *)
-    | _ -> error "Is not a mnemonic"
+     (** interpret command and return map and stack *)
+     let inter_one_args_cmd env st arg1 =
+       let helper fu = change_reg64 env fu arg1 >>= fun env -> return (env, st) in
+       function
+       | "INC" -> helper (fun x -> add x 1L)
+       | "DEC" -> helper (fun x -> sub x 1L)
+       | "NOT" -> helper neg
+       | "NEG" -> helper (fun x -> add (neg x) 1L)
+       | "PUSH" ->
+           find_reg64_cont env arg1 >>= fun v -> return (env, (arg1, Reg64 v) :: st)
+       | "POP" ->
+           return
+             (MapVar.add arg1 (List.assoc arg1 st) env, List.remove_assoc arg1 st)
+       (* | "CALL"  *)
+       | x -> error (x ^ " is not implemented yet")
 
-  (** general interpreter of commands not including jmp commands *)
-  let inter_cmd env st = function
-    | Args0 (Mnemonic cmd) ->
-        inter_zero_args_cmd env cmd >>= fun env -> return (env, st)
-    | Args1 (Mnemonic cmd, Ast.Reg64 x) -> inter_one_args_cmd env st x cmd
-    | Args2 (Mnemonic cmd, Ast.Reg64 x, y) ->
-        inter_two_args_cmd env x y cmd >>= fun env -> return (env, st)
-    | _ -> error "Isnt argsn"
+     (** interpret command and return map *)
+     let inter_zero_args_cmd env = function
+       | "RET" -> return env
+       | "SYSCALL" | _ -> error "Not implemented yet"
 
-  (** returns list of code_section that placed after label l *)
-  let rec assoc (Label l) = function
-    | [] -> error ("No such label: " ^ l)
-    | Id (Label label) :: tl when label = l -> return tl
-    | _ :: tl -> assoc (Label l) tl
+     (** interpret command and return map *)
+     let inter_two_args_cmd env arg1 arg2 cmd =
+       let f = function
+         | Ast.Const c -> return @@ of_string c
+         | Ast.Reg64 reg_name -> find_reg64_cont env reg_name
+         | Ast.Reg32 _ | Ast.Reg16 _ | Ast.Reg8 _ | _ ->
+             error "Vars not implemented"
+       in
+       let helper fu = change_reg64 env fu arg1 in
+       ev f arg2 >>= fun arg2 ->
+       match cmd with
+       | "MOV" -> helper (fun _ -> arg2)
+       | "ADD" -> helper (fun x -> add x arg2)
+       | "SUB" -> helper (fun x -> sub x arg2)
+       | "IMUL" -> helper (fun x -> mul x arg2)
+       | "CMP" ->
+           find_reg64_cont env arg1 >>= fun arg1 ->
+           change_flag env (arg1 = arg2) "ZF" >>= fun env ->
+           change_flag env (arg1 < arg2) "SF"
+       | "AND" -> helper (fun x -> logand x arg2)
+       | "XOR" -> helper (fun x -> logxor x arg2)
+       | "OR" -> helper (fun x -> logor x arg2)
+       | "SHL" -> helper (fun x -> shift_left x (to_int arg2))
+       | "SHR" -> helper (fun x -> shift_right x (to_int arg2))
+       (* | "ADDPD" | "SUBPD" | "MULPD" | "MOVAPD" *)
+       | _ -> error "Is not a mnemonic"
 
-  (** not implemeted data secction interpreter *)
-  let data_sec_inter env st = function _ -> return (env, st)
+     (** general interpreter of commands not including jmp commands *)
+     let inter_cmd env st = function
+       | Args0 (Mnemonic cmd) ->
+           inter_zero_args_cmd env cmd >>= fun env -> return (env, st)
+       | Args1 (Mnemonic cmd, Ast.Reg64 x) -> inter_one_args_cmd env st x cmd
+       | Args2 (Mnemonic cmd, Ast.Reg64 x, y) ->
+           inter_two_args_cmd env x y cmd >>= fun env -> return (env, st)
+       | _ -> error "Isnt argsn"
 
-  (** code section interpreter that return map, ast - general code that shouldn't change *)
-  let rec code_sec_inter env st ast =
-    let jump env ast tl = function
-      | Args1 (Mnemonic cmd, Lab label) ->
-          assoc label ast >>= fun code ->
-          (match cmd with
-          | "JMP" -> return true
-          | "JE" | "JZ" -> find_flag_cont env "ZF"
-          | "JNE" -> find_flag_cont env "ZF" >>= fun z -> return @@ not z
-          | "JG" -> find_eflags env >>= fun (z, s, o) -> return (o = s && not z)
-          | "JGE" -> find_eflags env >>= fun (_, s, o) -> return (o = s)
-          | "JL" -> find_eflags env >>= fun (_, s, o) -> return (o != s)
-          | "JLE" -> find_eflags env >>= fun (z, s, o) -> return (z && o != s)
-          | x -> error @@ x ^ " is not a jmp")
-          >>= fun cond ->
-          if cond then code_sec_inter env st ast code
-          else code_sec_inter env st ast tl
-      | _ -> error "Isnt jmp"
-    in
-    function
-    | Command cmd :: tl -> (
-        match cmd with
-        | Args1 (Mnemonic c, _) when is_jmp c -> jump env ast tl cmd
-        | _ ->
-            inter_cmd env st cmd >>= fun (env, st) ->
-            code_sec_inter env st ast tl)
-    | Id _ :: tl -> code_sec_inter env st ast tl
-    | [] -> return (env, st)
+     (** returns list of code_section that placed after label l *)
+     let rec assoc (Label l) = function
+       | [] -> error ("No such label: " ^ l)
+       | Id (Label label) :: tl when label = l -> return tl
+       | _ :: tl -> assoc (Label l) tl
 
-  (** general general interpreter *)
-  let rec interpret env st = function
-    | [] -> return (env, st)
-    | h :: tl -> (
-        match h with
-        | Code code ->
-            t_ch code >>= fun _ ->
-            code_sec_inter env st code code >>= fun (env, st) ->
-            interpret env st tl
-        | _ -> error "Not implemented yet")
-  (* data_sec_inter st env data >>= fun (env, st) -> interpret env st tl) *)
+     (** not implemeted data secction interpreter *)
+     let data_sec_inter env st = function _ -> return (env, st)
+
+     (** code section interpreter that return map, ast - general code that shouldn't change *)
+     let rec code_sec_inter env st ast =
+       let jump env ast tl = function
+         | Args1 (Mnemonic cmd, Lab label) ->
+             assoc label ast >>= fun code ->
+             (match cmd with
+             | "JMP" -> return true
+             | "JE" | "JZ" -> find_flag_cont env "ZF"
+             | "JNE" -> find_flag_cont env "ZF" >>= fun z -> return @@ not z
+             | "JG" -> find_eflags env >>= fun (z, s, o) -> return (o = s && not z)
+             | "JGE" -> find_eflags env >>= fun (_, s, o) -> return (o = s)
+             | "JL" -> find_eflags env >>= fun (_, s, o) -> return (o != s)
+             | "JLE" -> find_eflags env >>= fun (z, s, o) -> return (z && o != s)
+             | x -> error @@ x ^ " is not a jmp")
+             >>= fun cond ->
+             if cond then code_sec_inter env st ast code
+             else code_sec_inter env st ast tl
+         | _ -> error "Isnt jmp"
+       in
+       function
+       | Command cmd :: tl -> (
+           match cmd with
+           | Args1 (Mnemonic c, _) when is_jmp c -> jump env ast tl cmd
+           | _ ->
+               inter_cmd env st cmd >>= fun (env, st) ->
+               code_sec_inter env st ast tl)
+       | Id _ :: tl -> code_sec_inter env st ast tl
+       | [] -> return (env, st)
+
+     (** general general interpreter *)
+     let rec interpret env st = function
+       | [] -> return (env, st)
+       | h :: tl -> (
+           match h with
+           | Code code ->
+               t_ch code >>= fun _ ->
+               code_sec_inter env st code code >>= fun (env, st) ->
+               interpret env st tl
+           | _ -> error "Not implemented yet")
+     (* data_sec_inter st env data >>= fun (env, st) -> interpret env st tl) *)
+  *)
 end
