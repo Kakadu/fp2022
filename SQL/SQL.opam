@@ -20,7 +20,6 @@ depends: [
   "stdio"
   "ANSITerminal"
   "ounit2"
-  "unix"
   "odoc" {with-doc}
 ]
 build: [

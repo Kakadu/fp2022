@@ -31,6 +31,5 @@
   stdio
   ANSITerminal
   ounit2
-  unix
   ; After adding dependencies to 'dune' files and the same dependecies here too
   ))

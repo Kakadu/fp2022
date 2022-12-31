@@ -8,16 +8,7 @@
  (name REPL)
  (public_name SQL.Repl)
  (modules REPL)
- (libraries
-  SQL.Lib
-  unix
-  str
-  csv
-  ANSITerminal
-  stdio
-  opal
-  ppx_show.runtime
-  ounit2)
+ (libraries SQL.Lib str csv ANSITerminal stdio opal ppx_show.runtime ounit2)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))
 
