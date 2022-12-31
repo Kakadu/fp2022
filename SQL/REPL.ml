@@ -1,4 +1,4 @@
-open SQL
+open SQL_lib
 
 let main () =
   let _ =

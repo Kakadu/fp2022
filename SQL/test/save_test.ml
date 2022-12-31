@@ -1,5 +1,6 @@
-open SQL.Type
-open SQL.Tree
+open SQL_lib.Type
+open SQL_lib.Tree
+open SQL_lib.Save
 
 let class_number_tree =
   let insert_1 = insert (0, "1110") empty in
@@ -138,8 +139,6 @@ let table_tree =
 ;;
 
 let test_db = { database_name = "parent"; tables = table_tree; num_tables = 3 }
-
-open SQL.Save
 
 let suite =
   save_file test_db "programming";

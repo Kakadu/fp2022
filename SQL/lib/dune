@@ -1,4 +1,14 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
 (library
- (name SQL)
- (public_name SQL)
- (libraries csv unix))
+ (name SQL_lib)
+ (public_name SQL.Lib)
+ (modules Type Controller Helper Parser Rep Save Tokenizer Tree)
+ (libraries unix str csv ANSITerminal stdio opal ppx_show.runtime)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect ppx_show ppx_deriving.eq)))

@@ -1,8 +1,8 @@
 open OUnit2
-open SQL.Tokenizer
-open SQL.Parser
-open SQL.Type
-open SQL.Helper
+open SQL_lib.Tokenizer
+open SQL_lib.Parser
+open SQL_lib.Type
+open SQL_lib.Helper
 
 (* (Country = Mexico) or (LandSize >= 1000 and Population >= 1000) *)
 let condition1 =

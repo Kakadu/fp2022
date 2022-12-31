@@ -1,6 +1,6 @@
 open OUnit2
-open SQL.Tree
-open SQL.Type
+open SQL_lib.Tree
+open SQL_lib.Type
 
 let alist = [ 3, 4; 1, 2; 5, 6; 9, 10; 7, 8 ]
 let sorted = [ 1, 2; 3, 4; 5, 6; 7, 8; 9, 10 ]

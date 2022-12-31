@@ -8,9 +8,9 @@
   + `INSERT` queries:
     ```
     INSERT INTO Persons PersonID, LastName, FirstName, Address, City VALUES  9, "Big", "Flopa", "Jojo", "Moon" ;
-  INSERT INTO Persons PersonID, LastName, FirstName VALUES  20, "Nono", "Ilya"  ;
-  INSERT INTO Persons PersonID, LastName, FirstName VALUES  30, "Hoho",  "Jaba" ;
-  INSERT INTO Persons PersonID, LastName, FirstName VALUES  90,  "Dota", "dva" ;
+    INSERT INTO Persons PersonID, LastName, FirstName VALUES  20, "Nono", "Ilya"  ;
+    INSERT INTO Persons PersonID, LastName, FirstName VALUES  30, "Hoho",  "Jaba" ;
+    INSERT INTO Persons PersonID, LastName, FirstName VALUES  90,  "Dota", "dva" ;
     ```
   + `SELECT` queries:
     ```

@@ -1,4 +1,4 @@
-include Parser_test
-include Save_test
-include Tree_test
-include Expr_test
+include parser_test
+include save_test
+include tree_test
+include expr_test

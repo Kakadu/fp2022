@@ -1,24 +1,36 @@
 (lang dune 2.8)
 
-(name SQL)
-
 (generate_opam_files true)
 
-(source
- (github username/reponame))
+(cram enable)
+
+(license LGPL-3.0-or-later)
 
 (authors "Danil Yevdokimov")
 
-(maintainers "Maintainer Name")
+(maintainers "st076209@student.spbu.ru")
 
-(license LICENSE)
+(bug_reports "not specified")
 
-(documentation https://url/to/documentation)
+(homepage "not specified")
 
 (package
- (name SQL)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml dune)
- (tags
-  (topics "to describe" your project)))
+ (name SQL) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "SQL")
+ (description "SQL language")
+ (version 0.1)
+ (depends
+  dune
+  opal
+  (ppx_inline_test :with-test)
+  ppx_expect
+  ppx_deriving
+  ppx_show
+  (ocamlformat :build)
+  csv
+  stdio
+  ANSITerminal
+  ounit2
+  unix
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))

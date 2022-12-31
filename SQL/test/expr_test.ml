@@ -1,6 +1,6 @@
 open OUnit2
-open SQL.Parser
-open SQL.Type
+open SQL_lib.Parser
+open SQL_lib.Type
 
 (* (A = 1) or (D = 4) *)
 let (tokens1 : expr_type list) =
