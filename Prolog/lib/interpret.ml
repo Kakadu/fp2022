@@ -131,8 +131,11 @@ module Interpret (M : MonadFail) (C : Config) = struct
          >>= fun res ->
          unify (res @ substitution) >>= fun res -> return (res, choicepoints))
     | Writeln term ->
-      Caml.Format.printf "%s\n" (str_of_term term);
-      return (substitution, choicepoints)
+      (match str_of_term term with
+       | Ok str ->
+         Caml.Format.printf "%s\n" str;
+         return (substitution, choicepoints)
+       | Error _ -> critical "Cannot print term")
     | Clause_p (head, body) ->
       (match is_builtin head with
        | `Builtin _ -> eval_error "Can't unify clause with builtins"
@@ -198,7 +201,12 @@ module Interpret (M : MonadFail) (C : Config) = struct
 
   and backtrack_choicepoint choicepoint choicepoints =
     let debug_print goal =
-      if debug then Caml.Format.printf "Failed: %s\nBacktracking \n\n" (str_of_term goal)
+      if debug
+      then (
+        match str_of_term goal with
+        | Ok str -> Caml.Format.printf "Failed: %s\nBacktracking \n\n" str
+        | Error _ ->
+          Caml.Format.printf "Error: cannot properly print term %s \n" (show_term goal))
     in
     match choicepoint with
     | Choicepoint { goal; substitution; candidates } ->
@@ -244,7 +252,10 @@ module Interpret (M : MonadFail) (C : Config) = struct
   and eval goal substitution choicepoints =
     if debug
     then (
-      Caml.Format.printf "Goal: %s\n" (str_of_term goal);
+      (match str_of_term goal with
+       | Ok str -> Caml.Format.printf "Goal: %s\n" str
+       | Error _ ->
+         Caml.Format.printf "Error: cannot properly print term %s \n" (show_term goal));
       Print.print_substitution substitution;
       Caml.Format.printf "\n\n");
     match is_builtin goal with

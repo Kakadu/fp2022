@@ -4,22 +4,38 @@
 
 open Ast
 open Types
+open Types.Result
 
-let rec str_of_terms terms = String.concat ", " (List.map str_of_term terms)
+let rec str_of_terms terms =
+  let rec get_str_list = function
+    | hd :: tl ->
+      str_of_term hd >>= fun str -> get_str_list tl >>| fun list -> str :: list
+    | _ -> return []
+  in
+  match get_str_list terms with
+  | Ok list -> return (String.concat ", " list)
+  | Error _ as x -> x
+
+and str_of_term_pair (t1, t2) =
+  str_of_term t1 >>= fun str1 -> str_of_term t2 >>| fun str2 -> str1, str2
 
 and str_of_term = function
-  | Atomic (Ast.Num x) -> Int.to_string x
-  | Atomic (Ast.Atom (Ast.Name x)) -> x
-  | Atomic (Ast.Atom (Ast.Operator x)) -> x
-  | Var x -> x
-  | Compound { atom = Name "." } as x -> String.concat "" [ "["; str_of_list x; "]" ]
+  | Atomic (Ast.Num x) -> return (Int.to_string x)
+  | Atomic (Ast.Atom (Ast.Name x)) -> return x
+  | Atomic (Ast.Atom (Ast.Operator x)) -> return x
+  | Var x -> return x
+  | Compound { atom = Name "." } as x ->
+    str_of_list x >>| fun str -> String.concat "" [ "["; str; "]" ]
   | Compound { atom = Name name; terms } ->
-    String.concat "" [ name; "("; str_of_terms terms; ")" ]
+    str_of_terms terms >>| fun str -> String.concat "" [ name; "("; str; ")" ]
   | Compound { atom = Operator ","; terms = [ term1; term2 ] } ->
-    String.concat "" [ "("; str_of_term term1; ", "; str_of_term term2; ")" ]
+    str_of_term_pair (term1, term2)
+    >>| fun (str1, str2) -> String.concat "" [ "("; str1; ", "; str2; ")" ]
   | Compound { atom = Operator name; terms = [ term1; term2 ] } ->
-    String.concat "" [ str_of_term term1; name; str_of_term term2 ]
-  | _ as x -> "Error: Cannot get string of " ^ show_term x
+    str_of_term_pair (term1, term2)
+    >>| fun (str1, str2) -> String.concat "" [ str1; name; str2 ]
+  | x ->
+    fail (Critical (String.concat "" [ "Cannot convert "; show_term x; " to string" ]))
 
 (** Converts compound term with [atom = Name "."] to string.  *)
 and str_of_list l =
@@ -28,18 +44,27 @@ and str_of_list l =
     str_of_term l1
   | Compound { atom = Name "."; terms = [ l1; Compound { atom; terms } ] }
     when equal_atom atom (Name ".") ->
-    String.concat ", " [ str_of_term l1; str_of_list (Compound { atom; terms }) ]
+    str_of_term l1
+    >>= fun str1 ->
+    str_of_list (Compound { atom; terms })
+    >>| fun str2 -> String.concat ", " [ str1; str2 ]
   | Compound { atom = Name "."; terms = [ l1; l2 ] } ->
-    String.concat ", " [ str_of_term l1; str_of_term l2 ]
-  | _ -> "Error: Cannot get string of " ^ show_term l
+    str_of_term_pair (l1, l2) >>| fun (str1, str2) -> String.concat ", " [ str1; str2 ]
+  | _ ->
+    fail (Critical (String.concat "" [ "Cannot convert "; show_term l; " to string" ]))
 ;;
 
-let rec print_substitution = function
-  | [ (t1, t2) ] -> Caml.Format.printf "%s = %s" (str_of_term t1) (str_of_term t2)
-  | (t1, t2) :: tl ->
-    Caml.Format.printf "%s = %s,\n" (str_of_term t1) (str_of_term t2);
-    print_substitution tl
-  | _ -> ()
+let print_substitution sub =
+  let rec get_str_list = function
+    | hd :: tl ->
+      str_of_term_pair hd
+      >>= fun (left, right) ->
+      get_str_list tl >>| fun list -> String.concat " = " [ left; right ] :: list
+    | _ -> return []
+  in
+  match get_str_list sub with
+  | Ok lines -> Caml.Format.printf "%s" (String.concat ",\n" lines)
+  | Error _ -> Caml.Format.printf "Error: Cannot print substitution\n"
 ;;
 
 let print_choicepoints choicepoints =
