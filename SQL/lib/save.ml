@@ -2,7 +2,7 @@ open Rep
 open Printf
 open Type
 
-let path_to_csv_dir = "/Users/akabynda/fp2022/SQL" (* Filename.current_dir_name *)
+let path_to_csv_dir = Filename.current_dir_name (* "/Users/akabynda/fp2022/SQL" *)
 let conc_comma = String.concat ","
 let conc_line = String.concat "\n"
 
