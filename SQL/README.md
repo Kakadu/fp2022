@@ -7,10 +7,10 @@
     ```
   + `INSERT` queries:
     ```
-    INSERT INTO Persons PersonID, LastName, FirstName, Address, City VALUES  9, "Dan", "Kan", "Poni", "Moni" ;
-    INSERT INTO Persons PersonID, LastName, FirstName VALUES  20, "Bobr", "Ilya" ;
-    INSERT INTO Persons PersonID, LastName, FirstName VALUES  23, "Ogromni",  "Bobr" ;
-    INSERT INTO Persons PersonID, LastName, FirstName VALUES  93, "Putin", "Vladimir" ;
+    INSERT INTO Persons PersonID, LastName, FirstName, Address, City VALUES  9, "Du", "Chuhan", "Risley", "Moon" ;
+    INSERT INTO Persons PersonID, LastName, FirstName VALUES  20, "Li", "Fengyu"  ;
+    INSERT INTO Persons PersonID, LastName, FirstName VALUES  23, "Liu",  "Emerald" ;
+    INSERT INTO Persons PersonID, LastName, FirstName VALUES  93,  "Wang", "Yolanda" ;
     ```
   + `SELECT` queries:
     ```
@@ -18,11 +18,11 @@
     ```
   + `DELETE` queries:
     ```
-    DELETE FROM Persons WHERE PersonID = 20 ;
+    DELETE FROM Persons WHERE PersonID = 23 ;
     ```
   + `UPDATE` queries:
     ```
-    UPDATE Persons SET PersonID = 99, LastName = Unknown WHERE PersonID = 20 AND LastName = "Ilya" ;
+    UPDATE Persons SET PersonID = 999, LastName = Unknown WHERE PersonID = 23 AND LastName = "Liu" ;
     ```
   + `DROP` queries:
     ```
