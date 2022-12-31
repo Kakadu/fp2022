@@ -280,46 +280,46 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + 0x0");
-  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
+  [%expect {|(Add ((Const (ASMConst "0")), (Const (ASMConst "0x0"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + var");
-  [%expect {| (Add (Const (ASMConst "0")) (Var (ASMVar "VAR"))) |}]
+  [%expect {| (Add ((Const (ASMConst "0")), (Var (ASMVar "VAR")))) |}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0+0x0");
-  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
+  [%expect {|(Add ((Const (ASMConst "0")), (Const (ASMConst "0x0"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0      +     0x0");
-  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
+  [%expect {|(Add ((Const (ASMConst "0")), (Const (ASMConst "0x0"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + (0x0)");
-  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
+  [%expect {|(Add ((Const (ASMConst "0")), (Const (ASMConst "0x0"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + (    0x0   )   ");
-  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
+  [%expect {|(Add ((Const (ASMConst "0")), (Const (ASMConst "0x0"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "(0 + (0x0))");
-  [%expect {|(Add (Const (ASMConst "0")) (Const (ASMConst "0x0")))|}]
+  [%expect {|(Add ((Const (ASMConst "0")), (Const (ASMConst "0x0"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + 1 * 2");
   [%expect
-    {|(Add (Const (ASMConst "0")) (Mul (Const (ASMConst "1")) (Const (ASMConst "2"))))|}]
+    {|(Add ((Const (ASMConst "0")), (Mul ((Const (ASMConst "1")), (Const (ASMConst "2"))))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 * 1 + 2");
   [%expect
-    {|(Add (Mul (Const (ASMConst "0")) (Const (ASMConst "1"))) (Const (ASMConst "2")))|}]
+    {|(Add ((Mul ((Const (ASMConst "0")), (Const (ASMConst "1")))), (Const (ASMConst "2"))))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 * (1 + 2)");
   [%expect
-    {|(Mul (Const (ASMConst "0")) (Add (Const (ASMConst "1")) (Const (ASMConst "2"))))|}]
+    {|(Mul ((Const (ASMConst "0")), (Add ((Const (ASMConst "1")), (Const (ASMConst "2"))))))|}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "ret");
@@ -347,31 +347,31 @@ let%expect_test _ =
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1");
   [%expect
-    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
+    {| (Command (MOV (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
 
 let%expect_test _ =
   print_string
   @@ show_code_section (pr_opt code_line_parser "mov rax,         1        ");
   [%expect
-    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
+    {| (Command (MOV (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov \nrax, \n1\n");
   [%expect
-    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
+    {| (Command (MOV (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1 + 1");
   [%expect
-    {| (Command (MOV (RegToExpr (Reg64 "RAX") (Add (Const (ASMConst "1")) (Const (ASMConst "1")))))) |}]
+    {| (Command (MOV (RegToExpr ((Reg64 "RAX"), (Add ((Const (ASMConst "1")), (Const (ASMConst "1")))))))) |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, rax");
-  [%expect {| (Command (MOV (RegToReg (Reg64 "RAX") (Reg64 "RAX")))) |}]
+  [%expect {| (Command (MOV (RegToReg ((Reg64 "RAX"), (Reg64 "RAX"))))) |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, rbx");
-  [%expect {| (Command (MOV (RegToReg (Reg64 "RAX") (Reg64 "RBX")))) |}]
+  [%expect {| (Command (MOV (RegToReg ((Reg64 "RAX"), (Reg64 "RBX"))))) |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, eax");
@@ -407,7 +407,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "shl rax, 1");
-  [%expect {| (Command (SHL (RegToExpr (Reg64 "RAX") (Const (ASMConst "1"))))) |}]
+  [%expect {| (Command (SHL (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "shl rax, rax");
