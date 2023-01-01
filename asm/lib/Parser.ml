@@ -80,21 +80,6 @@ let reg =
   | w when is_128bitreg w -> return @@ Dyn (Reg128 w)
   | _ -> fail "Isnt reg"
 
-(** parses two registers ofParses two registers of the same bit size separeted br , *)
-let rtr =
-  let rr (Dyn x) (Dyn y) =
-    let matching x y = RegToReg (x, y) in
-    match (x, y) with
-    | Reg8 _, Reg8 _ -> return @@ matching x y
-    | Reg16 _, Reg16 _ -> return @@ matching x y
-    | Reg32 _, Reg32 _ -> return @@ matching x y
-    | Reg64 _, Reg64 _ -> return @@ matching x y
-    | Reg128 _, Reg128 _ -> return @@ matching x y
-    | _ -> fail "Isnt same type regs"
-  in
-  reg >>= fun x ->
-  trim @@ (char ',' *> reg) >>= fun y -> rr x y
-
 (** parses arithmetic expression with vars *)
 let expr =
   let add = char '+' *> return (fun x y -> Add (x, y)) in
@@ -125,23 +110,34 @@ let expr =
       let term = trim @@ chainl1 factor (mul <|> div) in
       trim @@ chainl1 term (add <|> sub))
 
-(** parses register with expression separeted by , *)
-let rte =
-  reg >>= fun (Dyn x) ->
-  trim @@ (char ',' *> expr) >>= fun y -> return @@ RegToExpr (x, y)
-
 (** parses label*)
-let l =
+let label =
   word >>= fun x ->
   let w = String.uppercase_ascii x in
   if (not (is_reg w)) & not (is_mnemonic w) then return @@ ASMLabel x
   else fail "Label cant have name of regs and mnemonics"
 
-(** parses label as single_arg *)
-let label = l >>= fun x -> return @@ Label x
+(** parses register with expression separeted by , *)
+let rte =
+  reg >>= fun (Dyn x) ->
+  trim @@ (char ',' *> expr) >>= fun y -> return @@ RegToExpr (x, y)
 
-(** parses register as single_arg *)
-let sr = reg >>= fun (Dyn x) -> return @@ Reg x
+(** parses two registers of the same bit size separeted br , *)
+let rtr =
+  let rr (Dyn x) (Dyn y) =
+    let matching x y = RegToReg (x, y) in
+    match (x, y) with
+    | Reg8 _, Reg8 _ -> return @@ matching x y
+    | Reg16 _, Reg16 _ -> return @@ matching x y
+    | Reg32 _, Reg32 _ -> return @@ matching x y
+    | Reg64 _, Reg64 _ -> return @@ matching x y
+    | Reg128 _, Reg128 _ -> return @@ matching x y
+    | _ -> fail "Isnt same type regs"
+  in
+  reg >>= fun x ->
+  trim @@ (char ',' *> reg) >>= fun y -> rr x y
+
+let da = rtr <|> rte
 
 (** parses mnemonic with arguments *)
 let command =
@@ -150,12 +146,12 @@ let command =
   match w with
   | "RET" -> return RET
   | "SYSCALL" -> return SYSCALL
-  | "PUSH" -> sr >>= fun x -> return @@ PUSH x
-  | "POP" -> sr >>= fun x -> return @@ POP x
-  | "INC" -> sr >>= fun x -> return @@ INC x
-  | "DEC" -> sr >>= fun x -> return @@ DEC x
-  | "NOT" -> sr >>= fun x -> return @@ NOT x
-  | "NEG" -> sr >>= fun x -> return @@ NEG x
+  | "PUSH" -> reg >>= fun (Dyn x) -> return @@ PUSH x
+  | "POP" -> reg >>= fun (Dyn x) -> return @@ POP x
+  | "INC" -> reg >>= fun (Dyn x) -> return @@ INC x
+  | "DEC" -> reg >>= fun (Dyn x) -> return @@ DEC x
+  | "NOT" -> reg >>= fun (Dyn x) -> return @@ NOT x
+  | "NEG" -> reg >>= fun (Dyn x) -> return @@ NEG x
   | "JMP" -> label >>= fun x -> return @@ JMP x
   | "JE" -> label >>= fun x -> return @@ JE x
   | "JNE" -> label >>= fun x -> return @@ JNE x
@@ -164,21 +160,25 @@ let command =
   | "JGE" -> label >>= fun x -> return @@ JGE x
   | "JL" -> label >>= fun x -> return @@ JL x
   | "JLE" -> label >>= fun x -> return @@ JLE x
-  | "MOV" -> rtr <|> rte >>= fun x -> return @@ MOV x
-  | "ADD" -> rtr <|> rte >>= fun x -> return @@ AND x
-  | "SUB" -> rtr <|> rte >>= fun x -> return @@ SUB x
-  | "IMUL" -> rtr <|> rte >>= fun x -> return @@ IMUL x
-  | "AND" -> rtr <|> rte >>= fun x -> return @@ AND x
-  | "XOR" -> rtr <|> rte >>= fun x -> return @@ XOR x
-  | "OR" -> rtr <|> rte >>= fun x -> return @@ OR x
-  | "SHL" -> rte >>= fun x -> return @@ SHL x
-  | "SHR" -> rte >>= fun x -> return @@ SHR x
-  | "CMP" -> rtr <|> rte >>= fun x -> return @@ CMP x
+  | "MOV" -> da >>= fun x -> return @@ MOV x
+  | "ADD" -> da >>= fun x -> return @@ AND x
+  | "SUB" -> da >>= fun x -> return @@ SUB x
+  | "IMUL" -> da >>= fun x -> return @@ IMUL x
+  | "AND" -> da >>= fun x -> return @@ AND x
+  | "XOR" -> da >>= fun x -> return @@ XOR x
+  | "OR" -> da >>= fun x -> return @@ OR x
+  | "SHL" ->
+      reg >>= fun (Dyn x) ->
+      (trim @@ char ',') *> expr >>= fun y -> return @@ SHL (x, y)
+  | "SHR" ->
+      reg >>= fun (Dyn x) ->
+      (trim @@ char ',') *> expr >>= fun y -> return @@ SHR (x, y)
+  | "CMP" -> da >>= fun x -> return @@ CMP x
   | _ -> fail "Isnt mnemonic"
 
 (** parses one line of code: mnemonic and her argumets or label then return Ast.code_section *)
 let code_line_parser =
-  let label = l <* char ':' >>= fun x -> return @@ Id x in
+  let label = label <* char ':' >>= fun x -> return @@ Id x in
   (* let coms = char ';' *> skip_while (fun x -> compare x '\n' != 0) in *)
   let cmd = command >>= fun x -> return @@ Command x in
   trim @@ cmd <|> label
@@ -233,6 +233,7 @@ let test_p p str expr =
   | Error _ -> false
 
 let pr_opt p str = Result.get_ok @@ parse_string ~consume:All p str
+let pr_not_opt p str = Result.get_error @@ parse_string ~consume:All p str
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0");
@@ -247,20 +248,8 @@ let%expect_test _ =
   [%expect {|(Const (ASMConst "0xa"))|}]
 
 let%expect_test _ =
-  print_string @@ show_expr (pr_opt expr "rax");
-  [%expect.unreachable]
-  [@@expect.uncaught_exn
-    {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
-  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
-  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 250, characters 28-47
-  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
+  print_string (pr_not_opt expr "rax");
+  [%expect{| : Vars cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "var");
@@ -336,13 +325,13 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "inc rax");
-  [%expect {|(Command (INC (Reg (Reg64 "RAX"))))|}]
+  [%expect {|(Command (INC (Reg64 "RAX")))|}]
 
 let%expect_test _ =
   print_string
   @@ show_code_section
        (pr_opt code_line_parser "    inc                  rax           ");
-  [%expect {|(Command (INC (Reg (Reg64 "RAX"))))|}]
+  [%expect {|(Command (INC (Reg64 "RAX")))|}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1");
@@ -374,55 +363,21 @@ let%expect_test _ =
   [%expect {| (Command (MOV (RegToReg ((Reg64 "RAX"), (Reg64 "RBX"))))) |}]
 
 let%expect_test _ =
-  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, eax");
-  [%expect.unreachable]
-  [@@expect.uncaught_exn
-    {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
-  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
-  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 377, characters 36-76
-  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
+  print_string (pr_not_opt code_line_parser "mov rax, eax");
+  [%expect{| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
-  print_string @@ show_code_section (pr_opt code_line_parser "mov rax, ebx");
-  [%expect.unreachable]
-  [@@expect.uncaught_exn
-    {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
-  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
-  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 393, characters 36-76
-  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
+  print_string (pr_not_opt code_line_parser "mov rax, ebx");
+  [%expect{| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "shl rax, 1");
-  [%expect {| (Command (SHL (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
+  [%expect
+    {| (Command (SHL (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
 
 let%expect_test _ =
-  print_string @@ show_code_section (pr_opt code_line_parser "shl rax, rax");
-  [%expect.unreachable]
-[@@expect.uncaught_exn {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-
-  (Invalid_argument "result is Error _")
-  Raised at Stdlib.invalid_arg in file "stdlib.ml" (inlined), line 30, characters 20-45
-  Called from Stdlib__Result.get_ok in file "result.ml", line 21, characters 45-76
-  Called from Asm__Parser.pr_opt in file "lib/Parser.ml" (inlined), line 235, characters 19-67
-  Called from Asm__Parser.(fun) in file "lib/Parser.ml", line 413, characters 36-76
-  Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 262, characters 12-19 |}]
+  print_string (pr_not_opt code_line_parser "shl rax, rax");
+  [%expect{| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dd 1");
@@ -481,8 +436,8 @@ let%expect_test _ =
   [%expect
     {|
          Code [
-         		(Command (INC (Reg (Reg64 "RAX"))));
-         		(Command (INC (Reg (Reg64 "RAX"))));
+         		(Command (INC (Reg64 "RAX")));
+         		(Command (INC (Reg64 "RAX")));
          ]|}]
 
 let%expect_test _ =
