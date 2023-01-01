@@ -2,8 +2,9 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open Ast
 open Base
+open Parsetree
+open Typedtree
 open Errors
 
 module Interpret (M : MONADERROR) = struct

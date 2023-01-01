@@ -1,8 +1,9 @@
 (** Copyright 2021-2022, Denis Porsev and contributors *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
-open Ast
+open Parsetree
 
+open Typedtree
 open Interpret
 open Interpret (EvalResult)
 open Prettyprint

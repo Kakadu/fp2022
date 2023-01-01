@@ -2,7 +2,8 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open Ast
+open Parsetree
+open Typedtree
 
 (* ------------------------------------------------------ *)
 (* --------------------- Test cases --------------------- *)

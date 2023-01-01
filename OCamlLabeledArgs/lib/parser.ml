@@ -3,7 +3,7 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Angstrom
-open Ast
+open Parsetree
 (* -------------------- Basic syntax -------------------- *)
 
 (** A subset of OCaml keywords, that are used in our mini language *)

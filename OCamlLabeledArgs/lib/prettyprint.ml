@@ -3,7 +3,8 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Format
-open Ast
+open Parsetree
+open Typedtree
 open Errors
 
 let pp_expr =
@@ -59,8 +60,11 @@ let pp_typ =
     | TInt -> fprintf ppf "int"
     | TVar x -> fprintf ppf "'%s" x
     | TUnit -> fprintf ppf "unit"
-    | Arrow ((Arrow (_l, _r) as l), r) -> fprintf ppf "(%a) -> %a" printer l printer r
-    | Arrow (l, r) -> fprintf ppf "%a -> %a" printer l printer r
+    | Arrow (l, label, r) ->
+      (match label with
+       | ArgNoLabel -> fprintf ppf "%a -> %a" printer l printer r
+       | ArgLabeled lab -> fprintf ppf "~%s:%a -> %a" lab printer l printer r
+       | ArgOptional lab -> fprintf ppf "?%s:%a -> %a" lab printer l printer r)
   in
   printer
 ;;

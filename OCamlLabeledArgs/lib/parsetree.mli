@@ -4,7 +4,7 @@
 
 (** The AST representation of our mini language *)
 
-(* ---------- Parse tree ----------*)
+(** Parse tree *)
 
 (** Built-in string type for variable names *)
 type id = string
@@ -53,32 +53,7 @@ type expr =
 (** Type for definitions *)
 type definition = id * expr [@@deriving show { with_path = false }]
 
-(* ---------- Typed tree ----------*)
-
-(** Mapping from variable names to values *)
-module IdMap : Map.S with type key = id
-
-(** Possible output values of expressions *)
-type value =
-  | VUndef (** internall value for implementing rec *)
-  | VUnit (** internall value for () *)
-  | VBool of bool (** represents boolean values *)
-  | VInt of int (** represents integer values *)
-  | VClosure of value Stdlib.ref IdMap.t * arg_label * expr option * id * expr
-      (** represents high-order functions in form of (env, "x", e) *)
-
-(** Mapping from variable names to types *)
-type environment = value Stdlib.ref IdMap.t
-
-(** Representation of types *)
-type typ =
-  | TBool (** boolean type *)
-  | TInt (** integer type *)
-  | TUnit (** unit type *)
-  | TVar of id (** representation of type variable 'id, needed for polymorphism *)
-  | Arrow of typ * typ (** representation of function types *)
-
-(* ---------- Top-level tree ----------*)
+(** Top-level tree *)
 
 (** Top-level input *)
 type command =
