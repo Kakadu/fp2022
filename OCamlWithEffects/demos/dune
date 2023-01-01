@@ -1,0 +1,8 @@
+(executable
+ (name demo)
+ (public_name demo)
+ (modules Demo)
+ (libraries OCamlWithEffects.Lib stdio))
+
+(cram
+ (deps ./demo.exe))

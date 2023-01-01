@@ -11,6 +11,18 @@ val all_pred : ('a -> bool) list -> 'a -> bool
 (* Computes diff between l1 and l2 *)
 val diff : 'a list -> 'a list -> 'a list
 
+(* standard file descriptors (for writing more readable code) *)
+type std_fd =
+  | StdIn (* 0 *)
+  | StdOut (* 1 *)
+  | StdErr (* 2 *)
+
+(* get int by standard file descriptor *)
+val fd_to_int : std_fd -> int
+
+(* List of standart fds *)
+val std_fds : Unix.file_descr list
+
 (* Map with string keys *)
 module StrMap : sig
   include Map.S with type key = string

@@ -1,0 +1,34 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Kalashnikov Matvey")
+
+(maintainers "https://github.com/foreverjun")
+
+(bug_reports "https://github.com/foreverjun/fp2022")
+
+(homepage "https://github.com/foreverjun/fp2022")
+
+(package
+ (name OcamlObj) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "An parser for language")
+ (description
+  "Parser supports objects")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))
