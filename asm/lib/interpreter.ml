@@ -88,23 +88,24 @@ module Interpret (M : MONADERROR) = struct
     | Reg64 x -> return x
     | _ -> error "Isnt reg64 or less"
 
+  let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false
+
   let find_r : type a. var MapVar.t -> a reg -> Int64.t M.t =
-    let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false in
-    fun env reg ->
-      full_name reg >>= fun name ->
-      return (MapVar.find name env) >>= function
-      | Reg64 x -> (
-          match reg with
-          | Reg8 name ->
-              return
-              @@
-              if rreg name then logand x 0xFFL
-              else shift_left (logand x 0xFFFFL) 8
-          | Reg16 _ -> return @@ logand x 0xFFFFL
-          | Reg32 _ -> return @@ logand x 0xFFFFFFFFL
-          | Reg64 _ -> return x
-          | _ -> error "Isnt reg64 or less")
-      | _ -> error "Isnt reg64 or less"
+   fun env reg ->
+    full_name reg >>= fun name ->
+    return (MapVar.find name env) >>= function
+    | Reg64 x -> (
+        match reg with
+        | Reg8 name ->
+            return
+            @@
+            if rreg name then logand x 0xFFL
+            else shift_left (logand x 0xFFFFL) 8
+        | Reg16 _ -> return @@ logand x 0xFFFFL
+        | Reg32 _ -> return @@ logand x 0xFFFFFFFFL
+        | Reg64 _ -> return x
+        | _ -> error "Isnt reg64 or less")
+    | _ -> error "Isnt reg64 or less"
 
   let find_v env name =
     return (MapVar.find name env) >>= function
@@ -115,6 +116,36 @@ module Interpret (M : MONADERROR) = struct
     return (MapVar.find f env) >>= function
     | Flag x -> return x
     | _ -> error "Isnt flag"
+
+  let change_flag env name f = return @@ MapVar.add name (Flag f) env
+
+  let change_eflag env x y z =
+    change_flag env "ZF" x >>= fun env ->
+    change_flag env "SF" y >>= fun env -> change_flag env "OF" z
+
+  let change_reg64 :
+      type a. var MapVar.t -> Int64.t -> a reg -> var MapVar.t M.t =
+   fun env v ->
+    let mask v l r =
+      add (logand v (sub (shift_left 1L l) 1L)) (div v (shift_left 1L r))
+    in
+    let insert ov v l r =
+      add
+        (sub ov (mask ov l r))
+        (logand (shift_left v r) (sub (shift_left v l) 1L))
+    in
+    let f env reg v l r =
+      full_name reg >>= fun name ->
+      find_r env (Reg64 name) >>= fun ov ->
+      return @@ insert ov v l r >>= fun v ->
+      return @@ MapVar.add name (Reg64 v) env
+    in
+    function
+    | Reg8 x -> if rreg x then f env (Reg8 x) v 8 0 else f env (Reg8 x) v 16 8
+    | Reg16 x -> f env (Reg16 x) v 16 0
+    | Reg32 x -> f env (Reg32 x) v 32 0
+    | Reg64 x -> f env (Reg64 x) v 64 0
+    | _ -> error "Isnt reg64 or less"
 
   let rec ev : var MapVar.t -> expr -> Int64.t M.t =
    fun env -> function
@@ -135,15 +166,6 @@ module Interpret (M : MONADERROR) = struct
     | Var (ASMVar x) -> find_v env x
 
   (*
-
-     (** change value of register by function f *)
-     let change_reg64 env f name =
-       find_reg64_cont env name >>= fun reg ->
-       return @@ MapVar.add name (Reg64 (f reg)) env
-
-     (** change value of flag on 'v' *)
-     let change_flag env v name = return @@ MapVar.add name (Flag v) env
-
      (** interpret command and return map and stack *)
      let inter_one_args_cmd env st arg1 =
        let helper fu = change_reg64 env fu arg1 >>= fun env -> return (env, st) in
