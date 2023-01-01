@@ -28,5 +28,3 @@ You can read more about this project in README.pdf
 ## Thanks
 @Kakadu
 
-## TODO
-> More tests
