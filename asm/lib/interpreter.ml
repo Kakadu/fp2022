@@ -165,6 +165,56 @@ module Interpret (M : MONADERROR) = struct
     | Const (ASMConst x) -> return @@ of_string x
     | Var (ASMVar x) -> find_v env x
 
+  let rec c_flags env =
+    find_f env "ZF" >>= fun z ->
+    find_f env "SF" >>= fun s ->
+    find_f env "OF" >>= fun f -> return (z, s = f)
+
+  let inter env code (h :: stl) (cmd :: tl) =
+    let s = h :: stl in
+    let f x af ff =
+      find_r env x >>= fun ov ->
+      return (af ov) >>= fun nv ->
+      change_eflag env (nv = 0L) (nv < 0L) (ff nv) >>= fun env ->
+      change_reg64 env nv x >>= fun env -> return (env, s, tl)
+    in
+    let rec assoc l = function
+      | [] -> error ""
+      | Id label :: tl when label = l -> return tl
+      | _ :: tl -> assoc l tl
+    in
+    let jmp l conde =
+      c_flags env >>= fun (f, ff) ->
+      if conde (f, ff) then assoc l code >>= fun tl -> return (env, s, tl)
+      else return (env, s, tl)
+    in
+    match cmd with
+    | Id _ -> return (env, s, tl)
+    | Command x -> (
+        match x with
+        | RET -> return (env, s, [])
+        | SYSCALL -> return (env, s, tl) (*TODO*)
+        | PUSH x -> return (env, Dyn x :: s, tl)
+        | POP x ->
+            find_r env x >>= fun v ->
+            change_reg64 env v x >>= fun env -> return (env, stl, tl)
+        | INC x -> f x (add 1L) (fun x -> x = 0L)
+        | DEC x -> f x (sub 1L) (fun x -> add x 1L = 0L)
+        | NOT x -> f x lognot (fun _ -> false)
+        | NEG x -> f x neg (fun _ -> false)
+        | JMP x -> assoc x code >>= fun tl -> return (env, s, tl)
+        | JE x | JZ x -> jmp x (fun (x, _) -> x)
+        | JNE x -> jmp x (fun (x, _) -> not x)
+        | JG x -> jmp x (fun (x, y) -> (not x) & y)
+        | JGE x -> jmp x (fun (_, y) -> y)
+        | JL x -> jmp x (fun (_, y) -> not y)
+        | JLE x -> jmp x (fun (x, y) -> x & not y)
+        | MOV x -> (
+            match x with
+            | RegToReg (x, y) -> error ""
+            | RegToExpr (x, y) -> error "")
+        | _ -> error "")
+
   (*
      (** interpret command and return map and stack *)
      let inter_one_args_cmd env st arg1 =
