@@ -2,8 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open OCamlLabeledArgs_lib
-open Repl
+open OCamlLabeledArgs_lib.Repl
 
 type opts =
   { mutable batch : bool
@@ -11,7 +10,7 @@ type opts =
   }
 
 let () =
-  let opts = { batch = false; debug_build = false } in
+  let opts = { batch = false; debug_build = true } in
   let open Caml.Arg in
   parse
     [ ( "-"
@@ -23,5 +22,5 @@ let () =
       Caml.Format.eprintf "Positioned arguments are not supported\n";
       Caml.exit 1)
     "Read-Eval-Print-Loop for the subset of OCaml language with labeled arguments";
-  if opts.batch then run_single opts.debug_build () else (fun () -> run_repl) ()
+  if opts.batch then run_single opts.debug_build else run_repl opts.debug_build ()
 ;;

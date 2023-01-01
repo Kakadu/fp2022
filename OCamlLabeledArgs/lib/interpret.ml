@@ -9,13 +9,17 @@ open Errors
 module Interpret (M : MONADERROR) = struct
   open M
 
-  let lookup_name name (env : environment) = !(IdMap.find name env)
-
   let compare_values v v' =
     match v, v' with
     | VBool b, VBool b' -> return (compare_bool b b')
     | VInt n, VInt n' -> return (compare_int n n')
     | _ -> fail (RuntimeError "could not compare values")
+  ;;
+
+  let find name (env : environment) =
+    !(match IdMap.find name env with
+      | v -> v
+      | exception Not_found -> ref VUndef)
   ;;
 
   let upd_env name value (env : environment) : environment =
@@ -25,7 +29,7 @@ module Interpret (M : MONADERROR) = struct
   let rec eval e (env : environment) =
     match e with
     | Const c -> eval_const c
-    | Var name -> return (lookup_name name env)
+    | Var name -> return (find name env)
     | Binop _ -> eval_binop e env
     | Fun (label, default, name, exp) ->
       return (VClosure (env, label, default, name, exp))

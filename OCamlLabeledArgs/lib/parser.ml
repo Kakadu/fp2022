@@ -362,7 +362,7 @@ let toplevel_parser () =
           ; return () >>= toplevel_expr_parser
           ; return () >>= toplevel_defininition_parser
           ]
-       <* option "" (ignored *> string ";;"))
+       <* option "" (pstring ";;"))
   <|> return []
 ;;
 

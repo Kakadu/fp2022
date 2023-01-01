@@ -116,6 +116,9 @@ let test_labeled_arguments_swapped_places_expected =
   f ~name2:4 ~name1:5
 ;;
 
+(* (9) Lambda with multiple arguments *)
+let test_mult_arguments_definition = "let f = (fun x y z -> if x (y * y) then z else x y)"
+
 (* ------------------------------------------------------ *)
 (* -------------------- Parser tests -------------------- *)
 (* ------------------------------------------------------ *)
@@ -123,7 +126,6 @@ let test_labeled_arguments_swapped_places_expected =
 open Parser
 
 (* -------------------- Combinators --------------------- *)
-
 (* Base combinators *)
 let%test _ = parse identifier "_" = Ok "_"
 let%test _ = parse ignored "\t\n\r " = Ok ()
@@ -550,6 +552,30 @@ let%test _ =
              , Const (Int 5) ) ))
 ;;
 
+(* (9) Lambda with multiple arguments *)
+
+let%test _ =
+  parse definition_parser test_mult_arguments_definition
+  = Ok
+      ( "f"
+      , Fun
+          ( ArgNoLabel
+          , None
+          , "x"
+          , Fun
+              ( ArgNoLabel
+              , None
+              , "y"
+              , Fun
+                  ( ArgNoLabel
+                  , None
+                  , "z"
+                  , IfThenElse
+                      ( App (Var "x", ArgNoLabel, Binop (Mult, Var "y", Var "y"))
+                      , Var "z"
+                      , App (Var "x", ArgNoLabel, Var "y") ) ) ) ) )
+;;
+
 (* ------------------------------------------------------ *)
 (* -------------------- Infer tests --------------------- *)
 (* ------------------------------------------------------ *)
@@ -662,59 +688,3 @@ let%test _ =
     test_labeled_arguments_swapped_places_expression
     (VInt test_labeled_arguments_swapped_places_expected)
 ;;
-
-(* ------------------------------------------------------ *)
-(* --------------------- REPL tests --------------------- *)
-(* ------------------------------------------------------ *)
-
-open Repl
-
-let test_repl_ok test_case (env : environment) =
-  match Parser.parse_toplevel test_case with
-  | Error e ->
-    Format.printf "%s" e;
-    false
-  | Result.Ok toplevel_input ->
-    let rec helper env toplevel_input =
-      match toplevel_input with
-      | [] -> IdMap.empty
-      | [ h ] -> repl env h
-      | h :: tl -> helper (repl env h) tl
-    in
-    let actual_env = helper env toplevel_input in
-    Format.printf "\n\n----- Test case -----\n";
-    Format.printf "%s" test_case;
-    Format.printf "\n\n----- Environment -----\n";
-    Prettyprint.pp_env Format.std_formatter actual_env;
-    false
-;;
-
-(* let%test _ =
-  test_repl_ok
-    (test_factorial_definition ^ "\n;;\n" ^ test_factorial_call)
-    IdMap.empty
-;; *)
-
-(* let%test _ =
-  test_repl_ok
-    (test_increment_definition ^ "\n;;\n" ^ test_increment_call)
-    IdMap.empty
-;; *)
-
-(* let%test _ =
-  test_repl_ok
-    (test_x_power_y_definition ^ "\n;;\n" ^ test_x_power_y_call)
-    IdMap.empty
-;; *)
-
-(* let%test _ =
-  test_repl_ok
-    (test_labeled_arguments_definition ^ "\n;;\n" ^ test_labeled_arguments_call)
-    IdMap.empty
-;; *)
-
-(* let%test _ =
-  test_repl_ok
-    (test_optional_arguments_definition ^ "\n;;\n" ^ test_optional_arguments_call)
-    IdMap.empty
-;; *)

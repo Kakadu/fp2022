@@ -1,7 +1,7 @@
 (library
  (name OCamlLabeledArgs_lib)
  (public_name OCamlLabeledArgs.Lib)
- (modules Ast Errors Interpret Parser Prettyprint Repl Tests utils)
+ (modules Ast Errors Interpret Parser Prettyprint Repl Tests)
  (libraries base angstrom stdio)
  (preprocess
   (pps ppx_expect ppx_deriving.show))

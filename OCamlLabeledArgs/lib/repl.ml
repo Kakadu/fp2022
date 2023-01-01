@@ -15,8 +15,6 @@ let commands =
   ]
 ;;
 
-let run_repl = Format.eprintf "OCaml-style toplevel (ocamlc, utop) is not implemented"
-
 let repl env toplevel =
   match toplevel with
   | Definition (name, exp) ->
@@ -41,7 +39,7 @@ let repl env toplevel =
     env
   | Command c ->
     (match c with
-     | Help -> List.iter (Format.printf "%s") commands
+     | Help -> List.iter (Format.printf "%s\n") commands
      | Quit ->
        Format.printf "Quiting...";
        exit 0
@@ -50,11 +48,9 @@ let repl env toplevel =
     env
 ;;
 
-let run_single debug () =
-  (* Format.printf "(mini_repl) | OCaml subset with labeled arguments #\n"; *)
-  let text = Stdio.In_channel.(input_all stdin) |> Base.String.rstrip in
-  match Parser.parse_toplevel text with
-  | Error e -> Format.printf "%s" e
+let init_repl is_debug input =
+  match Parser.parse_toplevel input with
+  | Error e -> Format.printf "\nError: %s\n" e
   | Result.Ok toplevel_input ->
     let rec helper env toplevel_input =
       match toplevel_input with
@@ -62,6 +58,27 @@ let run_single debug () =
       | [ h ] -> repl env h
       | h :: tl -> helper (repl env h) tl
     in
-    if debug
+    if is_debug
     then Prettyprint.pp_env Format.std_formatter (helper IdMap.empty toplevel_input)
+    else (
+      let _ = helper IdMap.empty toplevel_input in
+      ())
+;;
+
+let run_repl is_debug =
+  (* Format.printf "(mini_repl) | OCaml subset with labeled arguments #\n"; *)
+  let rec cycle_repl () =
+    let text = read_line () in
+    match text with
+    | exception End_of_file -> ()
+    | exception Failure msg -> Format.printf "Exception: %s" msg
+    | _ -> cycle_repl (init_repl is_debug text)
+  in
+  cycle_repl
+;;
+
+let run_single is_debug =
+  (* Format.printf "(mini_repl) | OCaml subset with labeled arguments #\n"; *)
+  let text = Stdio.In_channel.(input_all stdin) |> Base.String.rstrip in
+  init_repl is_debug text
 ;;
