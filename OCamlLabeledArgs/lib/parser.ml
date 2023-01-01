@@ -65,7 +65,7 @@ let identifier =
   | Some c when is_valid_first_char c ->
     take_while is_identifier_char
     >>= fun s -> if is_keyword s then fail "Invalid variable name" else return s
-  | _ -> fail "Invalid variable name" (* FIXME: error handling *)
+  | _ -> fail "Invalid variable name"
 ;;
 
 (* -------------------- Constant -------------------- *)
@@ -117,7 +117,7 @@ let label_parser =
     | "?" -> return (ArgOptional name)
     | _ -> fail "Error parsing the label of the argument"
   in
-  ignored *> label
+  option ArgNoLabel label
 ;;
 
 (* -------------------- Expressions -------------------- *)
@@ -187,7 +187,7 @@ let type_d =
     lift const_expr (choice [ boolean; integer; unit ]) <?> "const_parser"
   in
   let fun_argument_parser d =
-    ignored *> option ArgNoLabel label_parser
+    ignored *> label_parser
     >>= fun label ->
     (* If there is no label then parse the argument name *)
     (* If there is a label then parse the argument name or just the label:
@@ -231,9 +231,10 @@ let type_d =
   in
   let app_parser d =
     let app_argument_parser =
-      ignored *> option ArgNoLabel label_parser
+      ignored *> label_parser
       >>= fun label ->
-      ignored *> d.expr d
+      var_parser
+      <|> d.expr d
       >>= fun expr ->
       match label with
       | ArgNoLabel | ArgLabeled _ -> return { label; expr }
@@ -246,11 +247,6 @@ let type_d =
       ; (ignored *> var_parser
         <* required_ws
         >>= fun n ->
-        (* FIXME: Multiple argument parsing like
-        "f x y" parses as App (f, App (x, y)) instead of App (App (f, x), y), but
-        with extra parentheses "f (x) (y)" it's alright.
-        I want many1 to be greedy here and eat as much of the input as possible, which it doesn't.
-        Not sure how to fix it just yet. *)
         many1 app_argument_parser >>= fun args -> return (desugar_app n (List.rev args)))
       ]
     <?> "app_parser"
@@ -268,7 +264,7 @@ let type_d =
       ]
     <?> "if_the_else_parser"
   in
-  (* and is not supported *)
+  (* 'and' is not supported *)
   let let_parser d =
     fix
     @@ fun self ->

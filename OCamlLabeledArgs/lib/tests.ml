@@ -19,10 +19,7 @@ let test_factorial_expected =
 ;;
 
 (* (2) X into the power of Y *)
-let test_x_power_y_definition =
-  "let rec pow x y = if y = 0 then 1 else x * pow (x) (y - 1)"
-;;
-
+let test_x_power_y_definition = "let rec pow x y = if y = 0 then 1 else x * pow x (y - 1)"
 let test_x_power_y_call = "pow 4 5"
 let test_x_power_y_expression = test_x_power_y_definition ^ " in " ^ test_x_power_y_call
 
@@ -85,7 +82,7 @@ let test_optional_arguments_complex_definition =
   "let f ?x:(x = 0) ?y:(y = 0) () ?z:(z = 0) () = x + y + z"
 ;;
 
-let test_optional_arguments_complex_call = "f ~x:5"
+let test_optional_arguments_complex_call = "f ~x:5 () ()"
 
 let test_optional_arguments_complex_expression =
   test_optional_arguments_complex_definition
@@ -95,7 +92,7 @@ let test_optional_arguments_complex_expression =
 
 let test_optional_arguments_complex_expected =
   let f ?(x = 0) ?(y = 0) () ?(z = 0) () = x + y + z in
-  f ~x:5
+  f ~x:5 () ()
 ;;
 
 (* (8) Labeled arguments swapped places *)
@@ -480,7 +477,11 @@ let%test _ =
 
 let%test _ =
   parse expr_parser test_optional_arguments_complex_call
-  = Ok (App (Var "f", ArgLabeled "x", Const (Int 5)))
+  = Ok
+      (App
+         ( App (App (Var "f", ArgLabeled "x", Const (Int 5)), ArgNoLabel, Const Unit)
+         , ArgNoLabel
+         , Const Unit ))
 ;;
 
 let%test _ =
@@ -510,7 +511,10 @@ let%test _ =
                              , ""
                              , Binop (Plus, Binop (Plus, Var "x", Var "y"), Var "z") ) )
                      ) ) )
-         , App (Var "f", ArgLabeled "x", Const (Int 5)) ))
+         , App
+             ( App (App (Var "f", ArgLabeled "x", Const (Int 5)), ArgNoLabel, Const Unit)
+             , ArgNoLabel
+             , Const Unit ) ))
 ;;
 
 (* (8) Labeled arguments swapped places *)
@@ -589,22 +593,25 @@ let%test _ =
 open Interpret
 open Interpret (EvalResult)
 
-(* let basic = Binop (Plus, Const (Int 1), Const (Int 9))
+let basic = Binop (Plus, Const (Int 4), Const (Int 5))
 let increment = Fun (ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1)))
 
 let%test _ =
   let env = IdMap.empty in
   match eval basic env with
-  | Ok (VInt 10) -> true
+  | Ok (VInt 9) -> true
   | _ -> false
 ;;
 
 let%test _ =
   let env = IdMap.add "x" (ref (VInt 8)) IdMap.empty in
   match eval increment env with
-  | Ok (VClosure (_, ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1)))) -> true
+  | Ok (VClosure (env, ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1))))
+    when match compare_values !(IdMap.find "x" env) (VInt 8) with
+         | Result.Ok t when t = 0 -> true
+         | _ -> false -> true
   | _ -> false
-;; *)
+;;
 
 let test_parse_and_eval_single_expr_ok
   test_case
@@ -677,11 +684,11 @@ let%test _ =
     (VInt test_optional_arguments_expected)
 ;;
 
-(* let%test _ =
+let%test _ =
   test_parse_and_eval_single_expr_ok
     test_optional_arguments_complex_expression
     (VInt test_optional_arguments_complex_expected)
-;; *)
+;;
 
 let%test _ =
   test_parse_and_eval_single_expr_ok

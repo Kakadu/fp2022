@@ -117,9 +117,7 @@ module Interpret (M : MONADERROR) = struct
     match IdMap.find name new_env with
     | exception Not_found -> fail (RuntimeError "Couldn't update environment")
     | v ->
-      (* FIXME: use of assignment, because Map.add for some reason doesn't erase
-         the previous binding in the IdMap *)
-      (* let new_env = IdMap.add name (ref body_val) new_env in *)
+      (* Use of assignment because there are mutable values in IdMap *)
       v := body_val;
       eval exp new_env
   ;;

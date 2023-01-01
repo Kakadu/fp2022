@@ -47,8 +47,8 @@ let pp_expr =
          fprintf ppf "fun ?%s:(%s = %a) -> %a" s name printer def_e printer e)
   and pp_app ppf fu label arg =
     match label with
-    | ArgNoLabel -> fprintf ppf "(%a) (%a)" printer fu printer arg
-    | ArgLabeled s | ArgOptional s -> fprintf ppf "(%a) (~%s:%a)" printer fu s printer arg
+    | ArgNoLabel -> fprintf ppf "(%a %a)" printer fu printer arg
+    | ArgLabeled s | ArgOptional s -> fprintf ppf "(%a ~%s:%a)" printer fu s printer arg
   in
   printer
 ;;
