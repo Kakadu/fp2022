@@ -32,25 +32,23 @@ type double_arg =
   | RegToReg : 'a reg * 'a reg -> double_arg
   | RegToExpr : _ reg * expr -> double_arg
 
-type single_arg = Reg : _ reg -> single_arg | Label : label -> single_arg
-
 type mnemonic =
   | RET
   | SYSCALL
-  | PUSH of single_arg
-  | POP of single_arg
-  | INC of single_arg
-  | DEC of single_arg
-  | NOT of single_arg
-  | NEG of single_arg
-  | JMP of single_arg
-  | JE of single_arg
-  | JNE of single_arg
-  | JZ of single_arg
-  | JG of single_arg
-  | JGE of single_arg
-  | JL of single_arg
-  | JLE of single_arg
+  | PUSH : _ reg -> mnemonic
+  | POP : _ reg -> mnemonic
+  | INC : _ reg -> mnemonic
+  | DEC : _ reg -> mnemonic
+  | NOT : _ reg -> mnemonic
+  | NEG : _ reg -> mnemonic
+  | JMP of label
+  | JE of label
+  | JNE of label
+  | JZ of label
+  | JG of label
+  | JGE of label
+  | JL of label
+  | JLE of label
   | MOV of double_arg
   | ADD of double_arg
   | SUB of double_arg
@@ -58,8 +56,8 @@ type mnemonic =
   | AND of double_arg
   | XOR of double_arg
   | OR of double_arg
-  | SHL of double_arg
-  | SHR of double_arg
+  | SHL : _ reg * expr -> mnemonic
+  | SHR : _ reg * expr -> mnemonic
   | CMP of double_arg
 
 type code_section = Command of mnemonic | Id of label
@@ -105,27 +103,23 @@ let show_double_arg = function
   | RegToExpr (x, y) ->
       Printf.sprintf {|(RegToExpr (%s, %s))|} (show_reg x) (show_expr y)
 
-let show_single_arg = function
-  | Reg x -> Printf.sprintf {|(Reg %s)|} (show_reg x)
-  | Label x -> Printf.sprintf {|(Label %s)|} (show_label x)
-
 let show_mnemonic : mnemonic -> string = function
   | RET -> "(RET)"
   | SYSCALL -> "(SYSCALL)"
-  | PUSH x -> Printf.sprintf {|(PUSH %s)|} (show_single_arg x)
-  | POP x -> Printf.sprintf {|(POP %s)|} (show_single_arg x)
-  | INC x -> Printf.sprintf {|(INC %s)|} (show_single_arg x)
-  | DEC x -> Printf.sprintf {|(DEC %s)|} (show_single_arg x)
-  | NOT x -> Printf.sprintf {|(NOT %s)|} (show_single_arg x)
-  | NEG x -> Printf.sprintf {|(NEG %s)|} (show_single_arg x)
-  | JMP x -> Printf.sprintf {|(JMP %s)|} (show_single_arg x)
-  | JE x -> Printf.sprintf {|(JE %s)|} (show_single_arg x)
-  | JNE x -> Printf.sprintf {|(JNE %s)|} (show_single_arg x)
-  | JZ x -> Printf.sprintf {|(JZ %s)|} (show_single_arg x)
-  | JG x -> Printf.sprintf {|(JG %s)|} (show_single_arg x)
-  | JGE x -> Printf.sprintf {|(JGE %s)|} (show_single_arg x)
-  | JL x -> Printf.sprintf {|(JL %s)|} (show_single_arg x)
-  | JLE x -> Printf.sprintf {|(JLE %s)|} (show_single_arg x)
+  | PUSH x -> Printf.sprintf {|(PUSH %s)|} (show_reg x)
+  | POP x -> Printf.sprintf {|(POP %s)|} (show_reg x)
+  | INC x -> Printf.sprintf {|(INC %s)|} (show_reg x)
+  | DEC x -> Printf.sprintf {|(DEC %s)|} (show_reg x)
+  | NOT x -> Printf.sprintf {|(NOT %s)|} (show_reg x)
+  | NEG x -> Printf.sprintf {|(NEG %s)|} (show_reg x)
+  | JMP x -> Printf.sprintf {|(JMP %s)|} (show_label x)
+  | JE x -> Printf.sprintf {|(JE %s)|} (show_label x)
+  | JNE x -> Printf.sprintf {|(JNE %s)|} (show_label x)
+  | JZ x -> Printf.sprintf {|(JZ %s)|} (show_label x)
+  | JG x -> Printf.sprintf {|(JG %s)|} (show_label x)
+  | JGE x -> Printf.sprintf {|(JGE %s)|} (show_label x)
+  | JL x -> Printf.sprintf {|(JL %s)|} (show_label x)
+  | JLE x -> Printf.sprintf {|(JLE %s)|} (show_label x)
   | MOV x -> Printf.sprintf {|(MOV %s)|} (show_double_arg x)
   | ADD x -> Printf.sprintf {|(ADD %s)|} (show_double_arg x)
   | SUB x -> Printf.sprintf {|(SUB %s)|} (show_double_arg x)
@@ -133,8 +127,10 @@ let show_mnemonic : mnemonic -> string = function
   | AND x -> Printf.sprintf {|(AND %s)|} (show_double_arg x)
   | XOR x -> Printf.sprintf {|(XOR %s)|} (show_double_arg x)
   | OR x -> Printf.sprintf {|(OR %s)|} (show_double_arg x)
-  | SHL x -> Printf.sprintf {|(SHL %s)|} (show_double_arg x)
-  | SHR x -> Printf.sprintf {|(SHR %s)|} (show_double_arg x)
+  | SHL (x, y) ->
+      Printf.sprintf {|(SHL (RegToExpr (%s, %s)))|} (show_reg x) (show_expr y)
+  | SHR (x, y) ->
+      Printf.sprintf {|(SHR (RegToExpr (%s, %s)))|} (show_reg x) (show_expr y)
   | CMP x -> Printf.sprintf {|(CMP %s)|} (show_double_arg x)
 
 let show_code_section : code_section -> string = function
