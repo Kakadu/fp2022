@@ -395,7 +395,7 @@ let select_column (table : table) (field_list : string list) : table =
     in
     match field_list with
     | [ "*" ] ->
-      { table_name = table.table_name; columns = new_cols; num_rows = table.num_rows }
+      { table with columns = new_cols }
     | _ ->
       if List.length field_list = size new_cols
       then { table with columns = new_cols }
