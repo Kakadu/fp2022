@@ -10,10 +10,10 @@ let alist = [ 3, 4; 1, 2; 5, 6; 9, 10; 7, 8 ]
 let sorted = [ 1, 2; 3, 4; 5, 6; 7, 8; 9, 10 ]
 
 let sample_tree =
-  let rec generate_tree tree alist =
-    match alist with
-    | [] -> EmptyLeaf
+  let rec generate_tree tree =
+    function 
     | h :: t -> insert h (generate_tree tree t)
+    | _ -> EmptyLeaf
   in
   generate_tree EmptyLeaf (List.rev alist)
 ;;

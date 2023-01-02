@@ -118,16 +118,16 @@ let rec map f = function
 
 let filter_based_on_value f tree =
   let all_key_value_pairs = inorder tree in
-  let rec filter_helper f key_value_pairs =
-    match key_value_pairs with
-    | [] -> []
+  let rec filter_helper f =
+    function
     | h :: t -> if f (snd h) then h :: filter_helper f t else filter_helper f t
+    | _ -> []
   in
   let filtered_pairs = filter_helper f all_key_value_pairs in
-  let rec generate_tree alist =
-    match alist with
-    | [] -> EmptyLeaf
+  let rec generate_tree =
+    function
     | h :: t -> insert h (generate_tree t)
+    | _ -> EmptyLeaf
   in
   generate_tree filtered_pairs
 ;;
@@ -152,16 +152,16 @@ let get_key_col (f : column * int -> bool) tree =
 
 let filter_based_on_key f tree =
   let all_key_value_pairs = inorder tree in
-  let rec filter_helper f key_value_pairs =
-    match key_value_pairs with
-    | [] -> []
+  let rec filter_helper f =
+    function
     | h :: t -> if f (fst h) then h :: filter_helper f t else filter_helper f t
+    | _ -> []
   in
   let filtered_pairs = filter_helper f all_key_value_pairs in
-  let rec generate_tree alist =
-    match alist with
-    | [] -> EmptyLeaf
+  let rec generate_tree =
+    function
     | h :: t -> insert h (generate_tree t)
+    | _ -> EmptyLeaf
   in
   generate_tree filtered_pairs
 ;;
@@ -177,11 +177,11 @@ let rec generate_new_key = function
 
 let update_key tree =
   let all_key_value_pairs = inorder tree in
-  let rec generate_tree tree alist =
-    match alist with
-    | [] -> EmptyLeaf
+  let rec generate_tree tree =
+    function
     | h :: t ->
       insert (generate_new_key (generate_tree tree t), snd h) (generate_tree tree t)
+    | _ -> EmptyLeaf
   in
   generate_tree empty all_key_value_pairs
 ;;

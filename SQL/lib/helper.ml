@@ -32,14 +32,14 @@ let terminal_to_string (t : terminal) =
   | String x -> x
 ;;
 
-let rec find elem lst =
-  match lst with
+let rec find elem =
+  function
   | [] -> raise (Malformed "command does not have the correct subcommand")
   | h :: t -> if h = elem then 0 else 1 + find elem t
 ;;
 
-let rec sublist i j l =
-  match l with
+let rec sublist i j =
+  function
   | [] -> raise (Malformed "empty list")
   | h :: t ->
     let tail = if j = 0 then [] else sublist (i - 1) (j - 1) t in
@@ -76,8 +76,8 @@ let range n =
 
 let reverse_association_list lst = List.map (fun (a, b) -> b, a) lst
 
-let extract o =
-  match o with
+let extract =
+  function
   | Some i -> i
   | None -> 0
 ;;

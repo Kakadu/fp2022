@@ -8,7 +8,7 @@
  (name SQL_lib)
  (public_name SQL.Lib)
  (modules Type Controller Helper Parser Rep Save Tokenizer Tree)
- (libraries str csv ANSITerminal stdio opal ppx_show.runtime)
+ (libraries str csv ANSITerminal stdio opal ppx_show.runtime tezos-error-monad)
  (inline_tests)
  (preprocess
   (pps ppx_expect ppx_show ppx_deriving.eq)))

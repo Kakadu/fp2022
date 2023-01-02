@@ -13,14 +13,14 @@ exception Empty
 let rec terminal_to_string (tokens : terminal list) =
   (match tokens with
    | [] -> ""
-   | String s :: t -> s ^ " " ^ terminal_to_string t
-   | Int i :: t -> string_of_int i ^ " " ^ terminal_to_string t
-   | Float f :: t -> string_of_float f ^ " " ^ terminal_to_string t)
+   | String s :: t -> String.concat " " [s ; terminal_to_string t]
+   | Int i :: t -> String.concat " " [string_of_int i ; terminal_to_string t]
+   | Float f :: t -> String.concat " " [string_of_float f ; terminal_to_string t])
   |> String.trim
 ;;
 
-let token_to_terminal t =
-  match t with
+let token_to_terminal =
+  function
   | Terminal terminal -> terminal
   | _ -> raise (Malformed "not a terminal")
 ;;
@@ -31,8 +31,8 @@ let token_list_to_terminal_list l = List.map (fun x -> token_to_terminal x) l
 let explode (s : string) : char list = List.init (String.length s) (String.get s)
 
 (* find the index of the first elem in the list *)
-let rec find elem lst =
-  match lst with
+let rec find elem =
+  function
   | [] -> raise (Malformed "command does not have the correct subcommand")
   | h :: t -> if h = elem then 0 else 1 + find elem t
 ;;
@@ -61,8 +61,8 @@ let rec terminal_to_string_list (tokens : terminal list) : string list =
   | Float f :: t -> string_of_float f :: terminal_to_string_list t
 ;;
 
-let rec sublist i j l =
-  match l with
+let rec sublist i j =
+  function
   | [] -> raise (Malformed "empty list")
   | h :: t ->
     let tail = if j = 0 then [] else sublist (i - 1) (j - 1) t in
@@ -113,12 +113,12 @@ let parse_select_columns tokens =
     |> List.map String.trim
   in
   print_endline "\nThe columns after splitting and trimming are: ";
-  print_list (fun x -> "\"" ^ x ^ "\"") lst;
+  print_list (fun x -> String.concat x ["\"" ; "\""]) lst;
   lst
 ;;
 
-let extract_name token =
-  match token with
+let extract_name =
+  function
   | Terminal (String s) -> trim_string s
   | Terminal (Int i) -> string_of_int i
   | Terminal (Float f) -> string_of_float f
@@ -372,16 +372,16 @@ let rec parse_create db tokens =
 
 (* acc is accumulator, cols is token list of columns, from_lst is token
     list for parse_from, lst is the list containing parse_{some} *)
-and get_where db acc cols from_lst lst =
-  match lst with
+and get_where db acc cols from_lst =
+  function
   | [] -> raise (Malformed "No condition after WHERE")
   | EndOfQuery EOQ :: t ->
     select db (terminal_to_string from_lst) (parse_select_columns cols) (parse_where acc);
     parse_query db t
   | h :: t -> get_where db (h :: acc) cols from_lst t
 
-and get_from db acc cols lst =
-  match lst with
+and get_from db acc cols =
+  function
   | [] -> raise (Malformed "No restrictions after FROM")
   | SubCommand Where :: t -> get_where db [] cols acc t
   | EndOfQuery EOQ :: t ->
@@ -391,15 +391,15 @@ and get_from db acc cols lst =
   | Terminal h :: t -> get_from db (h :: acc) cols t
   | _ -> raise (Malformed "Wrong Syntax in FROM")
 
-and get_cols db acc lst =
-  match lst with
+and get_cols db acc =
+  function
   | [] -> raise (Malformed "No FROM statement after SELECT")
   | SubCommand From :: t -> get_from db [] acc t
   | Terminal h :: t -> get_cols db (h :: acc) t
   | _ -> raise (Malformed "Wrong Syntax in SELECT")
 
-and parse_select db tokens =
-  match tokens with
+and parse_select db =
+  function
   | [] -> raise (Malformed "No column list after SELECT")
   | Terminal s :: t -> get_cols db [] (Terminal s :: t)
   | _ -> raise (Malformed "Wrong Syntax in SELECT")
@@ -417,12 +417,12 @@ and parse_select_new db tokens =
     Controller.select db table select_cols (fun _ -> true);
     get_other_commands tokens |> parse_query db
 
-and parse_drop db tokens =
-  match tokens with
+and parse_drop db =
+  function
   | [] -> raise (Malformed "No table name after DROP")
   | Terminal s :: t ->
-    let rec grouping acc lst =
-      match lst with
+    let rec grouping acc =
+      function
       | [] -> raise (Malformed "Wrong Syntax in DROP")
       | EndOfQuery EOQ :: t ->
         let updated_db = drop db (terminal_to_string acc) in
@@ -480,8 +480,8 @@ and parse_read db tokens =
   let read_db = Controller.read db table in
   get_other_commands tokens |> parse_query read_db
 
-and parse_query db tokens =
-  match tokens with
+and parse_query db =
+  function
   | [] -> db
   | Command Create :: t -> parse_create db t
   | Command Select :: t -> parse_select_new db t
@@ -496,7 +496,7 @@ and parse_query db tokens =
 
 let parse (db : database) (input : string) =
   let tokens = tokenize input in
-  if List.length tokens = 0
+  if List.length tokens < 1
   then raise Empty
   else if List.hd (List.rev tokens) <> EndOfQuery EOQ
   then
