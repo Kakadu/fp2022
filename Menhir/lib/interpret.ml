@@ -76,10 +76,14 @@ let get_new_A_with_A' g a_name =
   new_a @ a'
 ;;
 
-let rec get_nonterm_names helper = function
-  | (lhs, _) :: tl when String.equal lhs helper -> get_nonterm_names helper tl
-  | (lhs, _) :: tl -> lhs :: get_nonterm_names lhs tl
-  | _ -> []
+let get_nonterm_names =
+  List.fold_left (fun (helper, res) (lhs, _) ->
+    if String.equal lhs helper then helper, res else lhs, res @ [ lhs ])
+;;
+
+let get_nonterm_names g =
+  let _, res = get_nonterm_names ("", []) g in
+  res
 ;;
 
 (* If the rule is not subject to left recursion, we can not fix it to have fewer rules. *)
@@ -90,7 +94,7 @@ let is_nonterm_subject_lr name =
 ;;
 
 let lr_grammar_fix g =
-  let nonterm_names = get_nonterm_names "" g in
+  let nonterm_names = get_nonterm_names g in
   let rec fix = function
     | h :: tl ->
       if is_nonterm_subject_lr h g
