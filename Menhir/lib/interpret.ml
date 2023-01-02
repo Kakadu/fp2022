@@ -218,8 +218,8 @@ let rec apply_rule text rule input parse_res =
      | h' :: tl' when string_list_contains h terminals (* TERM SYMBOL *) ->
        if String.equal h' h
        then (
-         let x, y = apply_rule text (lhs, tl) tl' parse_res in
-         Term h :: x, y
+         let res, remaining_input = apply_rule text (lhs, tl) tl' parse_res in
+         Term h :: res, remaining_input
          (* If equal TERM symbols in text and rule then continue checking *))
        else
          raise RejectApplyingRule (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
