@@ -615,8 +615,7 @@ let test_parse_and_eval_single_expr_ok
   ?(env : environment = IdMap.empty)
   expected_value
   =
-  let test_inner toplevel =
-    match toplevel with
+  let test_inner = function
     | Definition _ ->
       Format.printf
         "Definitions are for the REPL. Test expression evaluation instead!\n%!";

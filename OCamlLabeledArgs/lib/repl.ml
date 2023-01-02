@@ -52,8 +52,7 @@ let init_repl is_debug input =
   match Parser.parse_toplevel input with
   | Error e -> Format.printf "\nError: %s\n" e
   | Result.Ok toplevel_input ->
-    let rec helper env toplevel_input =
-      match toplevel_input with
+    let rec helper env = function
       | [] -> IdMap.empty
       | [ h ] -> repl env h
       | h :: tl -> helper (repl env h) tl
