@@ -107,19 +107,21 @@ let get_all_rows table =
     let row_list = range num_rows in
     List.map
       (fun row ->
-        String.concat "" 
-        ["| "
-        ; String.concat " | "
-            (let all_columns = List.map (fun x -> snd x) (inorder table.columns) in
-             List.map (fun col -> get_one_cell col row) all_columns)
-        ; " |"])
+        String.concat
+          ""
+          [ "| "
+          ; String.concat
+              " | "
+              (let all_columns = List.map (fun x -> snd x) (inorder table.columns) in
+               List.map (fun col -> get_one_cell col row) all_columns)
+          ; " |"
+          ])
       row_list
   with
   | Not_found -> raise TableDNE
 ;;
 
-let string_of_data_type =
-  function
+let string_of_data_type = function
   | (String : data_type) -> "String"
   | (Int : data_type) -> "Int"
   | (Float : data_type) -> "Float"
@@ -167,14 +169,17 @@ let get_all_rows_even_length table longest_length =
     print_int num_rows;
     List.map
       (fun row ->
-       String.concat "" ["| "
-       ; String.concat
-            " | "
-            (let all_columns = List.map (fun x -> snd x) (inorder table.columns) in
-             List.map
-               (fun col -> get_one_cell_even_length col row longest_length)
-               all_columns)
-        ; " |"])
+        String.concat
+          ""
+          [ "| "
+          ; String.concat
+              " | "
+              (let all_columns = List.map (fun x -> snd x) (inorder table.columns) in
+               List.map
+                 (fun col -> get_one_cell_even_length col row longest_length)
+                 all_columns)
+          ; " |"
+          ])
       row_list
   with
   | Not_found -> raise TableDNE
@@ -192,15 +197,17 @@ let pretty_print_fields table =
       (List.map (fun x -> string_of_data_type x) (snd pair_list))
       longest_length
   in
-  String.concat ""
-  ["| "
-  ; String.concat " | " field_list
-  ; " |\n"
-  ; row_separator
-  ; "\n| "
-  ; String.concat " | " type_list
-  ; " |\n"
-  ; row_separator]
+  String.concat
+    ""
+    [ "| "
+    ; String.concat " | " field_list
+    ; " |\n"
+    ; row_separator
+    ; "\n| "
+    ; String.concat " | " type_list
+    ; " |\n"
+    ; row_separator
+    ]
 ;;
 
 let pretty_print table =
@@ -213,15 +220,17 @@ let pretty_print table =
     (get_table_name_internal table)
     (get_col_num table)
     (get_row_num table)
-    ^ String.concat ""
-    [ "\n"
-    ; row_separator
-    ; "\n"
-    ; pretty_print_fields table
-    ; "\n"
-    ; String.concat
-        (String.concat row_separator ["\n";"\n"])
-        (get_all_rows_even_length table longest_length)]
+  ^ String.concat
+      ""
+      [ "\n"
+      ; row_separator
+      ; "\n"
+      ; pretty_print_fields table
+      ; "\n"
+      ; String.concat
+          (String.concat row_separator [ "\n"; "\n" ])
+          (get_all_rows_even_length table longest_length)
+      ]
 ;;
 
 let create_empty_column field_name data_type =
@@ -241,14 +250,9 @@ let create_empty_database database_name =
 ;;
 
 let insert_column_internal table column =
-  {
-    table with
-    num_rows = 0;
-    columns =
-      (insert
-          ((generate_new_key
-              table.columns), column)
-          table.columns)
+  { table with
+    num_rows = 0
+  ; columns = insert (generate_new_key table.columns, column) table.columns
   }
 ;;
 
@@ -390,8 +394,10 @@ let select_column (table : table) (field_list : string list) : table =
           table.columns
     in
     match field_list with
-    | [ "*" ] -> { table_name = table.table_name; columns = new_cols; num_rows = table.num_rows }
-    | _ -> if List.length field_list = size new_cols
+    | [ "*" ] ->
+      { table_name = table.table_name; columns = new_cols; num_rows = table.num_rows }
+    | _ ->
+      if List.length field_list = size new_cols
       then { table with columns = new_cols }
       else raise ColumnDNE
   in

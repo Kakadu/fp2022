@@ -119,15 +119,16 @@ let parse_where_tests =
 type t = string * string list * terminal list
 
 (** helper: return the list with the head removed *)
-let remove_hd =
-  (function
-  | h :: t -> t 
-  | _ -> [])
+let remove_hd = function
+  | h :: t -> t
+  | _ -> []
 ;;
 
-let update_token_1 = 
-  remove_hd (tokenize
-  "UPDATE Customers SET ContactName = 'AlfredSchmidt', City = 'Frankfurt' WHERE CustomerID = 1 ;")
+let update_token_1 =
+  remove_hd
+    (tokenize
+       "UPDATE Customers SET ContactName = 'AlfredSchmidt', City = 'Frankfurt' WHERE \
+        CustomerID = 1 ;")
 ;;
 
 let update_token_2 =

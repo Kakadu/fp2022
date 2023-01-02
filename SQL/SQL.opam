@@ -19,9 +19,7 @@ depends: [
   "csv"
   "stdio"
   "ANSITerminal"
-  "libgmp-dev"
   "ounit2"
-  "tezos-error-monad"
   "odoc" {with-doc}
 ]
 build: [

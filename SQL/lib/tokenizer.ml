@@ -13,13 +13,11 @@ let to_string_list input =
 ;;
 
 let match_terminal s =
-  if (int_of_string_opt s) != None
-    then Terminal (Int (int_of_string s))
-  else 
-    if (float_of_string_opt s) != None
-      then Terminal (Float (float_of_string s))
-    else
-      Terminal (String s)
+  if int_of_string_opt s != None
+  then Terminal (Int (int_of_string s))
+  else if float_of_string_opt s != None
+  then Terminal (Float (float_of_string s))
+  else Terminal (String s)
 ;;
 
 let match_token = function
