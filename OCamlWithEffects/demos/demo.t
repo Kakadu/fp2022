@@ -448,3 +448,7 @@
   > let main = remove_last [1;2;3;4;5]
   > EOF
   [1; 2; 3; 4]
+  $ ./demo.exe <<-EOF
+  > let _ x = x
+  > EOF
+  : end_of_input
