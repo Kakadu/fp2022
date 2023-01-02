@@ -11,7 +11,7 @@ Correct grammar tests.
   > demo_inputs/demo_input.mly
   > LBRACE INT MULTY INT PLUS LBRACE INT DIV INT RBRACE RBRACE EOL
   The file was successfully parsed.
-   [ main :  [ expr :  LBRACE   [ expr :  INT   [ expr' :  MULTY   [ expr :  INT   [ expr' :  PLUS   [ expr :  LBRACE   [ expr :  INT   [ expr' :  DIV   [ expr :  INT  ]  ]  ]   RBRACE  ]  ]  ]  ]  ]   RBRACE  ]   EOL  ] 
+   [ main :  [ expr :  LBRACE   [ expr :  INT   [ expr' :  MULTY   [ expr :  INT  ]   [ expr' :  PLUS   [ expr :  LBRACE   [ expr :  INT   [ expr' :  DIV   [ expr :  INT  ]  ]  ]   RBRACE  ]  ]  ]  ]   RBRACE  ]   EOL  ] 
   $ ./demoInterpret.exe <<-EOF
   > demo_inputs/demo_input.mly
   > LBRACE
@@ -26,12 +26,12 @@ Correct grammar tests.
   > demo_inputs/demo_input.mly
   > INT DIV INT PLUS INT MULTY INT EOL
   The file was successfully parsed.
-   [ main :  [ expr :  INT   [ expr' :  DIV   [ expr :  INT   [ expr' :  PLUS   [ expr :  INT   [ expr' :  MULTY   [ expr :  INT  ]  ]  ]  ]  ]  ]  ]   EOL  ] 
+   [ main :  [ expr :  INT   [ expr' :  DIV   [ expr :  INT  ]   [ expr' :  PLUS   [ expr :  INT  ]   [ expr' :  MULTY   [ expr :  INT  ]  ]  ]  ]  ]   EOL  ] 
   $ ./demoInterpret.exe <<-EOF
   > demo_inputs/demo_input.mly
   > INT DIV
   The file was successfully parsed.
-  REJECT
+  OVERSHOOT
   $ ./demoInterpret.exe <<-EOF
   > demo_inputs/demo_input.mly
   > DIV

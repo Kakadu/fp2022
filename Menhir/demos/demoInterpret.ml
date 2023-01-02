@@ -12,8 +12,8 @@ let read_command () =
 let () =
   let path = read_command () in
   let text = Interpret.read_all_file_text (Unix.openfile path [] 0) in
-  let parser, tree_parser =
-    try Interpret.get_parser_and_tree_parser text with
+  let parser, tree_printer =
+    try Interpret.get_parser_and_tree_printer text with
     | _ ->
       print_endline "Some error in parse part";
       (* These errors we check in demoParse.ml *)
@@ -21,10 +21,7 @@ let () =
   in
   print_endline "The file was successfully parsed.";
   let token_list = String.split_on_char ' ' (read_command ()) in
-  let b, ret = parser token_list in
-  if b
-  then print_endline (tree_parser token_list)
-  else if ret = 0
-  then print_endline "REJECT"
-  else print_endline "OVERSHOOT"
+  try print_endline (tree_printer (parser token_list)) with
+  | Interpret.RejectApplyingRule -> print_endline "REJECT"
+  | Interpret.OvershootApplyingRule -> print_endline "OVERSHOOT"
 ;;

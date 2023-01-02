@@ -196,94 +196,65 @@ let list_empty = function
   | _ -> false
 ;;
 
-(* 
-  returns true or false depending on whether we can apply the rule, 
-  remaining input len if true and error code if false, remaining input 
-  if true and empty list if false
+exception RejectApplyingRule
+exception OvershootApplyingRule
+
+(*  
+If we got one overshoot error, then we should save this result,
+because there is no reject error. 
+So, saved_error is_overshoot boolean flag helps with it.
 *)
-let rec try_apply_rule text rule input parse_res =
+let raise_applying_rule is_overshoot =
+  if is_overshoot then raise OvershootApplyingRule else raise RejectApplyingRule
+;;
+
+let rec apply_rule text rule input parse_res =
   let terminals, _, grammar = parse_res in
   let lhs, rhs = rule in
   match rhs with
   | h :: tl ->
     (match input with
-     | [] -> false, -1, [] (* OVERSHOOT RIGHT HERE. *)
+     | [] -> raise OvershootApplyingRule (* OVERSHOOT RIGHT HERE. *)
      | h' :: tl' when string_list_contains h terminals (* TERM SYMBOL *) ->
        if String.equal h' h
-       then
-         try_apply_rule text (lhs, tl) tl' parse_res
-         (* If equal TERM symbols in text and rule then continue checking *)
-       else false, 0, [] (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
+       then (
+         let x, y = apply_rule text (lhs, tl) tl' parse_res in
+         Term h :: x, y
+         (* If equal TERM symbols in text and rule then continue checking *))
+       else
+         raise RejectApplyingRule (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
      | _ :: _ when string_list_contains h (get_nonterminals grammar) (* NONTERM SYMBOL *)
        ->
        (* Get new input if nonterm rule is fits right here. *)
-       let rec get_new_input all_nonterms ret =
+       let rec try_apply_nonterm all_nonterms is_overshoot =
          match all_nonterms with
          | h' :: tl' ->
-           let is_applicable, remaining_input_len, remaining_input =
-             try_apply_rule text h' input parse_res
-           in
-           if is_applicable
-           then remaining_input, ret
-           else (
-             let ret' = if ret = -1 then ret else remaining_input_len in
-             get_new_input tl' ret')
-         | [] -> input, ret
+           let lhs', _ = h' in
+           (try
+              let result, remaining_input = apply_rule text h' input parse_res in
+              let tl_result', tl_remaining_input' =
+                apply_rule text (lhs', tl) remaining_input parse_res
+              in
+              Nonterm (lhs', result) :: tl_result', tl_remaining_input'
+            with
+            | OvershootApplyingRule -> try_apply_nonterm tl' true
+            | RejectApplyingRule -> try_apply_nonterm tl' is_overshoot)
+         | [] -> raise_applying_rule is_overshoot
        in
-       let new_input, ret = get_new_input (get_all_nonterms h grammar) 0 in
-       if List.compare_lengths new_input input = 0
-       then false, ret, []
-       else try_apply_rule text (lhs, tl) new_input parse_res
-     | _ -> false, 0, [] (* REJECT *))
-  | [] -> true, List.length input, input (* remaining input len *)
+       try_apply_nonterm (get_all_nonterms h grammar) false
+     | _ -> raise RejectApplyingRule (* REJECT *))
+  | [] -> [], input
 ;;
 
-exception NeverHappenError
-
-let rec apply_rule text rule input parse_res =
-  let _, _, grammar = parse_res in
-  let lhs, rhs = rule in
-  match rhs with
-  | h :: tl ->
-    if not (string_list_contains h (get_nonterminals grammar))
-    then Term h :: apply_rule text (lhs, tl) (List.tl input) parse_res
-    else (
-      let rec apply = function
-        | (lh', rh') :: tl' ->
-          let is_applicable, _, remaining_input =
-            try_apply_rule text (lh', rh') input parse_res
-          in
-          if is_applicable
-          then
-            Nonterm (h, apply_rule text (lh', rh') input parse_res)
-            :: apply_rule text (lhs, tl) remaining_input parse_res
-          else apply tl'
-        | _ -> raise NeverHappenError
-        (* Never happen because we checked it earlier in try_apply_rule function. *)
-      in
-      apply (get_all_nonterms h grammar))
-  | [] -> []
+let apply_rule text rule input parse_res =
+  let result, remaining_input = apply_rule text rule input parse_res in
+  if list_empty remaining_input then result else raise RejectApplyingRule
 ;;
 
-let parse text parse_res (input : string list) =
-  let _, start_rule, g = parse_res in
-  let _, all_rules = g in
-  let rec apply input = function
-    | h :: tl ->
-      if let is_applicable, applied_rule_len, _ = try_apply_rule text h input parse_res in
-         is_applicable && applied_rule_len = 0
-      then apply_rule text h input parse_res
-      else apply input tl
-    | [] -> raise NeverHappenError
-    (* Never happen because we checked it earlier. *)
-  in
-  apply input (start_rule_components text start_rule all_rules)
-;;
-
-let parse_tree text parse_res (input : string list) =
+(* parse_tree list to string *)
+let parse_tree parse_res tree =
   let _, start_rule, _ = parse_res in
-  let tree_list = parse text parse_res input in
-  let main_tree = Nonterm (start_rule, tree_list) in
+  let main_tree = Nonterm (start_rule, tree) in
   let rec print_tree = function
     | Term s -> Format.sprintf " %s " s
     | Nonterm (s, parse_tree_list) ->
@@ -297,28 +268,25 @@ let parse_tree text parse_res (input : string list) =
 
 let try_apply_start_nonterm text parse_res input =
   let _, start_rule, grammar = parse_res in
-  let rec applier return_code = function
+  let rec applier is_overshoot = function
     | h :: tl ->
-      let cond, ret, _ = try_apply_rule text h input parse_res in
-      if cond
-      then if ret = 0 then true, ret else applier ret tl
-      else if return_code = -1
-      then applier return_code tl
-      else applier ret tl
-    | [] -> false, return_code
+      (try apply_rule text h input parse_res with
+       | OvershootApplyingRule -> applier true tl
+       | RejectApplyingRule -> applier is_overshoot tl)
+    | [] -> raise_applying_rule is_overshoot
   in
-  applier 0 (get_all_nonterms start_rule grammar)
+  applier false (get_all_nonterms start_rule grammar)
 ;;
 
 let gen_parser = try_apply_start_nonterm
-let gen_tree_parser = parse_tree
+let gen_tree_printer = parse_tree
 
 open Lexer
 
-let get_parser_and_tree_parser text =
+let get_parser_and_tree_printer text =
   (* tokens, start rule, grammar *)
   let parse_result = parse' text in
-  gen_parser text parse_result, gen_tree_parser text parse_result
+  gen_parser text parse_result, gen_tree_printer parse_result
 ;;
 
 (* TESTS *)
@@ -341,67 +309,51 @@ let test_text =
    | INT|}
 ;;
 
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "PLUS"; "INT"; "INT"; "EOL" ] in
-  res
+let get_expected_tree token_list =
+  let parser, tree_printer = get_parser_and_tree_printer test_text in
+  tree_printer (parser token_list)
 ;;
 
 let%test _ =
-  let _, tree_parser = get_parser_and_tree_parser test_text in
-  tree_parser [ "PLUS"; "INT"; "INT"; "EOL" ]
+  get_expected_tree [ "PLUS"; "INT"; "INT"; "EOL" ]
   = " [ main :  [ expr :  PLUS   [ expr :  INT  ]   [ expr :  INT  ]  ]   EOL  ] "
 ;;
 
+let%test _ = get_expected_tree [ "EOL" ] = " [ main :  EOL  ] "
+
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "EOL" ] in
-  res
+  try get_expected_tree [ "PLUS"; "INT"; "INT" ] = "" with
+  | OvershootApplyingRule -> true
+  | _ -> false
 ;;
 
 let%test _ =
-  let _, tree_parser = get_parser_and_tree_parser test_text in
-  tree_parser [ "EOL" ] = " [ main :  EOL  ] "
+  try get_expected_tree [ "HELLOWORLD" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "PLUS"; "INT"; "INT" ] in
-  not res (* OVERSHOOT *)
-;;
-
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "HELLOWORLD" ] in
-  not res (* REJECT *)
-;;
-
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ] in
-  res
-;;
-
-let%test _ =
-  let _, tree_parser = get_parser_and_tree_parser test_text in
-  tree_parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
+  get_expected_tree [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL" ]
   = " [ main :  [ expr :  LBRACE   [ expr :  PLUS   [ expr :  INT  ]   [ expr :  MUL   [ \
      expr :  INT  ]   [ expr :  INT  ]  ]  ]   RBRACE  ]   EOL  ] "
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, return_code =
-    parser [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
-  in
-  (not res) && return_code = 0 (* REJECT *)
+  try
+    get_expected_tree
+      [ "LBRACE"; "PLUS"; "INT"; "MUL"; "INT"; "INT"; "RBRACE"; "EOL"; "EOL" ]
+    = ""
+  with
+  | RejectApplyingRule -> true
+  | _ -> false
 ;;
 
 let test_text = "%token PLU#!@#!KLS"
 
 let%test _ =
   try
-    let _ = get_parser_and_tree_parser test_text in
+    let _ = get_parser_and_tree_printer test_text in
     false
   with
   | NoSeparator _ -> true (* Not found %% *)
@@ -412,7 +364,7 @@ let test_text = "%token PLU#!@#!KLS %%"
 
 let%test _ =
   try
-    let _ = get_parser_and_tree_parser test_text in
+    let _ = get_parser_and_tree_printer test_text in
     false
   with
   | InvalidToken (_, s) -> String.equal s "#!@#!KLS"
@@ -474,46 +426,54 @@ let test_text =
    | SNORK|}
 ;;
 
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ] in
-  res (* ACCEPT *)
+let get_expected_tree token_list =
+  let parser, tree_printer = get_parser_and_tree_printer test_text in
+  tree_printer (parser token_list)
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] in
-  (not res) && ret = -1 (* OVERSHOOT *)
+  get_expected_tree [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL" ]
+  = " [ accepted_if_cartoons_same :  [ winnie :  WINNIE   [ winnie :  TIGER   [ winnie \
+     :  RABBIT   [ winnie :  DONKEY  ]  ]  ]  ]   EOL  ] "
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
+  try get_expected_tree [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY" ] = "" with
+  | OvershootApplyingRule -> true
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] in
-  (not res) && ret = 0 (* REJECT *)
+  try get_expected_tree [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "EOL"; "EOL" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
+  try get_expected_tree [ "WINNIE"; "TIGER"; "RABBIT"; "DONKEY"; "QWERTY" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
+  try get_expected_tree [ "WINNIE"; "TIGER"; "RABBIT"; "LITTLE_MY"; "EOL" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] in
-  res (* ACCEPT *)
+  try
+    get_expected_tree [ "MOOMINTROLL"; "TIGER"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ] = ""
+  with
+  | RejectApplyingRule -> true
+  | _ -> false
+;;
+
+let%test _ =
+  get_expected_tree [ "MOOMINTROLL"; "SNORK"; "MOOMINPAPPA"; "LITTLE_MY"; "EOL" ]
+  = " [ accepted_if_cartoons_same :  [ moomintroll :  MOOMINTROLL   [ moomintroll :  \
+     SNORK   [ moomintroll :  MOOMINPAPPA   [ moomintroll :  LITTLE_MY  ]  ]  ]  ]   \
+     EOL  ] "
 ;;
 
 (* TESTS WITH GRAMMAR SUBJECT TO LEFT RECURSION *)
@@ -537,40 +497,40 @@ expr:
 | INT|}
 ;;
 
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "INT" ] in
-  (not res) && ret = -1 (* OVERSHOOT *)
+let get_expected_tree token_list =
+  let parser, tree_printer = get_parser_and_tree_printer test_text in
+  tree_printer (parser token_list)
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "INT"; "EOL" ] in
-  res (* ACCEPT *)
+  try get_expected_tree [ "INT" ] = "" with
+  | OvershootApplyingRule -> true
+  | _ -> false
+;;
+
+let%test _ = get_expected_tree [ "INT"; "EOL" ] = " [ main :  [ expr :  INT  ]   EOL  ] "
+
+let%test _ =
+  get_expected_tree [ "INT"; "PLUS"; "INT"; "EOL" ]
+  = " [ main :  [ expr :  INT   [ expr' :  PLUS   [ expr :  INT  ]  ]  ]   EOL  ] "
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "INT"; "PLUS"; "INT"; "EOL" ] in
-  res (* ACCEPT *)
+  get_expected_tree [ "INT"; "MUL"; "INT"; "PLUS"; "INT"; "EOL" ]
+  = " [ main :  [ expr :  INT   [ expr' :  MUL   [ expr :  INT  ]   [ expr' :  PLUS   [ \
+     expr :  INT  ]  ]  ]  ]   EOL  ] "
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "INT"; "MUL"; "INT"; "PLUS"; "INT"; "EOL" ] in
-  res (* ACCEPT *)
+  get_expected_tree [ "LBRACE"; "INT"; "PLUS"; "INT"; "MUL"; "INT"; "RBRACE"; "EOL" ]
+  = " [ main :  [ expr :  LBRACE   [ expr :  INT   [ expr' :  PLUS   [ expr :  INT  ]   \
+     [ expr' :  MUL   [ expr :  INT  ]  ]  ]  ]   RBRACE  ]   EOL  ] "
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "LBRACE"; "INT"; "PLUS"; "INT"; "MUL"; "INT"; "RBRACE"; "EOL" ] in
-  res (* ACCEPT *)
-;;
-
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "RBRACE" ] in
-  (not res) && ret = 0 (* REJECT *)
+  try get_expected_tree [ "RBRACE" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
 ;;
 
 let test_text = {|
@@ -584,38 +544,33 @@ main:
 | X
 |}
 
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "Y" ] in
-  (not res) && ret = 0 (* REJECT *)
+let get_expected_tree token_list =
+  let parser, tree_printer = get_parser_and_tree_printer test_text in
+  tree_printer (parser token_list)
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "X" ] in
-  res (* ACCEPT *)
+  try get_expected_tree [ "Y" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
+;;
+
+let%test _ = get_expected_tree [ "X" ] = " [ main :  X  ] "
+
+let%test _ =
+  try get_expected_tree [ "EOL" ] = "" with
+  | RejectApplyingRule -> true
+  | _ -> false
+;;
+
+let%test _ = get_expected_tree [ "X"; "EOL" ] = " [ main :  X   [ main' :  EOL  ]  ] "
+
+let%test _ =
+  get_expected_tree [ "X"; "EOL"; "EOL" ]
+  = " [ main :  X   [ main' :  EOL   [ main' :  EOL  ]  ]  ] "
 ;;
 
 let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, ret = parser [ "EOL" ] in
-  (not res) && ret = 0 (* REJECT *)
-;;
-
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "X"; "EOL" ] in
-  res (* ACCEPT *)
-;;
-
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "X"; "EOL"; "EOL" ] in
-  res (* ACCEPT *)
-;;
-
-let%test _ =
-  let parser, _ = get_parser_and_tree_parser test_text in
-  let res, _ = parser [ "X"; "EOL"; "EOL"; "EOL" ] in
-  res (* ACCEPT *)
+  get_expected_tree [ "X"; "EOL"; "EOL"; "EOL" ]
+  = " [ main :  X   [ main' :  EOL   [ main' :  EOL   [ main' :  EOL  ]  ]  ]  ] "
 ;;

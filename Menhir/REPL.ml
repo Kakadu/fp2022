@@ -9,7 +9,7 @@ let read_command () =
   | End_of_file -> ""
 ;;
 
-let rec repl_tokens_list parser tree_parser =
+let rec repl_tokens_list parser tree_printer =
   let () =
     print_string "$ ";
     let command = read_command () in
@@ -17,14 +17,11 @@ let rec repl_tokens_list parser tree_parser =
     then exit 0
     else (
       let input = Interpret.split_string_on_spaces command in
-      let res, ret = parser input in
-      if res
-      then print_endline ("ACCEPT\n" ^ tree_parser input)
-      else if ret = 0
-      then print_endline "REJECT"
-      else print_endline "OVERSHOOT")
+      try print_endline (tree_printer (parser input)) with
+      | Interpret.RejectApplyingRule -> print_endline "REJECT"
+      | Interpret.OvershootApplyingRule -> print_endline "OVERSHOOT")
   in
-  repl_tokens_list parser tree_parser
+  repl_tokens_list parser tree_printer
 ;;
 
 (* Arg module usage *)
@@ -94,8 +91,8 @@ let () =
         (OpenFileError
            ("Please, check path on correctness, can't open file: " ^ !input_file))
   in
-  let parser, tree_parser =
-    try Interpret.get_parser_and_tree_parser text with
+  let parser, tree_printer =
+    try Interpret.get_parser_and_tree_printer text with
     | Lexer.InvalidToken (l, s) ->
       raise
         (ParseProcessError
@@ -125,5 +122,5 @@ let () =
   print_endline
     "> Menhir Reference Manual: https://gallium.inria.fr/~fpottier/menhir/manual.html";
   print_endline "> To exit you can type 'exit'.";
-  repl_tokens_list parser tree_parser
+  repl_tokens_list parser tree_printer
 ;;
