@@ -114,7 +114,7 @@ let parse_uncapitalized_entity =
   >>= fun entity ->
   if String.contains "abcdefghijklmnopqrstuvwxyz_" entity.[0]
   then return entity
-  else fail "Not an uncapitalized entity."
+  else fail "Parsing error: not an uncapitalized entity."
 ;;
 
 let parse_capitalized_entity =
@@ -122,7 +122,7 @@ let parse_capitalized_entity =
   >>= fun entity ->
   if String.contains "ABCDEFGHIJKLMNOPQRSTUVWXYZ" entity.[0]
   then return entity
-  else fail "Not a capitalized entity."
+  else fail "Parsing error: not a capitalized entity."
 ;;
 
 let data_constructors = [ "Ok"; "Error"; "Some"; "None" ]
@@ -318,7 +318,9 @@ let declaration_helper constructing_function d =
   in
   lift3
     constructing_function
-    parse_uncapitalized_entity
+    (parse_uncapitalized_entity
+    >>= fun name ->
+    if name = "_" then fail "Parsing error: wildcard not expected." else return name)
     (many parse_uncapitalized_entity)
     (remove_spaces *> string "=" *> parse_content)
 ;;
@@ -712,8 +714,8 @@ let parse_list_type td =
      >>= function
      | "" ->
        (match typ with
-        | TVar -1 -> fail "Not a list."
-        | _ -> return (tlist typ))
+       | TVar -1 -> fail "Not a list."
+       | _ -> return (tlist typ))
      | _ -> fail "Not a list.")
 ;;
 
