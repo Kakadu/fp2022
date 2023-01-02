@@ -20,7 +20,7 @@ let rec print_grammar = function
 
 let () =
   let path = read_command () in
-  let text = Interpret.read_all_file_text (Unix.openfile path [] 0) in
+  let text = Interpret.read_all_file_text path in
   let tokens, start_rule, grammar =
     try Menhir_lib.Interpret.parse' text with
     | Interpret.NoSeparator s ->

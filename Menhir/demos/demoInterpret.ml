@@ -11,7 +11,7 @@ let read_command () =
 
 let () =
   let path = read_command () in
-  let text = Interpret.read_all_file_text (Unix.openfile path [] 0) in
+  let text = Interpret.read_all_file_text path in
   let parser, tree_printer =
     try Interpret.get_parser_and_tree_printer text with
     | _ ->

@@ -132,9 +132,7 @@ let parse' text : string list * string * grammar =
   tokens, start_rule, (start_rule, grammar_fix grammar)
 ;;
 
-let read_all_file_text file_path =
-  Stdio.In_channel.input_all (Unix.in_channel_of_descr file_path)
-;;
+let read_all_file_text file_path = Stdio.In_channel.read_all file_path
 
 let split_string_on_spaces command =
   List.filter
@@ -225,9 +223,7 @@ let apply_rule rule input parse_res =
            in
            Term h :: res, remaining_input
            (* If equal TERM symbols in text and rule then continue checking *))
-         else
-           raise
-             RejectApplyingRule (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
+         else raise RejectApplyingRule (* REJECT. *)
        | _ :: _ when string_list_contains h nonterminals (* NONTERM SYMBOL *) ->
          (* Get new input if nonterm rule is fits right here. *)
          let rec try_apply_nonterm all_nonterms is_overshoot =

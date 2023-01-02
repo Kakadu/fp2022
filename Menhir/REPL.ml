@@ -85,8 +85,8 @@ let () =
   print_help ();
   check_errors ();
   let text =
-    try Interpret.read_all_file_text (Unix.openfile !input_file [] 0) with
-    | Unix.Unix_error _ ->
+    try Interpret.read_all_file_text !input_file with
+    | Sys_error _ ->
       raise
         (OpenFileError
            ("Please, check path on correctness, can't open file: " ^ !input_file))
