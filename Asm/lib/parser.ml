@@ -102,9 +102,9 @@ let xreg_p = gen_reg_p xreg_name_p reg_name_to_xmm_reg <?> "xreg_p"
 (* Generate parser for two registers that returns RegReg (...) *)
 let gen_regreg_p reg_p =
   both (reg_p <* comma_p) reg_p
-  >>| function
-  | Reg r1, Reg r2 -> RegReg (r1, r2)
-  | _ -> failwith "reg_p returned non-register"
+  >>= function
+  | Reg r1, Reg r2 -> return (RegReg (r1, r2))
+  | _ -> fail "reg_p returned non-register"
 ;;
 
 (* Parser two registers and convert them to RegReg (...) *)
@@ -118,10 +118,10 @@ let xregreg_p = gen_regreg_p xreg_p <?> "xregreg_p"
 
 let gen_regconst_p reg_p const_p =
   both (reg_p <* comma_p) const_p
-  >>| function
-  | Reg r, Const x -> RegConst (r, x)
+  >>= function
+  | Reg r, Const x -> return (RegConst (r, x))
   (* This branch is not reachable if we did everything right *)
-  | _ -> failwith "reg_p returned non-register or const_p returned non-constant"
+  | _ -> fail "reg_p returned non-register or const_p returned non-constant"
 ;;
 
 (* Parse register and constant and convert them to RegConst (...) *)
