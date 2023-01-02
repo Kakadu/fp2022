@@ -6,13 +6,11 @@ open Format
 open Interpret
 
 let rec pp_value fmt =
-  let rec print_list delimiter = function
-    | [ head ] -> pp_value fmt head
-    | head :: tail ->
-      pp_value fmt head;
-      fprintf fmt "%c " delimiter;
-      print_list delimiter tail
-    | [] -> ()
+  let pp_list fmt delimiter =
+    pp_print_list
+      ~pp_sep:(fun fmt _ -> fprintf fmt delimiter)
+      (fun fmt value -> pp_value fmt value)
+      fmt
   in
   function
   | VInt value -> fprintf fmt "%d" value
@@ -20,14 +18,8 @@ let rec pp_value fmt =
   | VBool value -> fprintf fmt "%B" value
   | VString value -> fprintf fmt "%S" value
   | VUnit -> fprintf fmt "()"
-  | VList list ->
-    fprintf fmt "[";
-    print_list ';' list;
-    fprintf fmt "]"
-  | VTuple tuple ->
-    fprintf fmt "(";
-    print_list ',' tuple;
-    fprintf fmt ")"
+  | VList list -> fprintf fmt "[%a]" (fun fmt -> pp_list fmt "; ") list
+  | VTuple tuple -> fprintf fmt "(%a)" (fun fmt -> pp_list fmt ", ") tuple
   | VADT (name, argument) ->
     fprintf fmt "%s " name;
     (match argument with
@@ -40,10 +32,7 @@ let rec pp_value fmt =
   | VEffectHandler (name, value) -> fprintf fmt "%s %a" name pp_value value
 ;;
 
-let print_value value =
-  let s = asprintf "%a" pp_value value in
-  printf "%s\n" s
-;;
+let print_value = printf "%a" pp_value
 
 let pp_error fmt = function
   | UnboundValue name -> fprintf fmt "Runtime error: unbound value %s." name
@@ -69,7 +58,29 @@ let pp_error fmt = function
   | ContinuationFailure value -> fprintf fmt "Continuation failure %a" pp_value value
 ;;
 
-let print_error error =
-  let s = asprintf "%a" pp_error error in
-  printf "%s\n" s
+let print_error = printf "%a" pp_error
+
+let%expect_test _ =
+  print_value @@ VTuple [ VChar 'f'; VInt 0 ];
+  [%expect "('f', 0)"]
+;;
+
+let%expect_test _ =
+  print_value @@ VADT ("Some", Some (VInt 2));
+  [%expect "Some 2"]
+;;
+
+let%expect_test _ =
+  print_value @@ VList [ VInt 1; VInt 2 ];
+  [%expect "[1; 2]"]
+;;
+
+let%expect_test _ =
+  print_error @@ NonExhaustivePatternMatching;
+  [%expect "Runtime error: this pattern-matching is not exhaustive."]
+;;
+
+let%expect_test _ =
+  print_error @@ Division_by_zero;
+  [%expect "Runtime error: division by zero."]
 ;;
