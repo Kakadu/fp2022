@@ -1,4 +1,8 @@
-(* A controller that executes SQL operations by calling the methods in [rep.mli]. *)
+(** Copyright 2022-2023, Danil Yevdokimov and contributors *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
+(** A controller that executes SQL operations*)
 
 open Type
 

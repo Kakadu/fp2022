@@ -1,3 +1,7 @@
+(** Copyright 2022-2023, Danil Yevdokimov and contributors *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 open Rep
 open Printf
 open Type
