@@ -395,7 +395,7 @@ module Dot = Graph.Graphviz.Dot (struct
     [ `Shape `Box ]
   ;;
 
-  let vertex_name (v : (Node.t, unit) labeled) = Printf.sprintf "\"%s\"" v.node.target
+  let vertex_name (v : (Node.t, unit) labeled) = Printf.sprintf "\"%S\"" v.node.target
   let default_vertex_attributes _ = []
   let graph_attributes _ = []
 end)
