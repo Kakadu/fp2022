@@ -6,7 +6,25 @@ open Utils
 open Ast
 open OperandsHandler
 
-module Interpreter = struct
+module type MonadError = sig
+  type 'a t
+
+  val return : 'a -> 'a t
+  val error : string -> 'a t
+  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+end
+
+module Result : MonadError with type 'a t = ('a, string) result = struct
+  type 'a t = ('a, string) result
+
+  let return = Result.ok
+  let error = Result.error
+  let ( >>= ) = Result.bind
+end
+
+module Interpreter (M : MonadError) = struct
+  open M
+
   type state_t =
     { reg_map : int IntMap.t
     ; xmm_reg_map : int list IntMap.t
@@ -30,35 +48,35 @@ module Interpreter = struct
   ;;
 
   let eval_mov reg_map = function
-    | RegReg (r1, r2) -> reg_val_set r1 (reg_val_get r2 reg_map) reg_map
-    | RegConst (r, c) -> reg_val_set r (const_val c) reg_map
+    | RegReg (r1, r2) -> return (reg_val_set r1 (reg_val_get r2 reg_map) reg_map)
+    | RegConst (r, c) -> return (reg_val_set r (const_val c) reg_map)
   ;;
 
   let eval_add reg_map = function
     | RegReg (r1, r2) ->
       let r1_val = reg_val_get r1 reg_map in
       let r2_val = reg_val_get r2 reg_map in
-      reg_val_set r1 (r1_val + r2_val) reg_map
+      return (reg_val_set r1 (r1_val + r2_val) reg_map)
     | RegConst (r, c) ->
       let r_val = reg_val_get r reg_map in
       let c_val = const_val c in
-      reg_val_set r (r_val + c_val) reg_map
+      return (reg_val_set r (r_val + c_val) reg_map)
   ;;
 
   let eval_sub reg_map = function
     | RegReg (r1, r2) ->
       let r1_val = reg_val_get r1 reg_map in
       let r2_val = reg_val_get r2 reg_map in
-      reg_val_set r1 (r1_val - r2_val) reg_map
+      return (reg_val_set r1 (r1_val - r2_val) reg_map)
     | RegConst (r, c) ->
       let r_val = reg_val_get r reg_map in
       let c_val = const_val c in
-      reg_val_set r (r_val - c_val) reg_map
+      return (reg_val_set r (r_val - c_val) reg_map)
   ;;
 
   let eval_inc reg_map = function
-    | Reg r -> reg_val_set r (reg_val_get r reg_map + 1) reg_map
-    | _ -> failwith "Inc command operand must be a register"
+    | Reg r -> return (reg_val_set r (reg_val_get r reg_map + 1) reg_map)
+    | _ -> error "Inc command operand must be a register"
   ;;
 
   let eval_mul reg_map x =
@@ -66,73 +84,80 @@ module Interpreter = struct
     match x with
     | Reg r ->
       let r_val = reg_val_get r reg_map in
-      reg_val_set (reg_name_to_dword_reg "eax") (eax_val * r_val) reg_map
+      return (reg_val_set (reg_name_to_dword_reg "eax") (eax_val * r_val) reg_map)
     | Const c ->
       let c_val = const_val c in
-      reg_val_set (reg_name_to_dword_reg "eax") (eax_val * c_val) reg_map
-    | _ -> failwith "Mul command operand must be a register or a constant"
+      return (reg_val_set (reg_name_to_dword_reg "eax") (eax_val * c_val) reg_map)
+    | _ -> error "Mul command operand must be a register or a constant"
   ;;
 
   let eval_push state = function
     (* We assume that we may push any register's value, i.e. "push ah"
        is a valid command *)
     | Reg r ->
-      { state with stack = ListStack.push (reg_val_get r state.reg_map) state.stack }
-    | Const c -> { state with stack = ListStack.push (const_val c) state.stack }
-    | _ -> failwith "Push command operand must be a register or a constant"
+      return
+        { state with stack = ListStack.push (reg_val_get r state.reg_map) state.stack }
+    | Const c -> return { state with stack = ListStack.push (const_val c) state.stack }
+    | _ -> error "Push command operand must be a register or a constant"
   ;;
 
   let eval_pop state = function
     | Reg r ->
       let value = ListStack.peek state.stack in
       (match value with
-       | None -> failwith "Trying to pop when the stack is empty"
+       | None -> error "Trying to pop when the stack is empty"
        | Some v ->
-         { state with
-           stack = ListStack.pop state.stack
-         ; reg_map = reg_val_set r v state.reg_map
-         })
-    | _ -> failwith "Pop command operand must be a register"
+         return
+           { state with
+             stack = ListStack.pop state.stack
+           ; reg_map = reg_val_set r v state.reg_map
+           })
+    | _ -> error "Pop command operand must be a register"
   ;;
 
   let eval_cmp reg_map = function
-    | RegReg (r1, r2) -> reg_val_get r1 reg_map - reg_val_get r2 reg_map
-    | RegConst (r, c) -> reg_val_get r reg_map - const_val c
+    | RegReg (r1, r2) -> return (reg_val_get r1 reg_map - reg_val_get r2 reg_map)
+    | RegConst (r, c) -> return (reg_val_get r reg_map - const_val c)
   ;;
 
   let eval_movdqa state = function
     | Reg r ->
-      xmm_reg_val_set
-        r
-        [ reg_val_get (reg_name_to_dword_reg "eax") state.reg_map
-        ; reg_val_get (reg_name_to_dword_reg "ebx") state.reg_map
-        ; reg_val_get (reg_name_to_dword_reg "ecx") state.reg_map
-        ; reg_val_get (reg_name_to_dword_reg "edx") state.reg_map
-        ]
-        state.xmm_reg_map
-    | _ -> failwith "Movdqa command operand must be a register"
+      return
+        (xmm_reg_val_set
+           r
+           [ reg_val_get (reg_name_to_dword_reg "eax") state.reg_map
+           ; reg_val_get (reg_name_to_dword_reg "ebx") state.reg_map
+           ; reg_val_get (reg_name_to_dword_reg "ecx") state.reg_map
+           ; reg_val_get (reg_name_to_dword_reg "edx") state.reg_map
+           ]
+           state.xmm_reg_map)
+    | _ -> error "Movdqa command operand must be a register"
   ;;
 
   let eval_addpd state = function
     | RegReg (r1, r2) ->
       let r1_val = xmm_reg_val_get r1 state.xmm_reg_map in
       let r2_val = xmm_reg_val_get r2 state.xmm_reg_map in
-      xmm_reg_val_set r1 (List.map2 ( + ) r1_val r2_val) state.xmm_reg_map
-    | _ -> failwith "Addpd command operands must both be a registers"
+      return (xmm_reg_val_set r1 (List.map2 ( + ) r1_val r2_val) state.xmm_reg_map)
+    | _ -> error "Addpd command operands must both be a registers"
   ;;
 
   let eval_mulpd state = function
     | RegReg (r1, r2) ->
       let r1_val = xmm_reg_val_get r1 state.xmm_reg_map in
       let r2_val = xmm_reg_val_get r2 state.xmm_reg_map in
-      xmm_reg_val_set r1 (List.map2 ( * ) r1_val r2_val) state.xmm_reg_map
-    | _ -> failwith "Mulpd command operands must both be a registers"
+      return (xmm_reg_val_set r1 (List.map2 ( * ) r1_val r2_val) state.xmm_reg_map)
+    | _ -> error "Mulpd command operands must both be a registers"
   ;;
 
   (* Eval B-, W-, D- or Xommand *)
   let eval_bwdxcommand state =
-    let eval_helper eval_op x = { state with reg_map = eval_op state.reg_map x } in
-    let eval_xmm_helper eval_op x = { state with xmm_reg_map = eval_op state x } in
+    let eval_helper eval_op x =
+      eval_op state.reg_map x >>= fun m -> return { state with reg_map = m }
+    in
+    let eval_xmm_helper eval_op x =
+      eval_op state x >>= fun m -> return { state with xmm_reg_map = m }
+    in
     function
     | Mov x -> eval_helper eval_mov x
     | Add x -> eval_helper eval_add x
@@ -141,52 +166,55 @@ module Interpreter = struct
     | Mul x -> eval_helper eval_mul x
     | Push x -> eval_push state x
     | Pop x -> eval_pop state x
-    | Cmp x -> { state with flags = eval_cmp state.reg_map x }
+    | Cmp x -> eval_cmp state.reg_map x >>= fun f -> return { state with flags = f }
     | Movdqa x -> eval_xmm_helper eval_movdqa x
     | Addpd x -> eval_xmm_helper eval_addpd x
     | Mulpd x -> eval_xmm_helper eval_mulpd x
-    | _ -> state
+    | _ -> return state
   ;;
 
   let from_label label_map l =
     match StringMap.find_opt l label_map with
-    | None -> failwith (Printf.sprintf "Label %S not found in the program" l)
-    | Some v -> v
+    | None -> error (Printf.sprintf "Label %S not found in the program" l)
+    | Some v -> return v
   ;;
 
   (* Returns tuple of state and list of instructions which we should execute *)
   let eval_scommand state tl = function
-    | Jmp (Label l) -> state, from_label state.label_map l
-    | Je (Label l) -> state, if state.flags = 0 then from_label state.label_map l else tl
+    | Jmp (Label l) -> from_label state.label_map l >>= fun i -> return (state, i)
+    | Je (Label l) ->
+      if state.flags = 0
+      then from_label state.label_map l >>= fun i -> return (state, i)
+      else return (state, tl)
     | Jne (Label l) ->
-      state, if state.flags <> 0 then from_label state.label_map l else tl
+      if state.flags <> 0
+      then from_label state.label_map l >>= fun i -> return (state, i)
+      else return (state, tl)
     | Call (Label l) ->
-      { state with cstack = ListStack.push tl state.cstack }, from_label state.label_map l
-    | _ -> failwith "Command not supported"
+      from_label state.label_map l
+      >>= fun i -> return ({ state with cstack = ListStack.push tl state.cstack }, i)
+    | _ -> error "Command not supported"
   ;;
 
   let eval_ret state =
     match ListStack.peek state.cstack with
-    | None -> failwith "Cannot return from function, the call stack is empty"
-    | Some instrs -> { state with cstack = ListStack.pop state.cstack }, instrs
+    | None -> error "Cannot return from function, the call stack is empty"
+    | Some instrs -> return ({ state with cstack = ListStack.pop state.cstack }, instrs)
   ;;
 
   let rec eval state = function
-    | [] -> state
+    | [] -> return state
     | instr :: tl ->
       (match instr with
        (* We do not care, labels are taken into account in the label_map *)
        | LCommand _ -> eval state tl
-       | BCommand Ret ->
-         (match eval_ret state with
-          | state, instrs -> eval state instrs)
-       | BCommand x -> eval (eval_bwdxcommand state x) tl
-       | WCommand x -> eval (eval_bwdxcommand state x) tl
-       | DCommand x -> eval (eval_bwdxcommand state x) tl
-       | XCommand x -> eval (eval_bwdxcommand state x) tl
+       | BCommand Ret -> eval_ret state >>= fun (state, instrs) -> eval state instrs
+       | BCommand x -> eval_bwdxcommand state x >>= fun s -> eval s tl
+       | WCommand x -> eval_bwdxcommand state x >>= fun s -> eval s tl
+       | DCommand x -> eval_bwdxcommand state x >>= fun s -> eval s tl
+       | XCommand x -> eval_bwdxcommand state x >>= fun s -> eval s tl
        | SCommand x ->
-         (match eval_scommand state tl x with
-          | state, instrs -> eval state instrs))
+         eval_scommand state tl x >>= fun (state, instrs) -> eval state instrs)
   ;;
 
   (* Scan through the AST and check if it contains invalid instructions that are
@@ -194,10 +222,15 @@ module Interpreter = struct
   let validate_ast program =
     let validate_instr = function
       | BCommand (Inc (Const _)) | WCommand (Inc (Const _)) | DCommand (Inc (Const _)) ->
-        failwith "Inc command operand must be a register"
-      | _ -> ()
+        error "Inc command operand must be a register"
+      | _ -> return ()
     in
-    List.iter validate_instr program
+    (* List.iter validate_instr program *)
+    let rec helper_iter = function
+      | [] -> return ()
+      | h :: tl -> validate_instr h >>= fun _ -> helper_iter tl
+    in
+    helper_iter program
   ;;
 
   let eval_whole whole_program =
@@ -220,12 +253,11 @@ module Interpreter = struct
       ; cstack = ListStack.empty
       }
     in
-    validate_ast whole_program;
-    eval initial_state whole_program
+    validate_ast whole_program >>= fun _ -> eval initial_state whole_program
   ;;
 end
 
-open Interpreter
+open Interpreter (Result)
 
 let%test _ =
   let program =
@@ -233,8 +265,13 @@ let%test _ =
     ; WCommand (Add (RegConst (reg_name_to_word_reg "ax", int_to_word_const 2)))
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_byte_reg "al") final_reg_map = 5
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_byte_reg "al") final_reg_map = 5
 ;;
 
 let%test _ =
@@ -249,8 +286,13 @@ let%test _ =
     ; DCommand (Mul (Reg (reg_name_to_dword_reg "ecx")))
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
 ;;
 
 let%test _ =
@@ -269,10 +311,15 @@ let%test _ =
     ; BCommand (Pop (Reg (reg_name_to_byte_reg "bh")))
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
-  && reg_val_get (reg_name_to_dword_reg "edx") final_reg_map = 43
-  && reg_val_get (reg_name_to_byte_reg "bh") final_reg_map = 8
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_word_reg "ax") final_reg_map = ((7 * 256) + 6 + 1) * 3
+    && reg_val_get (reg_name_to_dword_reg "edx") final_reg_map = 43
+    && reg_val_get (reg_name_to_byte_reg "bh") final_reg_map = 8
 ;;
 
 let%test _ =
@@ -281,8 +328,13 @@ let%test _ =
     ; BCommand (Cmp (RegConst (reg_name_to_byte_reg "al", int_to_byte_const 5)))
     ]
   in
-  let final_flags = (eval_whole program).flags in
-  final_flags < 0
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_flags = state.flags in
+    final_flags < 0
 ;;
 
 let%test _ =
@@ -301,8 +353,13 @@ let%test _ =
     ; LCommand "exit"
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 4
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 4
 ;;
 
 let%test _ =
@@ -321,8 +378,13 @@ let%test _ =
     ; LCommand "exit"
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
 ;;
 
 let%test _ =
@@ -341,8 +403,13 @@ let%test _ =
     ; LCommand "exit"
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_word_reg "cx") final_reg_map = 3
 ;;
 
 let%test _ =
@@ -374,8 +441,13 @@ let%test _ =
     ; LCommand "end"
     ]
   in
-  let final_reg_map = (eval_whole program).reg_map in
-  reg_val_get (reg_name_to_dword_reg "ebx") final_reg_map = 34
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_reg_map = state.reg_map in
+    reg_val_get (reg_name_to_dword_reg "ebx") final_reg_map = 34
 ;;
 
 let%test _ =
@@ -390,11 +462,16 @@ let%test _ =
     ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm7")))
     ]
   in
-  let final_xmm_reg_map = (eval_whole program).xmm_reg_map in
-  List.equal
-    ( = )
-    (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
-    [ 6; 4; 6; 8 ]
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_xmm_reg_map = state.xmm_reg_map in
+    List.equal
+      ( = )
+      (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
+      [ 6; 4; 6; 8 ]
 ;;
 
 (* Calculate (1, 2, 3) x ((4, 5, 6), (7, 8, 9), (10, 11, 12)).
@@ -432,18 +509,23 @@ let%test _ =
     ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm2")))
     ]
   in
-  let final_xmm_reg_map = (eval_whole program).xmm_reg_map in
-  List.equal
-    ( = )
-    (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
-    [ 48; 54; 60; 0 ]
+  match eval_whole program with
+  | Error e ->
+    Printf.eprintf "Unexpected error occured: %s" e;
+    false
+  | Ok state ->
+    let final_xmm_reg_map = state.xmm_reg_map in
+    List.equal
+      ( = )
+      (xmm_reg_val_get (reg_name_to_xmm_reg "xmm0") final_xmm_reg_map)
+      [ 48; 54; 60; 0 ]
 ;;
 
 let%test _ =
   let program = [ WCommand (Inc (Const (int_to_word_const 7))) ] in
-  try
-    ignore (eval_whole program);
+  match eval_whole program with
+  | Error _ -> true
+  | Ok _ ->
+    Printf.eprintf "An error was expected but it didn't occur";
     false
-  with
-  | Failure _ -> true
 ;;

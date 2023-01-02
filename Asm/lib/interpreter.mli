@@ -5,7 +5,15 @@
 open Ast
 open Utils
 
-module Interpreter : sig
+module type MonadError = sig
+  type 'a t
+
+  val return : 'a -> 'a t
+  val error : string -> 'a t
+  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+end
+
+module Interpreter (M : MonadError) : sig
   (* Current state of execution *)
   type state_t =
     { reg_map : int IntMap.t
@@ -31,5 +39,5 @@ module Interpreter : sig
     }
   [@@deriving show]
 
-  val eval_whole : ast -> state_t
+  val eval_whole : ast -> state_t M.t
 end
