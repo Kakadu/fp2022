@@ -30,8 +30,6 @@
   csv
   stdio
   ANSITerminal
-  libgmp-dev
   ounit2
-  tezos-error-monad
   ; After adding dependencies to 'dune' files and the same dependecies here too
   ))

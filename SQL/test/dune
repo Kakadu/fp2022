@@ -15,8 +15,7 @@
   stdio
   opal
   ppx_show.runtime
-  ounit2
-  tezos-error-monad)
+  ounit2)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
 
@@ -31,8 +30,7 @@
   stdio
   opal
   ppx_show.runtime
-  ounit2
-  tezos-error-monad)
+  ounit2)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
 
@@ -47,8 +45,7 @@
   stdio
   opal
   ppx_show.runtime
-  ounit2
-  tezos-error-monad)
+  ounit2)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
 
@@ -63,7 +60,6 @@
   stdio
   opal
   ppx_show.runtime
-  ounit2
-  tezos-error-monad)
+  ounit2)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
