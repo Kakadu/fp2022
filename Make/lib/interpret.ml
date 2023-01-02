@@ -234,7 +234,7 @@ let check_timestamps_of_parents graph node target =
   |> fst
 ;;
 
-let rec mark_all_parents_as_recompile graph (node : G.Node.t) nodes_to_recompile =
+let rec mark_all_parents_as_recompile graph node nodes_to_recompile =
   let nodes_to_recompile =
     fold_pred
       (fun parent set ->
