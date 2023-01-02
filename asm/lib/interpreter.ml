@@ -165,11 +165,6 @@ module Interpret (M : MONADERROR) = struct
     | Const (ASMConst x) -> return @@ of_string x
     | Var (ASMVar x) -> find_v env x
 
-  let rec c_flags env =
-    find_f env "ZF" >>= fun z ->
-    find_f env "SF" >>= fun s ->
-    find_f env "OF" >>= fun f -> return (z, s = f)
-
   let inter env code (h :: stl) (cmd :: tl) =
     let s = h :: stl in
     let f x af =
@@ -184,6 +179,11 @@ module Interpret (M : MONADERROR) = struct
       | [] -> error ""
       | Id label :: tl when label = l -> return tl
       | _ :: tl -> assoc l tl
+    in
+    let rec c_flags env =
+      find_f env "ZF" >>= fun z ->
+      find_f env "SF" >>= fun s ->
+      find_f env "OF" >>= fun f -> return (z, s = f)
     in
     let jmp l conde =
       c_flags env >>= fun (f, ff) ->
@@ -232,70 +232,13 @@ module Interpret (M : MONADERROR) = struct
             find_r env x >>= fun x ->
             change_flag env "ZF" (x = y) >>= fun env -> return (env, s, tl))
 
+  let rec code_sec_inter env s code = function
+    | cmd :: tl ->
+        inter env code s (cmd :: tl) >>= fun (env, s, c) ->
+        code_sec_inter env s code c
+    | [] -> return (env, s, [])
+
   (*
-     (** interpret command and return map and stack *)
-     let inter_one_args_cmd env st arg1 =
-       let helper fu = change_reg64 env fu arg1 >>= fun env -> return (env, st) in
-       function
-       | "INC" -> helper (fun x -> add x 1L)
-       | "DEC" -> helper (fun x -> sub x 1L)
-       | "NOT" -> helper neg
-       | "NEG" -> helper (fun x -> add (neg x) 1L)
-       | "PUSH" ->
-           find_reg64_cont env arg1 >>= fun v -> return (env, (arg1, Reg64 v) :: st)
-       | "POP" ->
-           return
-             (MapVar.add arg1 (List.assoc arg1 st) env, List.remove_assoc arg1 st)
-       (* | "CALL"  *)
-       | x -> error (x ^ " is not implemented yet")
-
-     (** interpret command and return map *)
-     let inter_zero_args_cmd env = function
-       | "RET" -> return env
-       | "SYSCALL" | _ -> error "Not implemented yet"
-
-     (** interpret command and return map *)
-     let inter_two_args_cmd env arg1 arg2 cmd =
-       let f = function
-         | Ast.Const c -> return @@ of_string c
-         | Ast.Reg64 reg_name -> find_reg64_cont env reg_name
-         | Ast.Reg32 _ | Ast.Reg16 _ | Ast.Reg8 _ | _ ->
-             error "Vars not implemented"
-       in
-       let helper fu = change_reg64 env fu arg1 in
-       ev f arg2 >>= fun arg2 ->
-       match cmd with
-       | "MOV" -> helper (fun _ -> arg2)
-       | "ADD" -> helper (fun x -> add x arg2)
-       | "SUB" -> helper (fun x -> sub x arg2)
-       | "IMUL" -> helper (fun x -> mul x arg2)
-       | "CMP" ->
-           find_reg64_cont env arg1 >>= fun arg1 ->
-           change_flag env (arg1 = arg2) "ZF" >>= fun env ->
-           change_flag env (arg1 < arg2) "SF"
-       | "AND" -> helper (fun x -> logand x arg2)
-       | "XOR" -> helper (fun x -> logxor x arg2)
-       | "OR" -> helper (fun x -> logor x arg2)
-       | "SHL" -> helper (fun x -> shift_left x (to_int arg2))
-       | "SHR" -> helper (fun x -> shift_right x (to_int arg2))
-       (* | "ADDPD" | "SUBPD" | "MULPD" | "MOVAPD" *)
-       | _ -> error "Is not a mnemonic"
-
-     (** general interpreter of commands not including jmp commands *)
-     let inter_cmd env st = function
-       | Args0 (Mnemonic cmd) ->
-           inter_zero_args_cmd env cmd >>= fun env -> return (env, st)
-       | Args1 (Mnemonic cmd, Ast.Reg64 x) -> inter_one_args_cmd env st x cmd
-       | Args2 (Mnemonic cmd, Ast.Reg64 x, y) ->
-           inter_two_args_cmd env x y cmd >>= fun env -> return (env, st)
-       | _ -> error "Isnt argsn"
-
-     (** returns list of code_section that placed after label l *)
-     let rec assoc (Label l) = function
-       | [] -> error ("No such label: " ^ l)
-       | Id (Label label) :: tl when label = l -> return tl
-       | _ :: tl -> assoc (Label l) tl
-
      (** not implemeted data secction interpreter *)
      let data_sec_inter env st = function _ -> return (env, st)
 
