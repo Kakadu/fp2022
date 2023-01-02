@@ -116,7 +116,7 @@ module Interpret (M : MONADERROR) = struct
     | exception Not_found -> fail (RuntimeError "Couldn't update environment")
     | v ->
       (* Use of assignment:
-         Basically the whole mutable IdMap thing is for supporting backpatching here *)
+         Basically, the whole mutable IdMap thing is for supporting backpatching here *)
       v := body_val;
       eval exp new_env
   ;;
