@@ -208,46 +208,54 @@ let raise_applying_rule is_overshoot =
   if is_overshoot then raise OvershootApplyingRule else raise RejectApplyingRule
 ;;
 
-let rec apply_rule text rule input parse_res =
+let apply_rule rule input parse_res =
   let terminals, _, grammar = parse_res in
-  let lhs, rhs = rule in
-  match rhs with
-  | h :: tl ->
-    (match input with
-     | [] -> raise OvershootApplyingRule (* OVERSHOOT RIGHT HERE. *)
-     | h' :: tl' when string_list_contains h terminals (* TERM SYMBOL *) ->
-       if String.equal h' h
-       then (
-         let res, remaining_input = apply_rule text (lhs, tl) tl' parse_res in
-         Term h :: res, remaining_input
-         (* If equal TERM symbols in text and rule then continue checking *))
-       else
-         raise RejectApplyingRule (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
-     | _ :: _ when string_list_contains h (get_nonterminals grammar) (* NONTERM SYMBOL *)
-       ->
-       (* Get new input if nonterm rule is fits right here. *)
-       let rec try_apply_nonterm all_nonterms is_overshoot =
-         match all_nonterms with
-         | h' :: tl' ->
-           let lhs', _ = h' in
-           (try
-              let result, remaining_input = apply_rule text h' input parse_res in
-              let tl_result', tl_remaining_input' =
-                apply_rule text (lhs', tl) remaining_input parse_res
-              in
-              Nonterm (lhs', result) :: tl_result', tl_remaining_input'
-            with
-            | OvershootApplyingRule -> try_apply_nonterm tl' true
-            | RejectApplyingRule -> try_apply_nonterm tl' is_overshoot)
-         | [] -> raise_applying_rule is_overshoot
-       in
-       try_apply_nonterm (get_all_nonterms h grammar) false
-     | _ -> raise RejectApplyingRule (* REJECT *))
-  | [] -> [], input
+  let nonterminals = get_nonterminals grammar in
+  let rec apply_rule rule input terminals nonterminals grammar =
+    let lhs, rhs = rule in
+    match rhs with
+    | h :: tl ->
+      (match input with
+       | [] -> raise OvershootApplyingRule (* OVERSHOOT RIGHT HERE. *)
+       | h' :: tl' when string_list_contains h terminals (* TERM SYMBOL *) ->
+         if String.equal h' h
+         then (
+           let res, remaining_input =
+             apply_rule (lhs, tl) tl' terminals nonterminals grammar
+           in
+           Term h :: res, remaining_input
+           (* If equal TERM symbols in text and rule then continue checking *))
+         else
+           raise
+             RejectApplyingRule (* If not equal then false, 0 --- REJECT RIGHT HERE. *)
+       | _ :: _ when string_list_contains h nonterminals (* NONTERM SYMBOL *) ->
+         (* Get new input if nonterm rule is fits right here. *)
+         let rec try_apply_nonterm all_nonterms is_overshoot =
+           match all_nonterms with
+           | h' :: tl' ->
+             let lhs', _ = h' in
+             (try
+                let result, remaining_input =
+                  apply_rule h' input terminals nonterminals grammar
+                in
+                let tl_result', tl_remaining_input' =
+                  apply_rule (lhs', tl) remaining_input terminals nonterminals grammar
+                in
+                Nonterm (lhs', result) :: tl_result', tl_remaining_input'
+              with
+              | OvershootApplyingRule -> try_apply_nonterm tl' true
+              | RejectApplyingRule -> try_apply_nonterm tl' is_overshoot)
+           | [] -> raise_applying_rule is_overshoot
+         in
+         try_apply_nonterm (get_all_nonterms h grammar) false
+       | _ -> raise RejectApplyingRule (* REJECT *))
+    | [] -> [], input
+  in
+  apply_rule rule input terminals nonterminals grammar
 ;;
 
-let apply_rule text rule input parse_res =
-  let result, remaining_input = apply_rule text rule input parse_res in
+let apply_rule rule input parse_res =
+  let result, remaining_input = apply_rule rule input parse_res in
   if list_empty remaining_input then result else raise RejectApplyingRule
 ;;
 
@@ -266,11 +274,11 @@ let parse_tree parse_res tree =
   print_tree main_tree
 ;;
 
-let try_apply_start_nonterm text parse_res input =
+let try_apply_start_nonterm parse_res input =
   let _, start_rule, grammar = parse_res in
   let rec applier is_overshoot = function
     | h :: tl ->
-      (try apply_rule text h input parse_res with
+      (try apply_rule h input parse_res with
        | OvershootApplyingRule -> applier true tl
        | RejectApplyingRule -> applier is_overshoot tl)
     | [] -> raise_applying_rule is_overshoot
@@ -286,7 +294,7 @@ open Lexer
 let get_parser_and_tree_printer text =
   (* tokens, start rule, grammar *)
   let parse_result = parse' text in
-  gen_parser text parse_result, gen_tree_printer parse_result
+  gen_parser parse_result, gen_tree_printer parse_result
 ;;
 
 (* TESTS *)
