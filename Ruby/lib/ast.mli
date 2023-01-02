@@ -23,6 +23,7 @@ type ast =
   | FuncDeclaration of string * string list * ast
       (** FunctionDeclaration [name param_names body]*)
   | Invocation of ast * ast list (** Invocation [name param_values] *)
+  | MethodAccess of ast * string (** MethodAccess [object method]*)
 
 (** Data types used in runtime *)
 type value =

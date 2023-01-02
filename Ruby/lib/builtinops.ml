@@ -139,3 +139,65 @@ let indexing (v : value) (ind : value) =
   | String v, Integer i -> String (String.get v i |> String.make 1)
   | _ -> binop_typefail "index" v ind
 ;;
+
+let process_method_access (obj : value) (m_name : string) : value =
+  let method_not_exist (class_name : string) =
+    failwith ("Method" ^ m_name ^ "does not exist for" ^ class_name)
+  in
+  match obj with
+  | Bool b ->
+    (match m_name with
+     | "class" -> if b then String "TrueClass" else String "FalseClass"
+     | "inspect" | "to_s" -> String (string_of_bool b)
+     | _ -> method_not_exist (if b then "TrueClass" else "FalseClass"))
+  | Integer i ->
+    (match m_name with
+     | "class" -> String "Integer"
+     | "abs" -> Integer (abs i)
+     | "digits" ->
+       Array
+         (i
+         |> string_of_int
+         |> String.to_seq
+         |> List.of_seq
+         |> List.map (String.make 1)
+         |> List.map (fun s -> String s))
+     | _ -> method_not_exist "Integer")
+  | String s ->
+    (match m_name with
+     | "class" -> String "String"
+     | "length" -> Integer (String.length s)
+     | "starts_with" ->
+       Function
+         ( "String.starts_with"
+         , [ "pref" ]
+         , function
+           | String pref :: [] -> Bool (String.starts_with ~prefix:pref s)
+           | _ -> failwith "Wrong number of arguments" )
+     | "ends_with" ->
+       Function
+         ( "String.ends_with"
+         , [ "suff" ]
+         , function
+           | String suff :: [] -> Bool (String.ends_with ~suffix:suff s)
+           | _ -> failwith "Wrong number of arguments" )
+     | _ -> method_not_exist "String")
+  | Array arr ->
+    (match m_name with
+     | "class" -> String "Array"
+     | "to_s" -> String ("[" ^ String.concat ", " (List.map string_of_value arr) ^ "]")
+     | "length" | "size" -> Integer (List.length arr)
+     | _ -> method_not_exist "Array")
+  | Function (name, param_list, _) ->
+    (match m_name with
+     | "to_s" ->
+       String
+         (String.concat
+            ""
+            [ "<Function: "; name; "("; String.concat ", " param_list; ")"; ">" ])
+     | _ -> method_not_exist "Function")
+  | Nil ->
+    (match m_name with
+     | "class" -> String "NilClass"
+     | _ -> method_not_exist "NilClass")
+;;

@@ -77,6 +77,9 @@ let rec eval (st : State.storage) (code : ast) : value * State.storage =
     ( Nil
     , State.set_variable st name (Function (name, params, eval_function name params body))
     )
+  | MethodAccess (obj, meth) ->
+    (match eval st obj with
+     | obj, new_st -> process_method_access obj meth, new_st)
   | Invocation (box_inv, params) ->
     let left, n_st = eval st box_inv in
     let params, n_st =
@@ -176,3 +179,11 @@ let%test "factorial" =
     "def f(i)\n x=1 \n while i > 0 \n x = x * i; i = i - 1 \n end \n x \n end; f(5)"
     "120"
 ;;
+
+let%test "int class field" = test_eval "123.class" "Integer"
+let%test "int expr abs field" = test_eval "(2 - 5).abs" "3"
+let%test "" = test_eval "true.to_s" "true"
+let%test "method acess" = test_eval "\"Hello world\".starts_with (\"Hello\")" "true"
+let%test "method access in expression" = test_eval "(1 - 3).abs + 4" "6"
+let%test "method access from variable" = test_eval "x = 10; x.class" "Integer"
+let%test "method access from array" = test_eval "([1, 2, 3, 4]).length" "4"

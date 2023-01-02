@@ -96,6 +96,11 @@ let seq_of_expr =
   fix (fun seq_of_expr ->
     let expr =
       fix (fun expr ->
+        (* --- Method access --- *)
+        let method_access =
+          choice [ literal; var_cal; parens expr ]
+          >>= fun obj -> token "." *> identifier_t >>| fun meth -> MethodAccess (obj, meth)
+        in
         (* --- Functions --- *)
         let parameters_decl = token "(" *> sep_by (token ",") identifier_t <* token ")" in
         let function_declaration =
@@ -109,7 +114,7 @@ let seq_of_expr =
           >>| fun f_body -> FuncDeclaration (func_name, params, f_body)
         in
         let invocation =
-          choice [ var_cal; parens expr ]
+          choice [ var_cal; method_access; parens expr ]
           >>= fun inv_box ->
           token "(" *> sep_by (token ",") expr
           <* token ")"
@@ -161,7 +166,15 @@ let seq_of_expr =
         let factor =
           choice
             ~failure_msg:"Unrecognized factor"
-            [ index_p; invocation; parens expr; literal; var_cal; conditional; array_v ]
+            [ index_p
+            ; invocation
+            ; method_access
+            ; parens expr
+            ; literal
+            ; var_cal
+            ; conditional
+            ; array_v
+            ]
         in
         let asoc0_p = chainl1 factor asoc0 in
         let asoc1_p = chainl1 asoc0_p asoc1 in
