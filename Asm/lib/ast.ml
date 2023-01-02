@@ -54,17 +54,6 @@ type instruction =
 
 type ast = instruction list [@@deriving show { with_path = false }]
 
-(* Scan through the AST and check if it contains invalid instructions that are
-   prevented by the type system or by parser *)
-let validate_ast program =
-  let validate_instr = function
-    | BCommand (Inc (Const _)) | WCommand (Inc (Const _)) | DCommand (Inc (Const _)) ->
-      failwith "Inc command operand must be a register"
-    | _ -> ()
-  in
-  List.iter ~f:validate_instr program
-;;
-
 module CmdHandler = struct
   let cmd_zero_args_list = [ "ret" ]
   let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]

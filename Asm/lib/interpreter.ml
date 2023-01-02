@@ -189,6 +189,17 @@ module Interpreter = struct
           | state, instrs -> eval state instrs))
   ;;
 
+  (* Scan through the AST and check if it contains invalid instructions that are
+   prevented by the type system or by parser *)
+  let validate_ast program =
+    let validate_instr = function
+      | BCommand (Inc (Const _)) | WCommand (Inc (Const _)) | DCommand (Inc (Const _)) ->
+        failwith "Inc command operand must be a register"
+      | _ -> ()
+    in
+    List.iter validate_instr program
+  ;;
+
   let eval_whole whole_program =
     let initial_label_map = gen_label_map whole_program in
     (* Each of dword registers is associated with 0 initial value *)
