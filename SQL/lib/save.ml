@@ -5,7 +5,7 @@
 open Rep
 open Printf
 open Type
-exception Malformed of string
+exception Type of string
 
 let path_to_csv_dir = Filename.current_dir_name (* "/Users/akabynda/fp2022/SQL" *)
 let conc_comma = String.concat ","
@@ -31,7 +31,7 @@ let rec string_to_type = function
       | "Int" -> (Int : Type.data_type)
       | "Float" -> (Float : Type.data_type)
       | "String" -> (String : Type.data_type)
-      | _ -> raise (Malformed "Type Error: Type does not exist")
+      | _ -> raise (Type "Type Error: Type does not exist")
     in
     string_helper h :: string_to_type t
 ;;
