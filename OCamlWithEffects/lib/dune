@@ -10,7 +10,8 @@
   Typing
   Util
   Pprintast
-  InterpreterPP)
+  InterpreterPP
+  Stdlib)
  (modules_without_implementation ast)
  (libraries base angstrom)
  (preprocess

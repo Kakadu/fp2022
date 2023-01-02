@@ -714,8 +714,8 @@ let parse_list_type td =
      >>= function
      | "" ->
        (match typ with
-       | TVar -1 -> fail "Not a list."
-       | _ -> return (tlist typ))
+        | TVar -1 -> fail "Not a list."
+        | _ -> return (tlist typ))
      | _ -> fail "Not a list.")
 ;;
 
