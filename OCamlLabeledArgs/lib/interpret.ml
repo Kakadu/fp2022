@@ -39,16 +39,14 @@ module Interpret (M : MONADERROR) = struct
     | Let (name, body, exp) -> eval_let name body exp env
     | LetRec (name, body, exp) -> eval_letrec name body exp env
 
-  and eval_const c =
-    match c with
+  and eval_const = function
     | Bool b -> return (VBool b)
     | Int n -> return (VInt n)
     | Unit -> return VUnit
 
   and eval_if cond tbody fbody env =
     eval cond env
-    >>= fun cond_val ->
-    match cond_val with
+    >>= function
     | VBool b -> eval (if b then tbody else fbody) env
     | _ -> fail (RuntimeError "error in if condition")
 
@@ -87,8 +85,7 @@ module Interpret (M : MONADERROR) = struct
 
   and eval_app fu label arg env =
     eval fu env
-    >>= fun closure_val ->
-    match closure_val with
+    >>= function
     | VClosure (fu_env, ArgNoLabel, None, name, fu_body) ->
       eval arg env >>= fun arg_val -> eval fu_body (upd_env name arg_val fu_env)
     | VClosure (fu_env, ArgLabeled l, None, name, fu_body) ->
@@ -118,7 +115,8 @@ module Interpret (M : MONADERROR) = struct
     match IdMap.find name new_env with
     | exception Not_found -> fail (RuntimeError "Couldn't update environment")
     | v ->
-      (* Use of assignment because there are mutable values in IdMap *)
+      (* Use of assignment:
+         Basically the whole mutable IdMap thing is for supporting backpatching here *)
       v := body_val;
       eval exp new_env
   ;;

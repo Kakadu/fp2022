@@ -12,7 +12,10 @@ open Typedtree
 (* (1) Factorial *)
 let test_factorial_definition = "let rec fact n = if n = 0 then 1 else n * fact (n - 1)"
 let test_factorial_call = "fact 5"
-let test_factorial_expression = test_factorial_definition ^ " in " ^ test_factorial_call
+
+let test_factorial_expression =
+  "let rec fact n = if n = 0 then 1 else n * fact (n - 1) in fact 5"
+;;
 
 let test_factorial_expected =
   let rec fact n = if n = 0 then 1 else n * fact (n - 1) in
@@ -22,7 +25,10 @@ let test_factorial_expected =
 (* (2) X into the power of Y *)
 let test_x_power_y_definition = "let rec pow x y = if y = 0 then 1 else x * pow x (y - 1)"
 let test_x_power_y_call = "pow 4 5"
-let test_x_power_y_expression = test_x_power_y_definition ^ " in " ^ test_x_power_y_call
+
+let test_x_power_y_expression =
+  "let rec pow x y = if y = 0 then 1 else x * pow x (y - 1) in pow 4 5"
+;;
 
 let test_x_power_y_expected =
   let rec pow x y = if y = 0 then 1 else x * pow x (y - 1) in
@@ -32,7 +38,7 @@ let test_x_power_y_expected =
 (* (3) Increment *)
 let test_increment_definition = "let inc = fun x -> x + 1"
 let test_increment_call = "inc 4"
-let test_increment_expression = test_increment_definition ^ " in " ^ test_increment_call
+let test_increment_expression = "let inc = fun x -> x + 1 in inc 4"
 
 let test_increment_expected =
   let inc x = x + 1 in
@@ -44,7 +50,7 @@ let test_labeled_arguments_definition = "let f ~name1:x ~name2:y = x / y"
 let test_labeled_arguments_call = "f ~name1:4 ~name2:5"
 
 let test_labeled_arguments_expression =
-  test_labeled_arguments_definition ^ " in " ^ test_labeled_arguments_call
+  "let f ~name1:x ~name2:y = x / y in f ~name1:4 ~name2:5"
 ;;
 
 let test_labeled_arguments_expected =
@@ -55,10 +61,7 @@ let test_labeled_arguments_expected =
 (* (5) Labeled arguments syntactic sugar *)
 let test_labeled_arguments_sugar_definition = "let f ~x ~y = x + y"
 let test_labeled_arguments_sugar_call = "f ~x:4 ~y:5"
-
-let test_labeled_arguments_sugar_expression =
-  test_labeled_arguments_sugar_definition ^ " in " ^ test_labeled_arguments_sugar_call
-;;
+let test_labeled_arguments_sugar_expression = "let f ~x ~y = x + y in f ~x:4 ~y:5"
 
 let test_labeled_arguments_sugar_expected =
   let f ~x ~y = x + y in
@@ -68,10 +71,7 @@ let test_labeled_arguments_sugar_expected =
 (* (6) Optional arguments *)
 let test_optional_arguments_definition = "let f ?name:(arg1=4) arg2 = arg1 + arg2"
 let test_optional_arguments_call = "f 5"
-
-let test_optional_arguments_expression =
-  test_optional_arguments_definition ^ " in " ^ test_optional_arguments_call
-;;
+let test_optional_arguments_expression = "let f ?name:(arg1=4) arg2 = arg1 + arg2 in f 5"
 
 let test_optional_arguments_expected =
   let f ?name:(arg1 = 4) arg2 = arg1 + arg2 in
@@ -86,9 +86,7 @@ let test_optional_arguments_complex_definition =
 let test_optional_arguments_complex_call = "f ~x:5 () ()"
 
 let test_optional_arguments_complex_expression =
-  test_optional_arguments_complex_definition
-  ^ " in "
-  ^ test_optional_arguments_complex_call
+  "let f ?x:(x = 0) ?y:(y = 0) () ?z:(z = 0) () = x + y + z in f ~x:5 () ()"
 ;;
 
 let test_optional_arguments_complex_expected =
@@ -104,9 +102,7 @@ let test_labeled_arguments_swapped_places_definition =
 let test_labeled_arguments_swapped_places_call = "f ~name2:4 ~name1:5"
 
 let test_labeled_arguments_swapped_places_expression =
-  test_labeled_arguments_swapped_places_definition
-  ^ " in "
-  ^ test_labeled_arguments_swapped_places_call
+  "let f ~name2 ~name1 = name1 / name2 in f ~name2:4 ~name1:5"
 ;;
 
 let test_labeled_arguments_swapped_places_expected =
@@ -628,8 +624,7 @@ let test_parse_and_eval_single_expr_ok
     | Expression exp ->
       let value = eval exp env in
       (match value with
-       | Result.Ok v ->
-         if compare_values v expected_value = Result.Ok 0 then true else false
+       | Result.Ok v -> compare_values v expected_value = Result.Ok 0
        | Result.Error e ->
          Prettyprint.pp_error Format.std_formatter e;
          false)

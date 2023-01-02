@@ -16,8 +16,7 @@ let commands =
   ]
 ;;
 
-let repl env toplevel =
-  match toplevel with
+let repl env = function
   | Definition (name, exp) ->
     let res_value = eval exp env in
     let value =

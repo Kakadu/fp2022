@@ -31,9 +31,9 @@ type bin_op =
 
 (** Representation of function arguments *)
 type arg_label =
-  | ArgNoLabel
-  | ArgLabeled of id
-  | ArgOptional of id
+  | ArgNoLabel (**[T -> ...] *)
+  | ArgLabeled of id (** [label:T -> ...] *)
+  | ArgOptional of id (** [?label:T -> ...] *)
 
 (** Type for expressions *)
 type expr =
@@ -57,11 +57,15 @@ type definition = id * expr [@@deriving show { with_path = false }]
 
 (** Top-level input *)
 type command =
-  | Help
-  | Quit
+  | Help (** [#help] command prints a list of all available commands *)
+  | Quit (** [#quit] command exits the toplevel loop and terminates this program *)
   | Use of string
+      (** [#use <file>] command reads and evaluates source phrases from the given file *)
 
 type toplevel =
   | Definition of definition
+      (** [Definition] is for representing [let] expressions in top-level input *)
   | Expression of expr
+      (** [Expression] is for representing [expr] type in top-level input *)
   | Command of command
+      (** [Command] is for representing available [REPL] commands in top-level input *)

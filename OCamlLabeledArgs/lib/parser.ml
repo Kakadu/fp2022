@@ -87,7 +87,7 @@ let plus = ignored *> string "+" *> return (fun x y -> Binop (Plus, x, y))
 let minus = ignored *> string "-" *> return (fun x y -> Binop (Minus, x, y))
 let mult = ignored *> string "*" *> return (fun x y -> Binop (Mult, x, y))
 let divide = ignored *> string "/" *> return (fun x y -> Binop (Divide, x, y))
-let _mod = ignored *> string "mod" *> return (fun x y -> Binop (Mod, x, y))
+let mod_ = ignored *> string "mod" *> return (fun x y -> Binop (Mod, x, y))
 let eq = ignored *> string "=" *> return (fun x y -> Binop (Eq, x, y))
 let neq = ignored *> string "!=" *> return (fun x y -> Binop (Neq, x, y))
 let lt = ignored *> string "<" *> return (fun x y -> Binop (Lt, x, y))
@@ -309,7 +309,7 @@ let type_d =
     let factor d =
       parens binop_expr <|> app_parser d <|> let_parser d <|> const_parser <|> var_parser
     in
-    let term_mult = chainl1 (factor d) (mult <|> divide <|> _mod) in
+    let term_mult = chainl1 (factor d) (mult <|> divide <|> mod_) in
     let term_add = chainl1 term_mult (plus <|> minus) in
     chainl1 term_add (eq <|> neq <|> ltq <|> lt <|> gtq <|> gt) <?> "binop_parser"
   in
