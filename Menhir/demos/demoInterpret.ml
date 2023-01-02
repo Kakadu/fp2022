@@ -14,7 +14,7 @@ let () =
   let text = Interpret.read_all_file_text path in
   let parser, tree_printer =
     try Interpret.get_parser_and_tree_printer text with
-    | _ ->
+    | Interpret.NoSeparator _ | Lexer.InvalidToken _ | Parser.Error ->
       print_endline "Some error in parse part";
       (* These errors we check in demoParse.ml *)
       exit 1
