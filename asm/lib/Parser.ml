@@ -98,7 +98,7 @@ let expr =
   let var =
     word >>= fun x ->
     let w = String.uppercase_ascii x in
-    if (not (is_reg w)) & not (is_mnemonic w) then return @@ Var (ASMVar w)
+    if (not (is_reg w)) & not (is_mnemonic w) then return @@ Var (ASMVar x)
     else fail "Vars cant have name of regs and mnemonics"
   in
   let arg = num <|> var in
@@ -254,19 +254,19 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "var");
-  [%expect {| (Var (ASMVar "VAR")) |}]
+  [%expect {| (Var (ASMVar "var")) |}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "vAr");
-  [%expect {| (Var (ASMVar "VAR")) |}]
+  [%expect {| (Var (ASMVar "vAr")) |}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "labl");
-  [%expect {|(Var (ASMVar "LABL"))|}]
+  [%expect {|(Var (ASMVar "labl"))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "lAbl");
-  [%expect {|(Var (ASMVar "LABL"))|}]
+  [%expect {|(Var (ASMVar "lAbl"))|}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + 0x0");
@@ -274,7 +274,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0 + var");
-  [%expect {| (Add ((Const (ASMConst "0")), (Var (ASMVar "VAR")))) |}]
+  [%expect {| (Add ((Const (ASMConst "0")), (Var (ASMVar "var")))) |}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "0+0x0");

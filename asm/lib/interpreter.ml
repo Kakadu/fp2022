@@ -45,7 +45,7 @@ module Interpret (M : MONADERROR) = struct
     | Flag of bool  (** EFLAGS *)
     | Reg64 of int64  (** not so large registers *)
     | Reg128 of int64 * int64  (** large registers *)
-    | Const of string  (** global consts *)
+    | Const of int64  (** global consts *)
   [@@deriving show { with_path = false }]
 
   type envr = var MapVar.t [@@deriving show { with_path = false }]
@@ -108,7 +108,7 @@ module Interpret (M : MONADERROR) = struct
 
   let find_v env name =
     return (MapVar.find name env) >>= function
-    | Const x -> return @@ of_string x
+    | Const x -> return x
     | _ -> error "Isnt const"
 
   let find_f env f =
@@ -122,17 +122,17 @@ module Interpret (M : MONADERROR) = struct
     change_flag env "ZF" x >>= fun env ->
     change_flag env "SF" y >>= fun env -> change_flag env "OF" z
 
+  let mask v l r =
+    let ones l r =
+      of_string
+      @@ Printf.sprintf "0b0%s%s" (String.make (l - r) '1') (String.make r '0')
+    in
+    logand v (ones l r)
+
   let change_reg64 :
       type a. var MapVar.t -> Int64.t -> a reg -> var MapVar.t M.t =
    fun env v ->
     let insert ov v l r =
-      let ones l r =
-        of_string
-        @@ Printf.sprintf "0b0%s%s"
-             (String.make (l - r) '1')
-             (String.make r '0')
-      in
-      let mask v l r = logand v (ones l r) in
       let amask v l r = lognot (mask v l r) in
       let inc = add 1L in
       inc @@ add (amask ov l r) (shift_left (mask v (l - r) 0) r)
@@ -243,7 +243,42 @@ module Interpret (M : MONADERROR) = struct
         code_sec_inter env s code c
     | [] -> return (env, s, [])
 
-  let data_sec_inter env s = function _ -> return (env, s, []) (*TODO*)
+  let rec data_sec_inter env s vars =
+    let explode s = List.init (String.length s) (String.get s) in
+    let f list len =
+      let rec helper = function
+        | -1 -> []
+        | x when x >= List.length list -> helper (x - 1)
+        | x -> List.nth list x :: helper (x - 1)
+      in
+      helper len
+    in
+    let cut b = function
+      | Num x ->
+          let num = of_string x in
+          mask num b 0
+      | Str s ->
+          mask
+            (List.fold_left
+               (fun x y -> add (shift_left x 8) (of_int (Char.code y)))
+               0L
+               (f (explode s) b))
+            b 0
+    in
+    match vars with
+    | Variable (name, t, v) :: tl ->
+        let vv =
+          match t with
+          | DB -> cut 8 v
+          | DW -> cut 16 v
+          | DD -> cut 32 v
+          | DQ -> cut 64 v
+          | DT -> cut 80 v
+        in
+        let vvv = Const vv in
+        let env = MapVar.add name vvv env in
+        data_sec_inter env s tl
+    | [] -> return (env, s, [])
 
   let rec interpret env s = function
     | h :: tl -> (
