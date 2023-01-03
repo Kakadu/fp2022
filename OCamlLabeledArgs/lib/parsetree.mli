@@ -2,7 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-(** The AST representation of our mini language *)
+(** The parsed AST representation of our mini language. *)
 
 (** Parse tree *)
 
