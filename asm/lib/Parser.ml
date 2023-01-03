@@ -161,7 +161,7 @@ let command =
   | "JL" -> label >>= fun x -> return @@ JL x
   | "JLE" -> label >>= fun x -> return @@ JLE x
   | "MOV" -> da >>= fun x -> return @@ MOV x
-  | "ADD" -> da >>= fun x -> return @@ AND x
+  | "ADD" -> da >>= fun x -> return @@ ADD x
   | "SUB" -> da >>= fun x -> return @@ SUB x
   | "IMUL" -> da >>= fun x -> return @@ IMUL x
   | "AND" -> da >>= fun x -> return @@ AND x
@@ -249,7 +249,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt expr "rax");
-  [%expect{| : Vars cant have name of regs and mnemonics |}]
+  [%expect {| : Vars cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string @@ show_expr (pr_opt expr "var");
@@ -364,11 +364,11 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "mov rax, eax");
-  [%expect{| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "mov rax, ebx");
-  [%expect{| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "shl rax, 1");
@@ -377,7 +377,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "shl rax, rax");
-  [%expect{| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dd 1");
