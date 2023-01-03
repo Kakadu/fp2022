@@ -7,7 +7,6 @@ open Ast
 open Ident
 open Pass
 
-exception RuntimeExn of string
 exception InternalExn
 
 type value =
@@ -29,6 +28,7 @@ and env =
 type eval_state =
   { env : env
   ; returned : value option
+  ; err : string option
   }
 
 module P = Pass (struct
@@ -67,10 +67,10 @@ let exit_func_call env =
 
 let new_var id value =
   let* s = access in
-  match s with
-  | { env = { parent; tbl }; returned } ->
+  match s.env with
+  | { parent; tbl } ->
     let tbl = Ident.set tbl ~key:id ~data:(ref value) in
-    put { env = { parent; tbl }; returned }
+    put { s with env = { parent; tbl } }
 ;;
 
 let set_var id value =
@@ -117,6 +117,59 @@ let get_returned =
   return s.returned
 ;;
 
+let set_err err =
+  let* s = access in
+  match s.err with
+  | Some _ -> return ()
+  | None -> put { s with err = Some err }
+;;
+
+let should_eval_stmt =
+  let* s = access in
+  match s.returned, s.err with
+  | None, None -> return true
+  | _ -> return false
+;;
+
+let array_index_out_of_bounds = return (Error "Array index out of bounds")
+
+(* Custom binds *)
+
+type 'v expr_t = ('v, string) result t
+type stmt_t = unit t
+
+(* This bind should be used to eval expressions inside statements *)
+let stmt_bind (t : 'v expr_t) (f : 'v -> stmt_t) : stmt_t =
+  let* res = t in
+  match res with
+  | Ok v -> f v
+  | Error err -> set_err err
+;;
+
+let ( let+ ) = stmt_bind
+
+(* This bind should be used to eval expressions inside expressions *)
+let expr_bind (t : 'a expr_t) (f : 'a -> 'b expr_t) : ('b, string) result t =
+  let* res = t in
+  match res with
+  | Ok a -> f a
+  | Error s -> return (Error s)
+;;
+
+let ( let** ) = expr_bind
+
+let many_exprs (exprs : 'a list) ~(f : 'a -> 'b expr_t) : 'b list expr_t =
+  let rec helper acc xs =
+    let* ys = acc in
+    match xs with
+    | [] -> return (Ok (List.rev ys))
+    | h :: tl ->
+      let** y = f h in
+      helper (return (y :: ys)) tl
+  in
+  helper (return []) exprs
+;;
+
 let rec value_to_string = function
   | VInt i -> Int.to_string i
   | VBool b -> Bool.to_string b
@@ -133,15 +186,17 @@ let rec value_to_string = function
 (* Expressions *)
 
 let rec eval_expr = function
-  | Const (Int x) -> return (VInt x)
-  | Const (Str x) -> return (VStr x)
-  | Const (Bool x) -> return (VBool x)
-  | Ident id -> get_var id
+  | Const (Int x) -> return (Ok (VInt x))
+  | Const (Str x) -> return (Ok (VStr x))
+  | Const (Bool x) -> return (Ok (VBool x))
+  | Ident id ->
+    let* v = get_var id in
+    return (Ok v)
   | ArrLit (_, els) -> eval_arr_lit els
   | ArrIndex (arr, i) -> eval_arr_index arr i
   | Call (f, args) ->
-    let* f = eval_expr f in
-    let* args = many args ~f:eval_expr in
+    let** f = eval_expr f in
+    let** args = many_exprs args ~f:eval_expr in
     eval_call f args
   | FuncLit (sign, b) -> eval_func_lit sign b
   | UnOp (op, e) -> eval_unop op e
@@ -151,20 +206,20 @@ let rec eval_expr = function
   | Append (arr, vs) -> eval_append arr vs
   | Make t -> eval_make t
 
-and eval_exprs exprs = many exprs ~f:eval_expr
+and eval_exprs exprs = many_exprs exprs ~f:eval_expr
 
 and eval_arr_lit els =
-  let* els = many els ~f:eval_expr in
-  return (VArr els)
+  let** els = eval_exprs els in
+  return (Ok (VArr els))
 
 and eval_arr_index arr i =
-  let* arr = eval_expr arr in
-  let* i = eval_expr i in
+  let** arr = eval_expr arr in
+  let** i = eval_expr i in
   match arr, i with
   | VArr arr, VInt i ->
     (match List.nth arr i with
-     | Some x -> return x
-     | None -> raise (RuntimeExn "Array index out of bounds"))
+     | Some x -> return (Ok x)
+     | None -> array_index_out_of_bounds)
   | _ -> raise InternalExn
 
 and eval_call f args =
@@ -183,25 +238,25 @@ and eval_call f args =
     let* _ = exit_func_call env in
     let* r = remove_returned in
     (match r with
-     | Some r -> return r
-     | None -> return VVoid)
+     | Some r -> return (Ok r)
+     | None -> return (Ok VVoid))
   | _ -> raise InternalExn
 
 and eval_func_lit sign block =
   let* env = get_env in
-  return (VFunc (env, sign, block))
+  return (Ok (VFunc (env, sign, block)))
 
 and eval_unop op e =
-  let* e = eval_expr e in
+  let** e = eval_expr e in
   match op, e with
-  | Minus, VInt i -> return (VInt (-i)) (* Todo this is dumb *)
-  | Not, VBool b -> return (VBool (Bool.equal b false))
-  | Receive, VChan c -> return (Channel.receive c)
+  | Minus, VInt i -> return (Ok (VInt (-i)))
+  | Not, VBool b -> return (Ok (VBool (Bool.equal b false)))
+  | Receive, VChan c -> return (Ok (Channel.receive c))
   | _ -> raise InternalExn
 
 and eval_binop l op r =
-  let* l = eval_expr l in
-  let* r = eval_expr r in
+  let** l = eval_expr l in
+  let** r = eval_expr r in
   let res =
     match l, op, r with
     | VInt a, Mul, VInt b -> VInt (a * b)
@@ -220,61 +275,65 @@ and eval_binop l op r =
     | VBool a, Or, VBool b -> VBool (a || b)
     | _ -> raise InternalExn
   in
-  return res
+  return (Ok res)
 
 and eval_print args =
-  let* args = many args ~f:eval_expr in
+  let** args = eval_exprs args in
   let args = List.map args ~f:value_to_string in
   let str = String.concat ~sep:" " args in
   Caml.print_string str;
-  return VVoid
+  return (Ok VVoid)
 
 and eval_len e =
-  let* arr = eval_expr e in
+  let** arr = eval_expr e in
   match arr with
-  | VArr list -> return (VInt (List.length list))
+  | VArr list -> return (Ok (VInt (List.length list)))
   | _ -> raise InternalExn
 
 and eval_append arr vs =
-  let* arr = eval_expr arr in
-  let* vs = eval_exprs vs in
+  let** arr = eval_expr arr in
+  let** vs = eval_exprs vs in
   match arr with
-  | VArr list -> return (VArr (List.append list vs))
+  | VArr list -> return (Ok (VArr (List.append list vs)))
   | _ -> raise InternalExn
 
-and eval_make = function
-  | IntTyp -> return (VInt 0)
-  | StrTyp -> return (VStr "")
-  | BoolTyp -> return (VBool false)
-  | ArrayTyp _ -> return (VArr [])
-  | ChanTyp _ -> return (VChan (Channel.create ()))
-  | _ -> raise InternalExn
+and eval_make typ =
+  let res =
+    match typ with
+    | IntTyp -> VInt 0
+    | StrTyp -> VStr ""
+    | BoolTyp -> VBool false
+    | ArrayTyp _ -> VArr []
+    | ChanTyp _ -> VChan (Channel.create ())
+    | _ -> raise InternalExn
+  in
+  return (Ok res)
 
 (* Statements *)
 
 and eval_stmt stmt =
-  let* r = get_returned in
-  match r with
-  | Some _ -> return ()
-  | None ->
-    (match stmt with
-     | AssignStmt (l, r) -> eval_assign l r
-     | VarDecl v -> eval_vardecl v
-     | BlockStmt b -> eval_block b
-     | ExprStmt e -> eval_expr e *> return ()
-     | RetStmt (Some v) ->
-       let* v = eval_expr v in
-       set_returned v
-     | RetStmt None -> set_returned VVoid
-     | IfStmt (cond, b1, b2) -> eval_if cond b1 b2
-     | ForStmt (cond, b) -> eval_for cond b
-     | GoStmt e -> eval_go e
-     | SendStmt (chan, x) -> eval_send chan x)
+  let* should_eval = should_eval_stmt in
+  if should_eval
+  then (
+    match stmt with
+    | AssignStmt (l, r) -> eval_assign l r
+    | VarDecl v -> eval_vardecl v
+    | BlockStmt b -> eval_block b
+    | ExprStmt e -> eval_expr e *> return ()
+    | RetStmt (Some v) ->
+      let+ v = eval_expr v in
+      set_returned v
+    | RetStmt None -> set_returned VVoid
+    | IfStmt (cond, b1, b2) -> eval_if cond b1 b2
+    | ForStmt (cond, b) -> eval_for cond b
+    | GoStmt e -> eval_go e
+    | SendStmt (chan, x) -> eval_send chan x)
+  else return ()
 
 and eval_block b = fold_state b ~f:eval_stmt
 
 and eval_assign l r =
-  let* r = eval_expr r in
+  let+ r = eval_expr r in
   match l with
   | Ident id -> set_var id r
   | ArrIndex (arr, i) -> eval_arr_index_assign arr i r
@@ -282,16 +341,16 @@ and eval_assign l r =
 
 and eval_arr_index_assign receiver i x =
   (* Evaluates receiver[i] = x *)
-  let list_set_i list i x =
-    if 0 <= i && i < List.length list
-    then List.mapi list ~f:(fun j el -> if i = j then x else el)
-    else raise (RuntimeExn "Array index out of bounds")
-  in
-  let* i = eval_expr i in
-  let* list = eval_expr receiver in
-  let new_list =
+  let+ i = eval_expr i in
+  let+ list = eval_expr receiver in
+  let+ new_list =
     match list, i with
-    | VArr list, VInt i -> VArr (list_set_i list i x)
+    | VArr list, VInt i ->
+      if 0 <= i && i < List.length list
+      then (
+        let newlist = List.mapi list ~f:(fun j el -> if i = j then x else el) in
+        return (Ok (VArr newlist)))
+      else array_index_out_of_bounds
     | _ -> raise InternalExn
   in
   match receiver with
@@ -300,7 +359,7 @@ and eval_arr_index_assign receiver i x =
   | _ -> return ()
 
 and eval_vardecl (id, expr) =
-  let* value = eval_expr expr in
+  let+ value = eval_expr expr in
   new_var id value
 
 and eval_go expr =
@@ -310,14 +369,14 @@ and eval_go expr =
   return ()
 
 and eval_if cond bthen belse =
-  let* cond = eval_expr cond in
+  let+ cond = eval_expr cond in
   match cond with
   | VBool true -> eval_block bthen
   | VBool false -> eval_block belse
   | _ -> raise InternalExn
 
 and eval_for cond body =
-  let* value = eval_expr cond in
+  let+ value = eval_expr cond in
   match value with
   | VBool true ->
     eval_block body *> eval_stmt (ForStmt (cond, body)) (* reuse "return" logic*)
@@ -325,8 +384,8 @@ and eval_for cond body =
   | _ -> raise InternalExn
 
 and eval_send chan x =
-  let* chan = eval_expr chan in
-  let* x = eval_expr x in
+  let+ chan = eval_expr chan in
+  let+ x = eval_expr x in
   match chan with
   | VChan chan ->
     Channel.send chan x;
@@ -351,7 +410,7 @@ let eval_file file =
   let eval_func_decl (id, sign, b) =
     let* _ = new_var id VVoid in
     (* For recursive functions *)
-    let* v = eval_func_lit sign b in
+    let+ v = eval_func_lit sign b in
     set_var id v
   in
   let* _ = fold_state funcs ~f:eval_func_decl in
@@ -364,10 +423,12 @@ let eval_file file =
 ;;
 
 let eval file =
-  let _ =
+  let s, () =
     run_pass
       (eval_file file)
-      ~init:{ env = { parent = None; tbl = empty_tbl }; returned = None }
+      ~init:{ env = { parent = None; tbl = empty_tbl }; returned = None; err = None }
   in
-  ()
+  match s.err with
+  | None -> Ok ()
+  | Some err -> Error err
 ;;
