@@ -23,10 +23,14 @@ let ruby_reads = function
   | _ -> failwith "reads function doesn't take argument"
 ;;
 
+let drop_first f = 
+  let g _ z = f z in
+  g
+
 let std_variables =
-  [ "puts", Function ("puts", [ "s" ], ruby_puts)
-  ; "reads", Function ("reads", [], ruby_reads)
-  ; "readi", Function ("readi", [], ruby_readi)
+  [ "puts", Function ("puts", [ "s" ], drop_first ruby_puts)
+  ; "reads", Function ("reads", [], drop_first ruby_reads)
+  ; "readi", Function ("readi", [], drop_first ruby_readi)
   ]
 ;;
 

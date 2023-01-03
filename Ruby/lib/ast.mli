@@ -3,8 +3,6 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 (** Ast types for literals *)
-open Map
-
 open Base
 
 type ruby_literal =
@@ -25,10 +23,15 @@ type ast =
   | Seq of ast list (** Seq [expressions] *)
   | Indexing of ast * ast (** Indexing [box index] *)
   | IndexAssign of ast * ast * ast (** IndexAssign [box index new_value]*)
-  | FuncDeclaration of string * string list * ast
+  | FuncDeclaration of func_scope * string * string list * ast
       (** FunctionDeclaration [name param_names body]*)
-  | Invocation of ast * ast list (** Invocation [name param_values] *)
-  | MethodAccess of ast * string (** MethodAccess [object method]*)
+  | Invocation of ast * ast list (** Invocation [target param_values] *)
+  | MethodAccess of ast * string * ast list (** MethodAccess [object method params]*)
+  | ClassDeclaration of string * ast list (** ClassDeclaration [name members]*)
+
+and func_scope =
+  | TopLevel
+  | Method
 
 (** Data types used in runtime *)
 type value =
@@ -36,6 +39,15 @@ type value =
   | Integer of int (** Integer [value]*)
   | String of string (** String [value]*)
   | Array of value list ref (** Array [value_list]*)
-  | Function of string * string list * (value list -> value)
+  | Function of string * string list * (state -> value list -> value)
       (** Function [name param_list body]*)
+  | Class of class_state (** Class [initial_state] *)
+  | ClassInstance of class_state ref (** ClassInstance [shared_instance_state] *)
   | Nil (** Nil *)
+
+and class_state = (string, value, String.comparator_witness) Map.t
+
+and state =
+  { local_vars : (string, value, String.comparator_witness) Map.t
+  ; class_scopes : class_state ref list
+  }

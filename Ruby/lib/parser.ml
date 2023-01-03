@@ -48,14 +48,21 @@ let is_letter = function
   | _ -> false
 ;;
 
-let is_letter_or_und c = is_letter c || c = '_'
-let keywords = [ "if"; "then"; "else"; "end"; "true"; "false"; "while"; "do"; "def" ]
+let is_letter_or_undat c = is_letter c || c = '_' || c = '@'
+
+let field_name =
+  take_while1 is_letter_or_undat
+  >>= (fun s1 ->
+        take_while (fun c -> is_letter_or_undat c || is_digit c) >>| fun s2 -> s1 ^ s2)
+  |> as_token
+;;
+
+let keywords =
+  [ "if"; "then"; "else"; "end"; "true"; "false"; "while"; "do"; "def"; "class" ]
+;;
 
 let identifier_t =
-  take_while1 is_letter_or_und
-  >>= (fun s1 ->
-        take_while (fun c -> is_letter_or_und c || is_digit c) >>| fun s2 -> s1 ^ s2)
-  |> as_token
+  field_name
   >>= fun i ->
   match List.find_opt (String.equal i) keywords with
   | Some _ -> fail "Keyword can't be identifier"
@@ -96,10 +103,14 @@ let seq_of_expr =
   fix (fun seq_of_expr ->
     let expr =
       fix (fun expr ->
+        (* --- Args --- *)
+        let args = token "(" *> sep_by (token ",") expr <* token ")" in
         (* --- Method access --- *)
         let method_access =
           choice [ literal; var_cal; parens expr ]
-          >>= fun obj -> token "." *> identifier_t >>| fun meth -> MethodAccess (obj, meth)
+          >>= fun obj ->
+          token "." *> field_name
+          >>= fun meth -> args >>| fun arg_list -> MethodAccess (obj, meth, arg_list)
         in
         (* --- Functions --- *)
         let parameters_decl = token "(" *> sep_by (token ",") identifier_t <* token ")" in
@@ -111,19 +122,20 @@ let seq_of_expr =
           maybe new_lines *> seq_of_expr
           <* maybe new_lines
           <* token "end"
-          >>| fun f_body -> FuncDeclaration (func_name, params, f_body)
+          >>| fun f_body -> FuncDeclaration (TopLevel, func_name, params, f_body)
         in
         let invocation =
           choice [ var_cal; method_access; parens expr ]
           >>= fun inv_box ->
-          token "(" *> sep_by (token ",") expr
-          <* token ")"
-          >>| fun param_values -> Invocation (inv_box, param_values)
+          args >>| fun param_values -> Invocation (inv_box, param_values)
         in
         (* --- Var assn --- *)
         let assn =
           identifier_t
           >>= fun i -> token "=" *> expr >>| fun var_val -> VarAssign (i, var_val)
+        in
+        let class_field_assn =
+          peek_char_fail >>= fun c -> if c == '@' then assn else fail "Not class field"
         in
         (* --- While --- *)
         let while_loop =
@@ -186,10 +198,39 @@ let seq_of_expr =
         let asoc0_p = chainl1 factor asoc0 in
         let asoc1_p = chainl1 asoc0_p asoc1 in
         let asoc2_p = chainl1 asoc1_p asoc2 in
+        (* --- Class declaration --- *)
+        let class_declaration =
+          token "class" *> identifier_t
+          <* new_lines
+          >>= fun class_name ->
+          sep_by (as_token new_lines) (function_declaration <|> class_field_assn)
+          <* maybe new_lines
+          <* token "end"
+          >>| fun members ->
+          ClassDeclaration
+            ( class_name
+            , List.map
+                (function
+                 | FuncDeclaration (_, name, params, body) ->
+                   FuncDeclaration (Method, name, params, body)
+                 | x -> x)
+                members )
+        in
+        (* let class_declaration =
+          token "class" *> identifier_t <* token "end"
+          >>| fun class_name -> ClassDeclaration (class_name, [])
+        in *)
         (* --- Expr definition --- *)
         choice
           ~failure_msg:"Unrecognized expression"
-          [ function_declaration; assn; asoc2_p; parens expr; while_loop; array_v ])
+          [ class_declaration
+          ; function_declaration
+          ; assn
+          ; asoc2_p
+          ; parens expr
+          ; while_loop
+          ; array_v
+          ])
     in
     maybe new_lines *> sep_by expr_separator expr <* maybe new_lines >>| fun s -> Seq s)
 ;;
