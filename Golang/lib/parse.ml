@@ -458,7 +458,7 @@ let eds =
     let* x = d.expr d <* ws <* semi in
     return (SendStmt (chan, x))
   in
-  let simple_stmt d = send_stmt d <|> expr_stmt d <|> assign d  in
+  let simple_stmt d = send_stmt d <|> expr_stmt d <|> assign d in
   let go_stmt d =
     (let* expr = keyword "go" *> ws1 *> d.expr d <* ws <* semi in
      return (GoStmt expr))

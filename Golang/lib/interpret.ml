@@ -35,8 +35,9 @@ let add_true_false ast =
 ;;
 
 let show_ast f =
-  Ast.show_source_file (fun fmt id ->
-    Ppx_deriving_runtime.Format.pp_print_string fmt (Ident.name id)) f
+  Ast.show_source_file
+    (fun fmt id -> Ppx_deriving_runtime.Format.pp_print_string fmt (Ident.name id))
+    f
 ;;
 
 let normalize ast =

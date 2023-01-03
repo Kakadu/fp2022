@@ -11,7 +11,7 @@ type typ =
   | BoolTyp (* boolean type *)
 [@@deriving show, ord]
 
-and array_typ = { el: typ }
+and array_typ = { el : typ }
 
 and 'id signature =
   { args : 'id arg list
