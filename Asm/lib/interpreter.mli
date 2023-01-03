@@ -4,14 +4,7 @@
 
 open Ast
 open Utils
-
-module type MonadError = sig
-  type 'a t
-
-  val return : 'a -> 'a t
-  val error : string -> 'a t
-  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
-end
+open MonadError
 
 module Interpreter (M : MonadError) : sig
   (* Current state of execution *)
