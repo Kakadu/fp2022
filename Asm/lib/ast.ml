@@ -4,6 +4,7 @@
 
 open Base
 open OperandsHandler
+open MonadError
 
 type 'a operands_double =
   | RegReg of 'a reg * 'a reg
@@ -54,7 +55,9 @@ type instruction =
 
 type ast = instruction list [@@deriving show { with_path = false }]
 
-module CmdHandler = struct
+module CmdHandler (M : MonadError) = struct
+  open M
+
   let lcommand v = LCommand v
   let bcommand v = BCommand v
   let wcommand v = WCommand v
@@ -69,49 +72,49 @@ module CmdHandler = struct
   let scmd_list = [ "jmp"; "je"; "jne"; "call" ]
 
   let cmd_zero_args_str_to_command = function
-    | "ret" -> Ret
-    | str -> failwith ("Unknown command " ^ str)
+    | "ret" -> return Ret
+    | str -> error ("Unknown command " ^ str)
   ;;
 
   let cmd_one_arg_str_to_command cmd x =
     match cmd with
-    | "inc" -> Inc x
-    | "mul" -> Mul x
-    | "push" -> Push x
-    | "pop" -> Pop x
-    | str -> failwith ("Unknown command " ^ str)
+    | "inc" -> return (Inc x)
+    | "mul" -> return (Mul x)
+    | "push" -> return (Push x)
+    | "pop" -> return (Pop x)
+    | str -> error ("Unknown command " ^ str)
   ;;
 
   let cmd_two_args_str_to_command cmd x =
     match cmd with
-    | "mov" -> Mov x
-    | "add" -> Add x
-    | "sub" -> Sub x
-    | "cmp" -> Cmp x
-    | str -> failwith ("Unknown command " ^ str)
+    | "mov" -> return (Mov x)
+    | "add" -> return (Add x)
+    | "sub" -> return (Sub x)
+    | "cmp" -> return (Cmp x)
+    | str -> error ("Unknown command " ^ str)
   ;;
 
   let xcmd_one_arg_str_to_command cmd x =
     match cmd with
-    | "movdqa" -> Movdqa x
-    | str -> failwith ("Unknown command " ^ str)
+    | "movdqa" -> return (Movdqa x)
+    | str -> error ("Unknown command " ^ str)
   ;;
 
   let xcmd_two_args_str_to_command cmd x =
     match cmd with
-    | "addpd" -> Addpd x
-    | "mulpd" -> Mulpd x
-    | str -> failwith ("Unknown command " ^ str)
+    | "addpd" -> return (Addpd x)
+    | "mulpd" -> return (Mulpd x)
+    | str -> error ("Unknown command " ^ str)
   ;;
 
   (* This is a special case for commands that take a string rather than Reg or
      Const. Such commands always have only one operand *)
   let scmd_str_to_command cmd x =
     match cmd with
-    | "jmp" -> Jmp x
-    | "je" -> Je x
-    | "jne" -> Jne x
-    | "call" -> Call x
-    | str -> failwith ("Unknown command " ^ str)
+    | "jmp" -> return (Jmp x)
+    | "je" -> return (Je x)
+    | "jne" -> return (Jne x)
+    | "call" -> return (Call x)
+    | str -> error ("Unknown command " ^ str)
   ;;
 end

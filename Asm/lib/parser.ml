@@ -5,7 +5,7 @@
 open Angstrom
 open Ast
 open OperandsHandler
-open Ast.CmdHandler
+open Ast.CmdHandler (MonadError.Result)
 
 let is_space = function
   | ' ' | '\t' -> true
@@ -131,26 +131,33 @@ let dregconst_p = gen_regconst_p dreg_p dconst_p <?> "dregconst_p"
 
 (****************************************************************************************)
 (* Generate a parser of one-line command *)
-let gen_command_p operand_p converter cmd_str =
-  string cmd_str *> spaces1_p *> operand_p >>| converter
+let gen_command_p operand_p cmd_str_to_comand gen_instr cmd_str =
+  string cmd_str *> spaces1_p *> operand_p
+  >>= fun x ->
+  match cmd_str_to_comand cmd_str x with
+  | Error e -> fail e
+  | Ok v -> return (gen_instr v)
 ;;
 
 (****************************************************************************************)
 (* Generate a parser of a string command *)
-let gen_scommand_p cmd_str =
-  gen_command_p label_p (fun x -> SCommand (scmd_str_to_command cmd_str x)) cmd_str
-;;
+
+let gen_scommand_p cmd_str = gen_command_p label_p scmd_str_to_command scommand cmd_str
 
 (****************************************************************************************)
 (* Generate a parser of a byte command *)
 let gen_bcommand_p operand_p cmd_str_to_command cmd_str =
-  gen_command_p operand_p (fun x -> BCommand (cmd_str_to_command cmd_str x)) cmd_str
+  gen_command_p operand_p cmd_str_to_command bcommand cmd_str
 ;;
 
 (* For now we'll consider all zero-args commands as BCommands *)
 let gen_bcommand_zero_args_p cmd_str =
   (* We cannot use gen_bcommand_p since it wants at least one space after the command *)
-  string cmd_str >>| fun _ -> BCommand (cmd_zero_args_str_to_command cmd_str)
+  string cmd_str
+  >>= fun _ ->
+  match cmd_zero_args_str_to_command cmd_str with
+  | Error e -> fail e
+  | Ok v -> return (BCommand v)
 ;;
 
 (* Generate a parser of one-arg byte command *)
@@ -166,7 +173,7 @@ let gen_bcommand_two_args_p =
 (****************************************************************************************)
 (* Generate a parser of a word command *)
 let gen_wcommand_p operand_p cmd_str_to_command cmd_str =
-  gen_command_p operand_p (fun x -> WCommand (cmd_str_to_command cmd_str x)) cmd_str
+  gen_command_p operand_p cmd_str_to_command wcommand cmd_str
 ;;
 
 (* Generate a parser of one-arg word command *)
@@ -182,7 +189,7 @@ let gen_wcommand_two_args_p =
 (****************************************************************************************)
 (* Generate a parser of a dword command *)
 let gen_dcommand_p operand_p cmd_str_to_command cmd_str =
-  gen_command_p operand_p (fun x -> DCommand (cmd_str_to_command cmd_str x)) cmd_str
+  gen_command_p operand_p cmd_str_to_command dcommand cmd_str
 ;;
 
 (* Generate a parser of one-arg dword command *)
@@ -198,7 +205,7 @@ let gen_dcommand_two_args_p =
 (****************************************************************************************)
 (* Generate a parser of an xmm command *)
 let gen_xcommand_p operand_p cmd_str_to_command cmd_str =
-  gen_command_p operand_p (fun x -> XCommand (cmd_str_to_command cmd_str x)) cmd_str
+  gen_command_p operand_p cmd_str_to_command xcommand cmd_str
 ;;
 
 (* Generate a parser of one-arg xmm command *)
