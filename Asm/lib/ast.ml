@@ -67,40 +67,45 @@ module CmdHandler = struct
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
-  let cmd_one_arg_str_to_command = function
-    | "inc" -> fun x -> Inc x
-    | "mul" -> fun x -> Mul x
-    | "push" -> fun x -> Push x
-    | "pop" -> fun x -> Pop x
+  let cmd_one_arg_str_to_command cmd x =
+    match cmd with
+    | "inc" -> Inc x
+    | "mul" -> Mul x
+    | "push" -> Push x
+    | "pop" -> Pop x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
-  let cmd_two_args_str_to_command = function
-    | "mov" -> fun x -> Mov x
-    | "add" -> fun x -> Add x
-    | "sub" -> fun x -> Sub x
-    | "cmp" -> fun x -> Cmp x
+  let cmd_two_args_str_to_command cmd x =
+    match cmd with
+    | "mov" -> Mov x
+    | "add" -> Add x
+    | "sub" -> Sub x
+    | "cmp" -> Cmp x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
-  let xcmd_one_arg_str_to_command = function
-    | "movdqa" -> fun x -> Movdqa x
+  let xcmd_one_arg_str_to_command cmd x =
+    match cmd with
+    | "movdqa" -> Movdqa x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
-  let xcmd_two_args_str_to_command = function
-    | "addpd" -> fun x -> Addpd x
-    | "mulpd" -> fun x -> Mulpd x
+  let xcmd_two_args_str_to_command cmd x =
+    match cmd with
+    | "addpd" -> Addpd x
+    | "mulpd" -> Mulpd x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 
   (* This is a special case for commands that take a string rather than Reg or
      Const. Such commands always have only one operand *)
-  let scmd_str_to_command = function
-    | "jmp" -> fun x -> Jmp x
-    | "je" -> fun x -> Je x
-    | "jne" -> fun x -> Jne x
-    | "call" -> fun x -> Call x
+  let scmd_str_to_command cmd x =
+    match cmd with
+    | "jmp" -> Jmp x
+    | "je" -> Je x
+    | "jne" -> Jne x
+    | "call" -> Call x
     | str -> failwith ("Unknown command " ^ str)
   ;;
 end
