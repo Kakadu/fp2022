@@ -25,7 +25,9 @@
   [1, 2, 3, 4, 5, 6, 7][2, 4, 6]
   $ ./INTERPRET.exe ../../../../examples/var_default.go
   0false[]chan
-  $ ./INTERPRET.exe ../../../../examples/goroutines_channels.go
+  $ ./INTERPRET.exe ../../../../examples/goroutines/single_message.go
   yes
-  $ ./INTERPRET.exe ../../../../examples/goroutines_sum.go
+  $ ./INTERPRET.exe ../../../../examples/goroutines/range.go
+  0123456789
+  $ ./INTERPRET.exe ../../../../examples/goroutines/sum_of_two_ranges.go
   9900

@@ -2,43 +2,18 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-type 'v t =
-  { data : 'v option ref
-  ; m : Mutex.t
-  ; notfull : Condition.t
-  ; notempty : Condition.t
-  }
+open Event
 
-let create () =
-  { data = ref None
-  ; m = Mutex.create ()
-  ; notfull = Condition.create ()
-  ; notempty = Condition.create ()
-  }
+type 'v t = { chan : 'v channel }
+
+let create () = { chan = new_channel () }
+
+let send { chan } v =
+  let event = send chan v in
+  sync event
 ;;
 
-let send chan v =
-  Mutex.lock chan.m;
-  while Option.is_some !(chan.data) do
-    Condition.wait chan.notfull chan.m
-  done;
-  chan.data := Some v;
-  Condition.signal chan.notempty;
-  Mutex.unlock chan.m
-;;
-
-let receive chan =
-  Mutex.lock chan.m;
-  while Option.is_none !(chan.data) do
-    Condition.wait chan.notempty chan.m
-  done;
-  match !(chan.data) with
-  | Some x ->
-    chan.data := None;
-    Condition.signal chan.notfull;
-    Mutex.unlock chan.m;
-    x
-  | None ->
-    Mutex.unlock chan.m;
-    failwith "Internal error"
+let receive { chan } =
+  let event = receive chan in
+  sync event
 ;;

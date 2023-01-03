@@ -2,12 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-type 'v t =
-  { data : 'v option ref
-  ; m : Mutex.t
-  ; notfull : Condition.t
-  ; notempty : Condition.t
-  }
+type 'v t
 
 val create : unit -> 'v t
 val send : 'v t -> 'v -> unit
