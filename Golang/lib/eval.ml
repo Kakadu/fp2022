@@ -8,8 +8,7 @@ open Ident
 open Pass
 
 exception RuntimeExn of string
-
-let runtime_exn msg = raise (RuntimeExn msg)
+exception InternalExn
 
 type value =
   | VInt of int
@@ -81,7 +80,7 @@ let set_var id value =
     match parent, var with
     | _, Some var -> var := value
     | Some env, None -> set_ref env
-    | None, None -> failwith (Printf.sprintf "Variable %s not found!" (Ident.name id))
+    | None, None -> raise InternalExn
   in
   let* s = access in
   set_ref s.env;
@@ -95,7 +94,7 @@ let get_var id =
     match parent, var with
     | _, Some var -> !var
     | Some env, None -> get_ref_val env
-    | None, None -> failwith (Printf.sprintf "Variable %s not found!" (Ident.name id))
+    | None, None -> raise InternalExn
   in
   let* s = access in
   return (get_ref_val s.env)
@@ -166,7 +165,7 @@ and eval_arr_index arr i =
     (match List.nth arr i with
      | Some x -> return x
      | None -> raise (RuntimeExn "Array index out of bounds"))
-  | _ -> failwith "Internal error: illegal types"
+  | _ -> raise InternalExn
 
 and eval_call f args =
   let set_args formal_args args =
@@ -174,8 +173,7 @@ and eval_call f args =
     match List.zip formal_args args with
     | List.Or_unequal_lengths.Ok lst ->
       fold_state lst ~f:(fun (farg, arg) -> new_var farg arg)
-    | List.Or_unequal_lengths.Unequal_lengths ->
-      failwith "Internal error: illegal number of args"
+    | List.Or_unequal_lengths.Unequal_lengths -> raise InternalExn
   in
   match f with
   | VFunc (closure_env, { args = fargs; _ }, b) ->
@@ -187,7 +185,7 @@ and eval_call f args =
     (match r with
      | Some r -> return r
      | None -> return VVoid)
-  | _ -> failwith "Internal error: illegal types"
+  | _ -> raise InternalExn
 
 and eval_func_lit sign block =
   let* env = get_env in
@@ -199,7 +197,7 @@ and eval_unop op e =
   | Minus, VInt i -> return (VInt (-i)) (* Todo this is dumb *)
   | Not, VBool b -> return (VBool (Bool.equal b false))
   | Receive, VChan c -> return (Channel.receive c)
-  | _ -> failwith "Internal error: Illegal type"
+  | _ -> raise InternalExn
 
 and eval_binop l op r =
   let* l = eval_expr l in
@@ -220,7 +218,7 @@ and eval_binop l op r =
     | VStr a, Add, VStr b -> VStr (a ^ b)
     | VBool a, And, VBool b -> VBool (a && b)
     | VBool a, Or, VBool b -> VBool (a || b)
-    | _ -> failwith "Illegal binary op"
+    | _ -> raise InternalExn
   in
   return res
 
@@ -235,14 +233,14 @@ and eval_len e =
   let* arr = eval_expr e in
   match arr with
   | VArr list -> return (VInt (List.length list))
-  | _ -> failwith "Internal error"
+  | _ -> raise InternalExn
 
 and eval_append arr vs =
   let* arr = eval_expr arr in
   let* vs = eval_exprs vs in
   match arr with
   | VArr list -> return (VArr (List.append list vs))
-  | _ -> failwith "internal err"
+  | _ -> raise InternalExn
 
 and eval_make = function
   | IntTyp -> return (VInt 0)
@@ -250,7 +248,7 @@ and eval_make = function
   | BoolTyp -> return (VBool false)
   | ArrayTyp _ -> return (VArr [])
   | ChanTyp _ -> return (VChan (Channel.create ()))
-  | _ -> failwith "Internal err"
+  | _ -> raise InternalExn
 
 (* Statements *)
 
@@ -280,21 +278,21 @@ and eval_assign l r =
   match l with
   | Ident id -> set_var id r
   | ArrIndex (arr, i) -> eval_arr_index_assign arr i r
-  | _ -> failwith "Illegal assignment"
+  | _ -> raise InternalExn
 
 and eval_arr_index_assign receiver i x =
   (* Evaluates receiver[i] = x *)
   let list_set_i list i x =
     if 0 <= i && i < List.length list
     then List.mapi list ~f:(fun j el -> if i = j then x else el)
-    else runtime_exn "Array index out of bounds"
+    else raise (RuntimeExn "Array index out of bounds")
   in
   let* i = eval_expr i in
   let* list = eval_expr receiver in
   let new_list =
     match list, i with
     | VArr list, VInt i -> VArr (list_set_i list i x)
-    | _ -> failwith "Internal error: typing"
+    | _ -> raise InternalExn
   in
   match receiver with
   | Ident id -> set_var id new_list
@@ -316,7 +314,7 @@ and eval_if cond bthen belse =
   match cond with
   | VBool true -> eval_block bthen
   | VBool false -> eval_block belse
-  | _ -> failwith "Internal error: illegal types"
+  | _ -> raise InternalExn
 
 and eval_for cond body =
   let* value = eval_expr cond in
@@ -324,7 +322,7 @@ and eval_for cond body =
   | VBool true ->
     eval_block body *> eval_stmt (ForStmt (cond, body)) (* reuse "return" logic*)
   | VBool false -> return ()
-  | _ -> failwith "Internal error"
+  | _ -> raise InternalExn
 
 and eval_send chan x =
   let* chan = eval_expr chan in
@@ -333,7 +331,7 @@ and eval_send chan x =
   | VChan chan ->
     Channel.send chan x;
     return ()
-  | _ -> failwith "Internal error"
+  | _ -> raise InternalExn
 ;;
 
 let eval_file file =
