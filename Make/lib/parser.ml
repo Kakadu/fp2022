@@ -33,6 +33,11 @@ let is_colon = function
   | _ -> false
 ;;
 
+let is_semicolon = function
+  | ';' -> true
+  | _ -> false
+;;
+
 let is_backslash = function
   | '\\' -> true
   | _ -> false
@@ -69,13 +74,14 @@ let trim_start, trim_end =
   start, finish
 ;;
 
-(* ban '\' in filenames *)
+(* ban '\' and ';' in filenames *)
 let filename =
   take_while1
     (all_pred
        [ Fun.negate is_empty_char
        ; Fun.negate is_hash
        ; Fun.negate is_colon
+       ; Fun.negate is_semicolon
        ; Fun.negate is_backslash
        ])
 ;;
@@ -111,7 +117,9 @@ let prerequisites =
 (**
  Parse recipes
  After targets:prerequisites parsing, recipes
- are lines __starting with the tab__.
+ are new lines __starting with the tab__.
+ However, if the same line starts with semicolon, it's also
+ considered as a recipe
 *)
 let recipes =
   let empty_line =
@@ -119,11 +127,11 @@ let recipes =
     wrap ws_line eols <|> discard (many1 end_of_line)
   in
   let recipe_delim = many (empty_line <|> comment) in
-  let recipe_line =
-    char '\t' *> take_while (all_pred [ not_newline; Fun.negate is_backslash ])
-  in
-  let recipe_line = multiline recipe_line ( ^ ) recipe_delim "" in
-  sep_and_trim recipe_delim recipe_line
+  let recipe = take_while (all_pred [ not_newline; Fun.negate is_backslash ]) in
+  let first_recipe_line = option [] (char ';' *> recipe >>| fun str -> [ str ]) in
+  let one_recipe_line = char '\t' *> recipe in
+  let recipe_line = multiline one_recipe_line ( ^ ) recipe_delim "" in
+  lift2 ( @ ) first_recipe_line (sep_and_trim recipe_delim recipe_line)
 ;;
 
 (**
@@ -198,7 +206,7 @@ let%test _ = parse_ok "abc  :" ("abc", [])
 let%test _ = parse_ok "abc \t  :" ("abc", [])
 let%test _ = parse_ok "a  \t:" ("a", [])
 let%test _ = parse_ok "a\tb:" ("a", [ "b" ])
-let%test _ = parse_ok "a \t b c,;dex :" ("a", [ "b"; "c,;dex" ])
+let%test _ = parse_ok "a \t b c,dex :" ("a", [ "b"; "c,dex" ])
 let%test _ = parse_ok "abc \t f  f :" ("abc", [ "f"; "f" ])
 let%test _ = parse_fail "abc\n:"
 let%test _ = parse_fail "abc#:"
@@ -217,7 +225,7 @@ let%test _ = parse_ok "abc" [ "abc" ]
 let%test _ = parse_ok "abc  " [ "abc" ]
 let%test _ = parse_ok "    abc" [ "abc" ]
 let%test _ = parse_ok "abc \t  " [ "abc" ]
-let%test _ = parse_ok "a \t b c,;dex" [ "a"; "b"; "c,;dex" ]
+let%test _ = parse_ok "a \t b c,dex" [ "a"; "b"; "c,dex" ]
 let%test _ = parse_ok "abc \t f  f " [ "abc"; "f"; "f" ]
 let%test _ = parse_ok "abc #\t f  f \t" [ "abc" ]
 let%test _ = parse_ok "abc #\n" [ "abc" ]
@@ -366,6 +374,18 @@ let%test _ =
   parse_ok
     "a:a \\\n b c\n\tabc\n  \t"
     { targets = "a", []; prerequisites = [ "a"; "b"; "c" ]; recipes = [ "abc" ] }
+;;
+
+let%test _ =
+  parse_ok
+    "a : b; abc"
+    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ " abc" ] }
+;;
+
+let%test _ =
+  parse_ok
+    "a : b; abc\n\t kek\\\n\tkek"
+    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ " abc"; " kekkek" ] }
 ;;
 
 (* combined targets;prerequisites;recipes parser test that returns list of exprs test *)

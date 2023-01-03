@@ -17,7 +17,6 @@ License: LGPL for implementation code + WTFPL for test examles in miniLanguage
 Author: Ivan Morozko
 
 TODO:
-- Add recipe definiton via `;` on the targets line
 - Add variables
     - Recursively expanded variable (`=`)
     - Simply expanded variables (`:=`)
@@ -47,6 +46,7 @@ Done:
 - Explicit rules parsing
     - Support multiline prerequisite definitions
     - Support multiline recipes
+    - Support recipe definiton via `;` on the targets line
     - Ignore comment lines
 - Explicit rules interpreting
     - Dropping circular dependencies
