@@ -55,16 +55,6 @@ let push_fn =
   put { s with env }
 ;;
 
-let pop_fn =
-  let* s = access in
-  let env =
-    match s.env with
-    | { parent = None; _ } -> failwith "Cannot pop global scope"
-    | { parent = Some env; _ } -> env
-  in
-  put { s with env }
-;;
-
 let enter_func_call closure_env =
   let* cur_env = set_env closure_env in
   let* _ = push_fn in
@@ -72,7 +62,6 @@ let enter_func_call closure_env =
 ;;
 
 let exit_func_call env =
-  let* _ = pop_fn in
   let* _ = set_env env in
   return ()
 ;;
@@ -176,7 +165,7 @@ and eval_arr_index arr i =
   | VArr arr, VInt i ->
     (match List.nth arr i with
      | Some x -> return x
-     | None -> failwith "Usererror: array index out of bounds")
+     | None -> raise (RuntimeExn "Array index out of bounds"))
   | _ -> failwith "Internal error: illegal types"
 
 and eval_call f args =
