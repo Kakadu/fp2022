@@ -45,7 +45,7 @@ module Interpret (M : MONADERROR) = struct
     | Flag of bool  (** EFLAGS *)
     | Reg64 of int64  (** not so large registers *)
     | Reg128 of int64 * int64  (** large registers *)
-    | Const of int64  (** global consts *)
+    | Const of string  (** global consts *)
   [@@deriving show { with_path = false }]
 
   type envr = var MapVar.t [@@deriving show { with_path = false }]
@@ -107,8 +107,16 @@ module Interpret (M : MONADERROR) = struct
     | _ -> error "Isnt reg64 or less"
 
   let find_v env name =
+    let explode s = List.init (String.length s) (String.get s) in
     return (MapVar.find name env) >>= function
-    | Const x -> return x
+    | Const x -> (
+        match of_string_opt x with
+        | Some x -> return x
+        | None ->
+            return
+            @@ List.fold_left
+                 (fun x y -> add (shift_left x 8) (of_int @@ Char.code y))
+                 0L (explode x))
     | _ -> error "Isnt const"
 
   let find_f env f =
@@ -244,26 +252,12 @@ module Interpret (M : MONADERROR) = struct
     | [] -> return (env, s, [])
 
   let rec data_sec_inter env s vars =
-    let explode s = List.init (String.length s) (String.get s) in
-    let f list len =
-      let rec helper = function
-        | -1 -> []
-        | x when x >= List.length list -> helper (x - 1)
-        | x -> List.nth list x :: helper (x - 1)
-      in
-      helper len
-    in
     let cut b = function
       | Num x ->
-          let num = of_string x in
-          mask num b 0
-      | Str s ->
-          mask
-            (List.fold_left
-               (fun x y -> add (shift_left x 8) (of_int (Char.code y)))
-               0L
-               (f (explode s) b))
-            b 0
+          let n = List.map (fun x -> mask (of_string x) b 0) x in
+          let nn = List.fold_left (fun x y -> add (shift_left x b) y) 0L n in
+          to_string nn
+      | Str s -> s
     in
     match vars with
     | Variable (name, t, v) :: tl ->
@@ -275,8 +269,8 @@ module Interpret (M : MONADERROR) = struct
           | DQ -> cut 64 v
           | DT -> cut 80 v
         in
-        let vvv = Const vv in
-        let env = MapVar.add name vvv env in
+        let vv = Const vv in
+        let env = MapVar.add name vv env in
         data_sec_inter env s tl
     | [] -> return (env, s, [])
 
