@@ -55,6 +55,12 @@ type instruction =
 type ast = instruction list [@@deriving show { with_path = false }]
 
 module CmdHandler = struct
+  let lcommand v = LCommand v
+  let bcommand v = BCommand v
+  let wcommand v = WCommand v
+  let dcommand v = DCommand v
+  let xcommand v = XCommand v
+  let scommand v = SCommand v
   let cmd_zero_args_list = [ "ret" ]
   let cmd_one_arg_list = [ "inc"; "mul"; "push"; "pop" ]
   let cmd_two_args_list = [ "mov"; "add"; "sub"; "cmp" ]
