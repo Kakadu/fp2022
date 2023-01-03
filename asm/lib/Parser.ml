@@ -66,6 +66,14 @@ let nums = take_while1 is_num
 
 let hex_nums = take_while1 is_hex_digit
 
+let num =
+  let sign = option "" (string "+" <|> string "-") in
+  let hex_pref = option "" (string "0x") in
+  sign >>= fun s ->
+  hex_pref >>= fun p ->
+  (match p with "" -> nums | _ -> hex_nums) >>= fun n ->
+  return @@ String.concat "" [ s; p; n ]
+
 (** parses word of letters *)
 let word = take_while1 is_ch
 
@@ -86,14 +94,7 @@ let expr =
   let sub = char '-' *> return (fun x y -> Sub (x, y)) in
   let mul = char '*' *> return (fun x y -> Mul (x, y)) in
   let div = char '/' *> return (fun x y -> Div (x, y)) in
-  let sign = option "" (string "+" <|> string "-") in
-  let hex_pref = option "" (string "0x") in
-  let num =
-    sign >>= fun s ->
-    hex_pref >>= fun p ->
-    (match p with "" -> nums | _ -> hex_nums) >>= fun n ->
-    return @@ Const (ASMConst (String.concat "" [ s; p; n ]))
-  in
+  let num = num >>= fun x -> return @@ Const (ASMConst x) in
   let var =
     word >>= fun x ->
     let w = String.uppercase_ascii x in
@@ -204,7 +205,8 @@ let data_line_parser =
   in
   var >>= fun v ->
   dt >>= fun dt ->
-  word <|> nums >>= fun l -> return @@ Variable (v, dt, l)
+  word >>= (fun s -> return @@ Str s) <|> (num >>= fun n -> return @@ Num n)
+  >>= fun l -> return @@ Variable (v, dt, l)
 
 (** parses one of two possible sections and then parse section then return Ast.ast *)
 let sec_parser =
@@ -380,23 +382,23 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dd 1");
-  [%expect {| (Variable ("a", DD, "1")) |}]
+  [%expect {| (Variable ("a", DD, (Num "1"))) |}]
 
 let%expect_test _ =
   print_string (pr_not_opt data_line_parser "a dd 1, 2");
-  [%expect{| : end_of_input |}]
+  [%expect {| : end_of_input |}]
 
 let%expect_test _ =
   print_string (pr_not_opt data_line_parser "a   dd    1   ,     2");
-  [%expect{| : end_of_input |}]
+  [%expect {| : end_of_input |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dD 1");
-  [%expect {| (Variable ("a", DD, "1")) |}]
+  [%expect {| (Variable ("a", DD, (Num "1"))) |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "A dd 1");
-  [%expect {| (Variable ("A", DD, "1")) |}]
+  [%expect {| (Variable ("A", DD, (Num "1"))) |}]
 
 let%expect_test _ =
   print_string @@ show_dir (pr_opt sec_parser "section .code");
@@ -443,7 +445,7 @@ let%expect_test _ =
   print_string @@ show_dir (pr_opt sec_parser "section .data a dd 1");
   [%expect {|
     Data [
-    		(Variable ("a", DD, "1"))
+    		(Variable ("a", DD, (Num "1")))
     ] |}]
 
 let%expect_test _ =
@@ -451,8 +453,8 @@ let%expect_test _ =
   [%expect
     {|
     Data [
-    		(Variable ("a", DD, "1"))
-    		(Variable ("b", DD, "2"))
+    		(Variable ("a", DD, (Num "1")))
+    		(Variable ("b", DD, (Num "2")))
     ] |}]
 
 let%expect_test _ =
@@ -462,7 +464,7 @@ let%expect_test _ =
     {|
     (Ast [
     	Data [
-    		(Variable ("a", DD, "1"))
+    		(Variable ("a", DD, (Num "1")))
     ];
     	Code [
     		(Command (RET));
@@ -477,7 +479,7 @@ let%expect_test _ =
     {|
     (Ast [
     	Data [
-    		(Variable ("a", DD, "1"))
+    		(Variable ("a", DD, (Num "1")))
     ];
     	Data [
     ];
