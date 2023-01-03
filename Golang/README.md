@@ -18,14 +18,5 @@ Author: Egor Porsev, furetur@gmail.com
   - Functions as values
   - Local functions
   - Recursion
-- ...
-
-**Features in progress (and TODOs)**:
-
-- `main` function signature validation
-- Runtime scopes (currently the scope is flat)
-- Array element assignment
-- Closures
+  - Closures
 - Goroutines and channels
-- ...
-
