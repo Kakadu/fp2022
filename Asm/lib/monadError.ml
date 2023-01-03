@@ -1,3 +1,7 @@
+(** Copyright 2021-2023, andreyizrailev and contributors *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 module type MonadError = sig
   type 'a t
 
