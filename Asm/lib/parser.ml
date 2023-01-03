@@ -218,7 +218,7 @@ let gen_xcommand_two_args_p = gen_xcommand_p xregreg_p xcmd_two_args_str_to_comm
 (* The following parsers are intended to parse a one-line command *)
 
 (* Parse label declaration (e.g. "l1:") *)
-let lcommand_p = label_str_p <* char ':' >>| (fun s -> LCommand s) <?> "lcommand_p"
+let lcommand_p = label_str_p <* char ':' >>| lcommand <?> "lcommand_p"
 
 let bcommand_p =
   choice
