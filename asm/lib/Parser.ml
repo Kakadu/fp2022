@@ -202,10 +202,9 @@ let data_line_parser =
     if (not (is_reg w)) & not (is_mnemonic w) then return x
     else fail "Var's name must not be equal the name of reg or datatype"
   in
-  let sep = trim @@ char ',' in
   var >>= fun v ->
   dt >>= fun dt ->
-  sep_by sep (word <|> nums) >>= fun l -> return @@ Variable (v, dt, l)
+  word <|> nums >>= fun l -> return @@ Variable (v, dt, l)
 
 (** parses one of two possible sections and then parse section then return Ast.ast *)
 let sec_parser =
@@ -381,23 +380,23 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dd 1");
-  [%expect {| (Variable ("a", DD, ["1"])) |}]
+  [%expect {| (Variable ("a", DD, "1")) |}]
 
 let%expect_test _ =
-  print_string @@ show_var (pr_opt data_line_parser "a dd 1, 2");
-  [%expect {| (Variable ("a", DD, ["1"; "2"])) |}]
+  print_string (pr_not_opt data_line_parser "a dd 1, 2");
+  [%expect{| : end_of_input |}]
 
 let%expect_test _ =
-  print_string @@ show_var (pr_opt data_line_parser "a   dd    1   ,     2");
-  [%expect {| (Variable ("a", DD, ["1"; "2"])) |}]
+  print_string (pr_not_opt data_line_parser "a   dd    1   ,     2");
+  [%expect{| : end_of_input |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dD 1");
-  [%expect {| (Variable ("a", DD, ["1"])) |}]
+  [%expect {| (Variable ("a", DD, "1")) |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "A dd 1");
-  [%expect {| (Variable ("A", DD, ["1"])) |}]
+  [%expect {| (Variable ("A", DD, "1")) |}]
 
 let%expect_test _ =
   print_string @@ show_dir (pr_opt sec_parser "section .code");
@@ -444,7 +443,7 @@ let%expect_test _ =
   print_string @@ show_dir (pr_opt sec_parser "section .data a dd 1");
   [%expect {|
     Data [
-    		(Variable ("a", DD, ["1"]))
+    		(Variable ("a", DD, "1"))
     ] |}]
 
 let%expect_test _ =
@@ -452,8 +451,8 @@ let%expect_test _ =
   [%expect
     {|
     Data [
-    		(Variable ("a", DD, ["1"]))
-    		(Variable ("b", DD, ["2"]))
+    		(Variable ("a", DD, "1"))
+    		(Variable ("b", DD, "2"))
     ] |}]
 
 let%expect_test _ =
@@ -463,7 +462,7 @@ let%expect_test _ =
     {|
     (Ast [
     	Data [
-    		(Variable ("a", DD, ["1"]))
+    		(Variable ("a", DD, "1"))
     ];
     	Code [
     		(Command (RET));
@@ -478,7 +477,7 @@ let%expect_test _ =
     {|
     (Ast [
     	Data [
-    		(Variable ("a", DD, ["1"]))
+    		(Variable ("a", DD, "1"))
     ];
     	Data [
     ];

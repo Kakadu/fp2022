@@ -65,7 +65,7 @@ type code_section = Command of mnemonic | Id of label
 type data_type = DB | DW | DD | DQ | DT
 [@@deriving show { with_path = false }]
 
-type var = Variable of string * data_type * string list
+type var = Variable of string * data_type * string
 [@@deriving show { with_path = false }]
 
 type dir = Code of code_section list | Data of var list
