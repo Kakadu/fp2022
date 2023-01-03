@@ -91,16 +91,21 @@ let filenames = sep_and_trim filename_delim filename
 (** Parse targets `<target> [<target[s]>...]:` *)
 let targets = both filename filenames <* char ':'
 
+(* combine output from parser on multiline lines *)
+let multiline p concat delim start =
+  fix (fun g ->
+    lift2
+      concat
+      p
+      ((char '\\' <* filename_delim *> char '\n') *> g <|> delim *> return start))
+;;
+
 (**
  Parse prerequisites (could be multilined)
  We could not insert comments in between.
 *)
 let prerequisites =
-  fix (fun p ->
-    lift2
-      List.append
-      (filename_delim *> many comment *> filenames)
-      ((char '\\' <* filename_delim *> char '\n') *> p <|> many comment *> return []))
+  multiline (filename_delim *> many comment *> filenames) ( @ ) (many comment) []
 ;;
 
 (**
@@ -114,7 +119,10 @@ let recipes =
     wrap ws_line eols <|> discard (many1 end_of_line)
   in
   let recipe_delim = many (empty_line <|> comment) in
-  let recipe_line = char '\t' *> take_while not_newline in
+  let recipe_line =
+    char '\t' *> take_while (all_pred [ not_newline; Fun.negate is_backslash ])
+  in
+  let recipe_line = multiline recipe_line ( ^ ) recipe_delim "" in
   sep_and_trim recipe_delim recipe_line
 ;;
 
@@ -310,6 +318,18 @@ let%test _ =
   parse_ok
     "a \tb c: a"
     { targets = "a", [ "b"; "c" ]; prerequisites = [ "a" ]; recipes = [] }
+;;
+
+let%test _ =
+  parse_ok
+    "a: a\n\t echo abc\\\n\tcde"
+    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ " echo abccde" ] }
+;;
+
+let%test _ =
+  parse_ok
+    "a: a\n\tabc  \\\n\tcde  \\\n\tefg"
+    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ "abc  cde  efg" ] }
 ;;
 
 let%test _ =

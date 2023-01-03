@@ -18,7 +18,6 @@ Author: Ivan Morozko
 
 TODO:
 - Add recipe definiton via `;` on the targets line
-- Support multiline recipes
 - Add variables
     - Recursively expanded variable (`=`)
     - Simply expanded variables (`:=`)
@@ -47,6 +46,7 @@ TODO:
 Done:
 - Explicit rules parsing
     - Support multiline prerequisite definitions
+    - Support multiline recipes
     - Ignore comment lines
 - Explicit rules interpreting
     - Dropping circular dependencies
