@@ -2,7 +2,7 @@
  (name bash_lib)
  (public_name Bash.Lib)
  (modules Ast Interpret Parser utils)
- (libraries base angstrom unix batteries)
+ (libraries base angstrom unix re batteries)
  (preprocess
   (pps ppx_expect ppx_fields_conv ppx_deriving.show ppx_variants_conv))
  (inline_tests))

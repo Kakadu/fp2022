@@ -1,0 +1,35 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Ilya Shchuckin")
+
+(maintainers "Ilya Shchuckin")
+
+(bug_reports "Send bug reports to theilia509@gmail.com")
+
+(homepage "https://github.com/Elluran/fp2022")
+
+(package
+ (name Prolog) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "An interpreter for Prolog")
+ (description "An interpreter for Prolog written in OCaml")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  ppx_variants_conv
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  core
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))

@@ -1,4 +1,4 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Chizhov Anton *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
@@ -132,6 +132,20 @@ let delim_spaces_around_sc1 p =
 (* skip delim spaces aroud optional single semicolon *)
 let spaces_delims_around_sc = delim_spaces <* option ' ' sc <* delim_spaces
 
+(* Tries to parse with the first parser, otherwise with the second.
+   The result is stored in the first and second array, respectively.
+   Then tries to parse separator and repeats first step as long as it can use
+   one of the parsers. *)
+let or_parse_many1 s p1 p2 =
+  fix (fun m ->
+    lift2
+      (fun (lhs, rhs) (l1, l2) -> List.append lhs l1, List.append rhs l2)
+      (p1 >>| (fun e -> [ e ], []) <|> (p2 >>| fun e -> [], [ e ]))
+      (s *> m <|> return ([], [])))
+;;
+
+let or_parse_many s p1 p2 = option ([], []) (or_parse_many1 s p1 p2)
+
 (* Binary operators *)
 
 let add = char '+' *> return plus
@@ -225,7 +239,25 @@ let text_p ~arg_ctx =
    | InnerSQS -> [ "\'" ]
    | InnerDQS -> [ "\""; "$" ]
    | InnerAS ->
-     [ ","; "!"; "`"; "$"; "\n"; ";"; " "; "\'"; "\""; "("; ")"; "|"; "&"; "}"; "{" ]
+     [ ","
+     ; "!"
+     ; "`"
+     ; "$"
+     ; "\n"
+     ; ";"
+     ; " "
+     ; "\'"
+     ; "\""
+     ; "("
+     ; ")"
+     ; "|"
+     ; "&"
+     ; "}"
+     ; "{"
+     ; ">"
+     ; "<"
+     ; "&"
+     ]
    | _ -> [])
   |> fun stop_chars ->
   let char_p = function
@@ -438,7 +470,20 @@ and arg ~arg_ctx () =
   let reserved_args =
     List.map
       (fun r -> [ AtomString [ Text r ] ])
-      [ "do"; "done"; "if"; "for"; "case"; "in"; "esac"; "then"; "else"; "elif"; "fi" ]
+      [ "do"
+      ; "done"
+      ; "if"
+      ; "for"
+      ; "case"
+      ; "while"
+      ; "until"
+      ; "in"
+      ; "esac"
+      ; "then"
+      ; "else"
+      ; "elif"
+      ; "fi"
+      ]
   in
   let process_many x =
     Batteries.List.n_cartesian_product
@@ -457,7 +502,7 @@ and arg ~arg_ctx () =
   | SingleArg arg when List.mem arg reserved_args -> fail "Received reserved word"
   | x -> return x
 
-and single_arg ~arg_ctx () =
+and single_arg ?(arg_ctx = Default) () =
   arg ~arg_ctx ()
   >>= function
   | SingleArg x -> return x
@@ -479,12 +524,14 @@ and env_var ~arg_ctx () =
 
 (* parses atom_operand *)
 and atom_operand ~arg_ctx () =
-  let create invert env_vars cmd = Fields_of_atom_operand.create ~invert ~env_vars ~cmd in
+  let create invert (rs1, env_vars) (rs2, cmd) =
+    Fields_of_atom_operand.create ~invert ~env_vars ~cmd ~redirs:(List.append rs1 rs2)
+  in
   lift3
     create
     (option ' ' (char '!' <* char ' ') >>| ( = ) '!')
-    (many (trim_r @@ env_var ~arg_ctx ()))
-    (many (trim @@ arg ~arg_ctx ()))
+    (or_parse_many spaces (return () >>= redir_p) (env_var ~arg_ctx () <* spaces))
+    (or_parse_many spaces (return () >>= redir_p) (trim (arg ~arg_ctx ())))
   >>= function
   | x when x.cmd = [] && x.env_vars = [] -> fail "Variables or command must be defined"
   | x -> return x
@@ -492,21 +539,25 @@ and atom_operand ~arg_ctx () =
 (* parses operand *)
 and operand ~arg_ctx () =
   let atom_operand () = lift atomoperand (atom_operand ~arg_ctx ()) in
+  let compound () = compound_p () >>| compoundoperand in
+  let atom () = return () >>= atom_operand <|> (return () >>= compound) in
   fix (fun operand ->
     lift3
       (fun l sep -> (if sep = "||" then oroperand else andoperand) l)
-      (trim_r @@ atom_operand ())
+      (trim_r @@ atom ())
       (trim @@ (string "||" <|> string "&&"))
-      operand
-    <|> atom_operand ())
+      (operand <|> (return () >>= atom)))
+  <|> (return () >>= atom_operand)
 
 (* parses pipe *)
 and pipe ~arg_ctx () =
-  lift operands @@ many1 (trim_l @@ operand ~arg_ctx () <* option ' ' (char '|'))
+  lift operands @@ many1 (trim_l @@ operand ~arg_ctx () <* option ' ' (trim (char '|')))
 
 and any_commands () = many1 @@ delim_spaces_around_sc1 (return () >>= any_command)
 and group_p () = braces (return () >>= any_commands)
-and arithm_compound () = parens2 expr_p >>| arithmcompound >>| fun x -> [ compound x ]
+
+and arithm_compound () =
+  parens2 expr_p >>| arithmcompound >>| fun x -> [ compound (x, []) ]
 
 and loop_p () =
   let loop_cmd = sep_by1 delim_spaces_sc (return () >>= any_command) in
@@ -536,15 +587,15 @@ and if_p () =
   let commands () = sep_by1 delim_spaces_sc (return () >>= any_command) in
   let lift = lift2 create in
   let if_elif_then key_word =
+    let any_commands () = many1 (delim_spaces_sc *> (return () >>= any_command)) in
     lift
-      (string key_word *> (return () >>= commands <|> arithm_compound ())
-      <* delim_spaces_sc1)
+      (string key_word *> (return () >>= any_commands) <* delim_spaces_sc1)
       (string "then" *> delim_spaces_sc *> (return () >>= commands) <* delim_spaces_sc)
   in
   (* the condition below is always true *)
   let else_p =
     lift
-      (return [ Compound (ArithmCompound (Number 1)) ])
+      (return [ Compound (ArithmCompound (Number 1), []) ])
       (string "else" *> delim_spaces_around_sc1 (return () >>= commands))
   in
   lift3
@@ -593,11 +644,26 @@ and compound_p () =
     ; loop_p () >>| loop
     ; if_p () >>| ifcompound
     ; case_in_p () >>| casein
-    ; lift arithmcompound (dollar *> parens (parens expr_p))
+    ; lift arithmcompound (option ' ' dollar *> parens2 expr_p)
     ]
 
+and redir_p () =
+  let open Utils in
+  [ ">>", StdOut, appendoutput
+  ; "<&", StdIn, dupinput
+  ; ">&", StdOut, dupoutput
+  ; "<", StdIn, redirinput
+  ; ">", StdOut, rediroutput
+  ]
+  |> List.map (fun (prefix, fd, create) ->
+       lift2 create (option (fd_to_int fd) u_int) (string prefix *> spaces >>= single_arg))
+  |> choice
+
 and any_command ?(arg_ctx = Default) () =
-  compound_p () >>| compound <|> (pipe ~arg_ctx () >>| simple)
+  let simple = pipe ~arg_ctx () >>| simple in
+  let redirs = many (trim (redir_p ())) in
+  let compound = both (compound_p ()) redirs >>| compound in
+  simple <|> compound
 
 and parse_function () =
   let create name body = func @@ Fields_of_func.create ~name ~body in
@@ -611,6 +677,7 @@ and parse_script () =
   *> many1
        (choice [ return () >>= parse_function; any_command () >>| command ]
        <* delim_spaces_sc)
+  <|> return []
 ;;
 
 let parse str =
@@ -1565,11 +1632,13 @@ let%test _ =
                { invert = false
                ; env_vars = []
                ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+               ; redirs = []
                }
            , AtomOperand
                { invert = false
                ; env_vars = []
                ; cmd = [ SingleArg [ AtomString [ Text "pritn" ] ] ]
+               ; redirs = []
                } )
        ])
 ;;
@@ -1582,23 +1651,27 @@ let%test _ =
            { invert = false
            ; env_vars = []
            ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+           ; redirs = []
            }
        ; OrOperand
            ( AtomOperand
                { invert = false
                ; env_vars = []
                ; cmd = [ SingleArg [ AtomString [ Text "pritn" ] ] ]
+               ; redirs = []
                }
            , AndOperand
                ( AtomOperand
                    { invert = false
                    ; env_vars = []
                    ; cmd = [ SingleArg [ AtomString [ Text "some" ] ] ]
+                   ; redirs = []
                    }
                , AtomOperand
                    { invert = false
                    ; env_vars = []
                    ; cmd = [ SingleArg [ AtomString [ Text "some" ] ] ]
+                   ; redirs = []
                    } ) )
        ])
 ;;
@@ -1615,6 +1688,7 @@ let%test _ =
                    [ SingleArg [ AtomString [ Text "echo" ] ]
                    ; SingleArg [ AtomString [ Text "hello" ] ]
                    ]
+               ; redirs = []
                }
            , AtomOperand
                { invert = false
@@ -1623,6 +1697,7 @@ let%test _ =
                    [ SingleArg [ AtomString [ Text "print" ] ]
                    ; SingleArg [ AtomString [ Text "something" ] ]
                    ]
+               ; redirs = []
                } )
        ])
 ;;
@@ -1638,11 +1713,13 @@ let%test _ =
                [ SingleArg [ AtomString [ Text "echo" ] ]
                ; SingleArg [ AtomString [ Text "hello" ] ]
                ]
+           ; redirs = []
            }
        ; AtomOperand
            { invert = false
            ; env_vars = []
            ; cmd = [ SingleArg [ AtomString [ Text "some" ] ] ]
+           ; redirs = []
            }
        ; AtomOperand
            { invert = false
@@ -1652,6 +1729,7 @@ let%test _ =
                ; SingleArg [ SingleQuotedString "sommand" ]
                ; SingleArg [ SingleQuotedString "sos eom " ]
                ]
+           ; redirs = []
            }
        ])
 ;;
@@ -1676,6 +1754,7 @@ let%test _ =
                    ; SingleQuotedString "something"
                    ]
                ]
+           ; redirs = []
            }
        ])
 ;;
@@ -1692,6 +1771,7 @@ let%test _ =
                    [ SingleArg [ AtomString [ Text "print" ] ]
                    ; SingleArg [ AtomString [ Text "something" ] ]
                    ]
+               ; redirs = []
                }
            , OrOperand
                ( AtomOperand
@@ -1701,6 +1781,7 @@ let%test _ =
                        [ SingleArg [ AtomString [ Text "echo" ] ]
                        ; SingleArg [ AtomString [ Text "hello" ] ]
                        ]
+                   ; redirs = []
                    }
                , AndOperand
                    ( AtomOperand
@@ -1710,28 +1791,33 @@ let%test _ =
                            [ SingleArg [ AtomString [ Text "em" ] ]
                            ; SingleArg [ AtomString [ Text "lo" ] ]
                            ]
+                       ; redirs = []
                        }
                    , OrOperand
                        ( AtomOperand
                            { invert = false
                            ; env_vars = []
                            ; cmd = [ SingleArg [ AtomString [ Text "lo" ] ] ]
+                           ; redirs = []
                            }
                        , AtomOperand
                            { invert = false
                            ; env_vars = []
                            ; cmd = [ SingleArg [ AtomString [ Text "ke" ] ] ]
+                           ; redirs = []
                            } ) ) ) )
        ; AndOperand
            ( AtomOperand
                { invert = false
                ; env_vars = []
                ; cmd = [ SingleArg [ AtomString [ Text "wow" ] ] ]
+               ; redirs = []
                }
            , AtomOperand
                { invert = false
                ; env_vars = []
                ; cmd = [ SingleArg [ AtomString [ Text "ke" ] ] ]
+               ; redirs = []
                } )
        ])
 ;;
@@ -1744,35 +1830,155 @@ let%test _ =
            { invert = true
            ; env_vars = []
            ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+           ; redirs = []
            }
        ])
 ;;
 
 let%test _ =
   ok_pipe
-    {|var=1 ! echo |}
+    {|! var=1 echo|}
     (Operands
        [ AtomOperand
-           { invert = false
+           { invert = true
            ; env_vars =
                [ AtomVariable
                    { key = { name = "var"; subscript = "0" }
                    ; value = [ AtomString [ Text "1" ] ]
                    }
                ]
-           ; cmd = []
-           }
-       ; AtomOperand
-           { invert = true
-           ; env_vars = []
            ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+           ; redirs = []
            }
        ])
 ;;
 
 let%test _ =
   ok_pipe
-    {|`var=1 ! echo`|}
+    {|! var=1 var2=2 echo |}
+    (Operands
+       [ AtomOperand
+           { invert = true
+           ; env_vars =
+               [ AtomVariable
+                   { key = { name = "var"; subscript = "0" }
+                   ; value = [ AtomString [ Text "1" ] ]
+                   }
+               ; AtomVariable
+                   { key = { name = "var2"; subscript = "0" }
+                   ; value = [ AtomString [ Text "2" ] ]
+                   }
+               ]
+           ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+           ; redirs = []
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|`! var=1 echo`|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg
+                   [ AtomString
+                       [ CommandSubstitution
+                           (Operands
+                              [ AtomOperand
+                                  { invert = true
+                                  ; env_vars =
+                                      [ AtomVariable
+                                          { key = { name = "var"; subscript = "0" }
+                                          ; value = [ AtomString [ Text "1" ] ]
+                                          }
+                                      ]
+                                  ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                                  ; redirs = []
+                                  }
+                              ])
+                       ]
+                   ]
+               ]
+           ; redirs = []
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|`! var=1 >some.txt echo`|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg
+                   [ AtomString
+                       [ CommandSubstitution
+                           (Operands
+                              [ AtomOperand
+                                  { invert = true
+                                  ; env_vars =
+                                      [ AtomVariable
+                                          { key = { name = "var"; subscript = "0" }
+                                          ; value = [ AtomString [ Text "1" ] ]
+                                          }
+                                      ]
+                                  ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                                  ; redirs =
+                                      [ RedirOutput (1, [ AtomString [ Text "some.txt" ] ])
+                                      ]
+                                  }
+                              ])
+                       ]
+                   ]
+               ]
+           ; redirs = []
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|`! var=1 >some.txt echo <from.txt`|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg
+                   [ AtomString
+                       [ CommandSubstitution
+                           (Operands
+                              [ AtomOperand
+                                  { invert = true
+                                  ; env_vars =
+                                      [ AtomVariable
+                                          { key = { name = "var"; subscript = "0" }
+                                          ; value = [ AtomString [ Text "1" ] ]
+                                          }
+                                      ]
+                                  ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                                  ; redirs =
+                                      [ RedirOutput (1, [ AtomString [ Text "some.txt" ] ])
+                                      ; RedirInput (0, [ AtomString [ Text "from.txt" ] ])
+                                      ]
+                                  }
+                              ])
+                       ]
+                   ]
+               ]
+           ; redirs = []
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|`>some.txt echo <from.txt hello`|}
     (Operands
        [ AtomOperand
            { invert = false
@@ -1784,22 +1990,110 @@ let%test _ =
                            (Operands
                               [ AtomOperand
                                   { invert = false
-                                  ; env_vars =
-                                      [ AtomVariable
-                                          { key = { name = "var"; subscript = "0" }
-                                          ; value = [ AtomString [ Text "1" ] ]
-                                          }
-                                      ]
-                                  ; cmd = []
-                                  }
-                              ; AtomOperand
-                                  { invert = true
                                   ; env_vars = []
-                                  ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                                  ; cmd =
+                                      [ SingleArg [ AtomString [ Text "echo" ] ]
+                                      ; SingleArg [ AtomString [ Text "hello" ] ]
+                                      ]
+                                  ; redirs =
+                                      [ RedirOutput (1, [ AtomString [ Text "some.txt" ] ])
+                                      ; RedirInput (0, [ AtomString [ Text "from.txt" ] ])
+                                      ]
                                   }
                               ])
                        ]
                    ]
+               ]
+           ; redirs = []
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|kek=10 some=5 printenv | wc|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars =
+               [ AtomVariable
+                   { key = { name = "kek"; subscript = "0" }
+                   ; value = [ AtomString [ Text "10" ] ]
+                   }
+               ; AtomVariable
+                   { key = { name = "some"; subscript = "0" }
+                   ; value = [ AtomString [ Text "5" ] ]
+                   }
+               ]
+           ; cmd = [ SingleArg [ AtomString [ Text "printenv" ] ] ]
+           ; redirs = []
+           }
+       ; AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd = [ SingleArg [ AtomString [ Text "wc" ] ] ]
+           ; redirs = []
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|>some.txt echo <from.txt hello | ok let\'s go <&from.txt|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg [ AtomString [ Text "echo" ] ]
+               ; SingleArg [ AtomString [ Text "hello" ] ]
+               ]
+           ; redirs =
+               [ RedirOutput (1, [ AtomString [ Text "some.txt" ] ])
+               ; RedirInput (0, [ AtomString [ Text "from.txt" ] ])
+               ]
+           }
+       ; AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg [ AtomString [ Text "ok" ] ]
+               ; SingleArg [ AtomString [ Text "let's" ] ]
+               ; SingleArg [ AtomString [ Text "go" ] ]
+               ]
+           ; redirs = [ DupInput (0, [ AtomString [ Text "from.txt" ] ]) ]
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|$((1+2))<&from.txt|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg [ AtomString [ ArithmExpansion (Plus (Number 1, Number 2)) ] ]
+               ]
+           ; redirs = [ DupInput (0, [ AtomString [ Text "from.txt" ] ]) ]
+           }
+       ])
+;;
+
+let%test _ =
+  ok_pipe
+    {|$((1+2))<&from.txt<what.txt|}
+    (Operands
+       [ AtomOperand
+           { invert = false
+           ; env_vars = []
+           ; cmd =
+               [ SingleArg [ AtomString [ ArithmExpansion (Plus (Number 1, Number 2)) ] ]
+               ]
+           ; redirs =
+               [ DupInput (0, [ AtomString [ Text "from.txt" ] ])
+               ; RedirInput (0, [ AtomString [ Text "what.txt" ] ])
                ]
            }
        ])
@@ -1824,11 +2118,13 @@ let%test _ =
                                       [ SingleArg [ AtomString [ Text "echo" ] ]
                                       ; SingleArg [ AtomString [ Text "hello" ] ]
                                       ]
+                                  ; redirs = []
                                   }
                               ])
                        ]
                    ]
                ]
+           ; redirs = []
            }
        ])
 ;;
@@ -1867,16 +2163,19 @@ let%test _ =
                                                                      [ Text "hello" ]
                                                                  ]
                                                              ]
+                                                         ; redirs = []
                                                          }
                                                      ])
                                               ]
                                           ]
                                       ]
+                                  ; redirs = []
                                   }
                               ])
                        ]
                    ]
                ]
+           ; redirs = []
            }
        ])
 ;;
@@ -1923,6 +2222,7 @@ done|}
                               }
                           ]
                       ; cmd = []
+                      ; redirs = []
                       }
                   ])
            ]
@@ -1938,8 +2238,9 @@ let%test _ =
     (UntilCompound
        { condition =
            [ Compound
-               (ArithmCompound
-                  (Greater (Variable { name = "i"; subscript = "0" }, Number 10)))
+               ( ArithmCompound
+                   (Greater (Variable { name = "i"; subscript = "0" }, Number 10))
+               , [] )
            ]
        ; cons_cmds =
            [ Simple
@@ -1960,6 +2261,7 @@ let%test _ =
                               }
                           ]
                       ; cmd = []
+                      ; redirs = []
                       }
                   ])
            ]
@@ -1975,7 +2277,8 @@ let%test _ =
     (WhileCompound
        { condition =
            [ Compound
-               (ArithmCompound (Less (Variable { name = "i"; subscript = "0" }, Number 3)))
+               ( ArithmCompound (Less (Variable { name = "i"; subscript = "0" }, Number 3))
+               , [] )
            ]
        ; cons_cmds =
            [ Simple
@@ -1990,6 +2293,7 @@ let%test _ =
                               }
                           ]
                       ; cmd = []
+                      ; redirs = []
                       }
                   ])
            ]
@@ -2022,6 +2326,7 @@ let%test _ =
                               }
                           ]
                       ; cmd = []
+                      ; redirs = []
                       }
                   ])
            ]
@@ -2053,6 +2358,7 @@ done|}
                           [ SingleArg [ AtomString [ Text "echo" ] ]
                           ; SingleArg [ DoubleQuotedString [ Text "Welcome times" ] ]
                           ]
+                      ; redirs = []
                       }
                   ])
            ]
@@ -2083,6 +2389,7 @@ let%test _ =
                           [ SingleArg [ AtomString [ Text "echo" ] ]
                           ; SingleArg [ DoubleQuotedString [ Text "number is" ] ]
                           ]
+                      ; redirs = []
                       }
                   ])
            ]
@@ -2096,7 +2403,7 @@ let%test _ =
      echo hello
     done|}
     (WhileCompound
-       { condition = [ Compound (ArithmCompound (Number 133)) ]
+       { condition = [ Compound (ArithmCompound (Number 133), []) ]
        ; cons_cmds =
            [ Simple
                (Operands
@@ -2107,6 +2414,7 @@ let%test _ =
                           [ SingleArg [ AtomString [ Text "echo" ] ]
                           ; SingleArg [ AtomString [ Text "hello" ] ]
                           ]
+                      ; redirs = []
                       }
                   ])
            ]
@@ -2128,6 +2436,7 @@ let%test _ =
                           { invert = false
                           ; env_vars = []
                           ; cmd = [ SingleArg [ AtomString [ Text "some" ] ] ]
+                          ; redirs = []
                           }
                       , AtomOperand
                           { invert = false
@@ -2136,6 +2445,7 @@ let%test _ =
                               [ SingleArg [ AtomString [ Text "echo" ] ]
                               ; SingleArg [ AtomString [ Text "1337" ] ]
                               ]
+                          ; redirs = []
                           } )
                   ])
            ]
@@ -2146,6 +2456,7 @@ let%test _ =
                       { invert = false
                       ; env_vars = []
                       ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                      ; redirs = []
                       }
                   ])
            ; Simple
@@ -2154,6 +2465,7 @@ let%test _ =
                       { invert = false
                       ; env_vars = []
                       ; cmd = [ SingleArg [ AtomString [ Text "hello2" ] ] ]
+                      ; redirs = []
                       }
                   ])
            ]
@@ -2181,6 +2493,7 @@ let%test _ =
                       [ SingleArg [ AtomString [ Text "echo" ] ]
                       ; SingleArg [ AtomString [ Text "hello" ] ]
                       ]
+                  ; redirs = []
                   }
               ])
        ; Simple
@@ -2192,6 +2505,7 @@ let%test _ =
                       [ SingleArg [ AtomString [ Text "echo" ] ]
                       ; SingleArg [ AtomString [ Text "hello2" ] ]
                       ]
+                  ; redirs = []
                   }
               ])
        ])
@@ -2210,6 +2524,7 @@ let%test _ =
                       [ SingleArg [ AtomString [ Text "echo" ] ]
                       ; SingleArg [ AtomString [ Text "hello" ] ]
                       ]
+                  ; redirs = []
                   }
               ])
        ])
@@ -2230,6 +2545,7 @@ let%test _ =
                       [ SingleArg [ AtomString [ Text "echo" ] ]
                       ; SingleArg [ AtomString [ Text "hello" ] ]
                       ]
+                  ; redirs = []
                   }
               ])
        ])
@@ -2244,7 +2560,7 @@ let%test _ =
         a=10
       fi|}
     (IfCompound
-       [ { condition = [ Compound (ArithmCompound (Greater (Number 1, Number 2))) ]
+       [ { condition = [ Compound (ArithmCompound (Greater (Number 1, Number 2)), []) ]
          ; cons_cmds =
              [ Simple
                  (Operands
@@ -2257,6 +2573,7 @@ let%test _ =
                                 }
                             ]
                         ; cmd = []
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2273,7 +2590,7 @@ let%test _ =
         b=$a
       fi|}
     (IfCompound
-       [ { condition = [ Compound (ArithmCompound (Greater (Number 1, Number 2))) ]
+       [ { condition = [ Compound (ArithmCompound (Greater (Number 1, Number 2)), []) ]
          ; cons_cmds =
              [ Simple
                  (Operands
@@ -2286,11 +2603,12 @@ let%test _ =
                                 }
                             ]
                         ; cmd = []
+                        ; redirs = []
                         }
                     ])
              ]
          }
-       ; { condition = [ Compound (ArithmCompound (Number 1)) ]
+       ; { condition = [ Compound (ArithmCompound (Number 1), []) ]
          ; cons_cmds =
              [ Simple
                  (Operands
@@ -2305,6 +2623,7 @@ let%test _ =
                                 }
                             ]
                         ; cmd = []
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2332,6 +2651,7 @@ let%test _ =
                         { invert = false
                         ; env_vars = []
                         ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2342,6 +2662,7 @@ let%test _ =
                         { invert = false
                         ; env_vars = []
                         ; cmd = [ SingleArg [ AtomString [ Text "echo" ] ] ]
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2353,6 +2674,7 @@ let%test _ =
                         { invert = false
                         ; env_vars = []
                         ; cmd = [ SingleArg [ AtomString [ Text "hz" ] ] ]
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2363,6 +2685,7 @@ let%test _ =
                         { invert = false
                         ; env_vars = []
                         ; cmd = [ SingleArg [ AtomString [ Text "echo228" ] ] ]
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2374,6 +2697,7 @@ let%test _ =
                         { invert = false
                         ; env_vars = []
                         ; cmd = [ SingleArg [ AtomString [ Text "hz" ] ] ]
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2384,11 +2708,12 @@ let%test _ =
                         { invert = false
                         ; env_vars = []
                         ; cmd = [ SingleArg [ AtomString [ Text "echo228" ] ] ]
+                        ; redirs = []
                         }
                     ])
              ]
          }
-       ; { condition = [ Compound (ArithmCompound (Number 1)) ]
+       ; { condition = [ Compound (ArithmCompound (Number 1), []) ]
          ; cons_cmds =
              [ Simple
                  (Operands
@@ -2399,6 +2724,7 @@ let%test _ =
                             [ SingleArg [ AtomString [ Text "echo" ] ]
                             ; SingleArg [ AtomString [ Text "what" ] ]
                             ]
+                        ; redirs = []
                         }
                     ])
              ]
@@ -2449,6 +2775,7 @@ let%test _ =
                             ; SingleArg [ AtomString [ Text "-n" ] ]
                             ; SingleArg [ DoubleQuotedString [ Text "four" ] ]
                             ]
+                        ; redirs = []
                         }
                     ]) )
            ; ( [ [ AtomString [ Text "*" ] ]; [ AtomString [ Text "ro" ] ] ]
@@ -2461,6 +2788,7 @@ let%test _ =
                             [ SingleArg [ AtomString [ Text "echo" ] ]
                             ; SingleArg [ AtomString [ Text "hello" ] ]
                             ]
+                        ; redirs = []
                         }
                     ]) )
            ]
@@ -2489,6 +2817,7 @@ let%test _ =
                             ; SingleArg [ AtomString [ Text "-n" ] ]
                             ; SingleArg [ DoubleQuotedString [ Text "four" ] ]
                             ]
+                        ; redirs = []
                         }
                     ]) )
            ; ( [ [ AtomString [ Text "ro" ] ] ]
@@ -2501,6 +2830,7 @@ let%test _ =
                             [ SingleArg [ AtomString [ Text "echo" ] ]
                             ; SingleArg [ AtomString [ Text "hello" ] ]
                             ]
+                        ; redirs = []
                         }
                     ]) )
            ]
@@ -2548,6 +2878,7 @@ let%test _ =
                                  }
                              ]
                          ; cmd = []
+                         ; redirs = []
                          }
                      ]))
            ]
@@ -2572,6 +2903,7 @@ let%test _ =
                              [ SingleArg [ AtomString [ Text "echo" ] ]
                              ; SingleArg [ AtomString [ Text "hello" ] ]
                              ]
+                         ; redirs = []
                          }
                      ]))
            ]
@@ -2607,6 +2939,7 @@ let%test _ =
                                  }
                              ]
                          ; cmd = []
+                         ; redirs = []
                          }
                      ]))
            ; Command
@@ -2629,6 +2962,7 @@ let%test _ =
                                  }
                              ]
                          ; cmd = []
+                         ; redirs = []
                          }
                      ]))
            ]
@@ -2656,6 +2990,7 @@ let%test _ =
                                  }
                              ]
                          ; cmd = []
+                         ; redirs = []
                          }
                      ]))
            ; Command
@@ -2677,6 +3012,7 @@ let%test _ =
                                  }
                              ]
                          ; cmd = []
+                         ; redirs = []
                          }
                      ]))
            ]
@@ -2707,6 +3043,7 @@ let%test _ =
                                  }
                              ]
                          ; cmd = []
+                         ; redirs = []
                          }
                      ]))
            ; Func
@@ -2724,6 +3061,7 @@ let%test _ =
                                          }
                                      ]
                                  ; cmd = []
+                                 ; redirs = []
                                  }
                              ]))
                    ]
@@ -2735,8 +3073,170 @@ let%test _ =
                          { invert = false
                          ; env_vars = []
                          ; cmd = [ SingleArg [ AtomString [ Text "what2" ] ] ]
+                         ; redirs = []
                          }
                      ]))
            ]
        })
+;;
+
+(* Script parser tests *)
+
+let ok_script = test_ok pp_script (parse_script ())
+let fail_script = test_fail pp_script (parse_script ())
+
+let%test _ =
+  ok_script
+    {|echo hello >some.txt | echo hello|}
+    [ Command
+        (Simple
+           (Operands
+              [ AtomOperand
+                  { invert = false
+                  ; env_vars = []
+                  ; cmd =
+                      [ SingleArg [ AtomString [ Text "echo" ] ]
+                      ; SingleArg [ AtomString [ Text "hello" ] ]
+                      ]
+                  ; redirs = [ RedirOutput (1, [ AtomString [ Text "some.txt" ] ]) ]
+                  }
+              ; AtomOperand
+                  { invert = false
+                  ; env_vars = []
+                  ; cmd =
+                      [ SingleArg [ AtomString [ Text "echo" ] ]
+                      ; SingleArg [ AtomString [ Text "hello" ] ]
+                      ]
+                  ; redirs = []
+                  }
+              ]))
+    ]
+;;
+
+let%test _ =
+  ok_script
+    {|ls >dirlist 2>&1|}
+    [ Command
+        (Simple
+           (Operands
+              [ AtomOperand
+                  { invert = false
+                  ; env_vars = []
+                  ; cmd = [ SingleArg [ AtomString [ Text "ls" ] ] ]
+                  ; redirs =
+                      [ RedirOutput (1, [ AtomString [ Text "dirlist" ] ])
+                      ; DupOutput (2, [ AtomString [ Text "1" ] ])
+                      ]
+                  }
+              ]))
+    ]
+;;
+
+let%test _ =
+  ok_script
+    {|echo hello && ((1+2)) |}
+    [ Command
+        (Simple
+           (Operands
+              [ AndOperand
+                  ( AtomOperand
+                      { invert = false
+                      ; env_vars = []
+                      ; cmd =
+                          [ SingleArg [ AtomString [ Text "echo" ] ]
+                          ; SingleArg [ AtomString [ Text "hello" ] ]
+                          ]
+                      ; redirs = []
+                      }
+                  , CompoundOperand (ArithmCompound (Plus (Number 1, Number 2))) )
+              ]))
+    ]
+;;
+
+let%test _ =
+  ok_script
+    {|((1+2)) && echo hello|}
+    [ Command
+        (Simple
+           (Operands
+              [ AndOperand
+                  ( CompoundOperand (ArithmCompound (Plus (Number 1, Number 2)))
+                  , AtomOperand
+                      { invert = false
+                      ; env_vars = []
+                      ; cmd =
+                          [ SingleArg [ AtomString [ Text "echo" ] ]
+                          ; SingleArg [ AtomString [ Text "hello" ] ]
+                          ]
+                      ; redirs = []
+                      } )
+              ]))
+    ]
+;;
+
+let%test _ =
+  ok_script
+    {|if (( 2 > 3 )) || (( 2 + 2 = 4 )) && (( 1 + 1 = 2 ))
+      then echo should be printed 3
+      else echo should not be printed
+      fi|}
+    [ Command
+        (Compound
+           ( IfCompound
+               [ { condition =
+                     [ Simple
+                         (Operands
+                            [ OrOperand
+                                ( CompoundOperand
+                                    (ArithmCompound (Greater (Number 2, Number 3)))
+                                , AndOperand
+                                    ( CompoundOperand
+                                        (ArithmCompound
+                                           (Equal (Plus (Number 2, Number 2), Number 4)))
+                                    , CompoundOperand
+                                        (ArithmCompound
+                                           (Equal (Plus (Number 1, Number 1), Number 2)))
+                                    ) )
+                            ])
+                     ]
+                 ; cons_cmds =
+                     [ Simple
+                         (Operands
+                            [ AtomOperand
+                                { invert = false
+                                ; env_vars = []
+                                ; cmd =
+                                    [ SingleArg [ AtomString [ Text "echo" ] ]
+                                    ; SingleArg [ AtomString [ Text "should" ] ]
+                                    ; SingleArg [ AtomString [ Text "be" ] ]
+                                    ; SingleArg [ AtomString [ Text "printed" ] ]
+                                    ; SingleArg [ AtomString [ Text "3" ] ]
+                                    ]
+                                ; redirs = []
+                                }
+                            ])
+                     ]
+                 }
+               ; { condition = [ Compound (ArithmCompound (Number 1), []) ]
+                 ; cons_cmds =
+                     [ Simple
+                         (Operands
+                            [ AtomOperand
+                                { invert = false
+                                ; env_vars = []
+                                ; cmd =
+                                    [ SingleArg [ AtomString [ Text "echo" ] ]
+                                    ; SingleArg [ AtomString [ Text "should" ] ]
+                                    ; SingleArg [ AtomString [ Text "not" ] ]
+                                    ; SingleArg [ AtomString [ Text "be" ] ]
+                                    ; SingleArg [ AtomString [ Text "printed" ] ]
+                                    ]
+                                ; redirs = []
+                                }
+                            ])
+                     ]
+                 }
+               ]
+           , [] ))
+    ]
 ;;

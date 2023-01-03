@@ -1,0 +1,33 @@
+(lang dune 2.8)
+
+(using menhir 2.1)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Artur Gagin")
+
+(maintainers "Artur Gagin")
+
+(bug_reports "https://github.com/lastdesire/fp2022/issues")
+
+(homepage "https://github.com/lastdesire/fp2022")
+
+(package
+ (name Menhir)
+ (synopsis "Implementation of Menhir mini-library.")
+ (description "You can read more about this project in file README.pdf")
+ (version 0.1)
+ (depends
+  sedlex
+  dune
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base))

@@ -1,0 +1,33 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Arthur Alekseev")
+
+(maintainers "Arthur Alekseev")
+
+(bug_reports "-")
+
+(homepage "-")
+
+(package
+ (name Lua)
+ (synopsis "An interpreter for lua")
+ (description
+  "An interpreter for lua that supports functions, tables, math, loops, ifs etc")
+ (version 0.1)
+ (depends
+  dune
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))

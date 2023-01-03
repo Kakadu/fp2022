@@ -1,4 +1,4 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Chizhov Anton *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
@@ -45,34 +45,6 @@ module Interpret (M : MonadFail) = struct
   (* it is used when executing functions *)
   type local_variables = variable StrMap.t [@@deriving show { with_path = false }]
 
-  (* std file descriptors
-    (for writing more readable code)
-  *)
-  type std_fd =
-    | StdIn
-    | StdOut
-    | StdErr
-
-  let type_to_std_fd = function
-    | StdIn -> 0
-    | StdOut -> 1
-    | StdErr -> 2
-  ;;
-
-  (* order is important *)
-  let std_fd_types = [ StdIn; StdOut; StdErr ]
-
-  (* function-resolver for default std descriptors *)
-  let num_to_std_fd = function
-    | 0 -> stdin
-    | 1 -> stdout
-    | 2 -> stderr
-    | _ -> failwith "Cannot resolve fd"
-  ;;
-
-  (* List of standart fds *)
-  let std_fds = List.map (fun x -> num_to_std_fd (type_to_std_fd x)) std_fd_types
-
   (* global environment *)
   type environment =
     { vars : variable StrMap.t
@@ -82,10 +54,10 @@ module Interpret (M : MonadFail) = struct
     }
   [@@deriving show { with_path = false }]
 
-  let default_global_env =
+  let default_env =
     { vars = StrMap.empty
     ; functions = StrMap.empty
-    ; retcode = 1
+    ; retcode = 0
     ; fds = IntMap.from_list std_fds
     }
   ;;
@@ -96,28 +68,46 @@ module Interpret (M : MonadFail) = struct
     }
   [@@deriving show { with_path = false }]
 
-  let default_session_env = { local = StrMap.empty; global = default_global_env }
+  let default_session_env = { local = StrMap.empty; global = default_env }
   let reset_local_env { global } = { local = StrMap.empty; global }
   let set_local_env env local = { env with local }
   let set_retcode env retcode = { env with global = { env.global with retcode } }
 
-  let set_std_fd env fd_type =
-    let set_fd env key value =
-      { env with global = { env.global with fds = IntMap.add key value env.global.fds } }
-    in
-    set_fd env (type_to_std_fd fd_type)
+  let set_fd env key value =
+    { env with global = { env.global with fds = IntMap.add key value env.global.fds } }
   ;;
 
-  let get_std_fd { global = { fds } } fd_type = IntMap.find (type_to_std_fd fd_type) fds
+  let set_fds env fds = { env with global = { env.global with fds } }
+  let set_std_fd env fd_type = set_fd env (fd_to_int fd_type)
+  let get_fd_opt { global = { fds } } fd_num = IntMap.find_opt fd_num fds
+
+  let get_std_fd, get_std_fd_opt =
+    let get_fd find { global = { fds } } fd_type = find (fd_to_int fd_type) fds in
+    get_fd IntMap.find, get_fd IntMap.find_opt
+  ;;
 
   (* duplicate standard fds *)
   let dup_fds { global = { fds } } =
     IntMap.iter
       (fun n fd ->
         match n with
-        | 0 | 1 | 2 -> dup2 fd (num_to_std_fd n)
+        | 0 -> dup2 fd Unix.stdin
+        | 1 -> dup2 fd Unix.stdout
+        | 2 -> dup2 fd Unix.stderr
         | _ -> ())
       fds
+  ;;
+
+  let try_write fd s =
+    let len = String.length s in
+    try write_substring fd s 0 len = len with
+    | Unix_error (Unix.EBADF, "write", "") -> false
+  ;;
+
+  let print ?(std_fd = StdErr) env data =
+    match get_std_fd_opt env std_fd with
+    | Some stderr when try_write stderr (data ^ "\n") -> ()
+    | _ -> ()
   ;;
 
   (* string value to variable with default subscript *)
@@ -176,21 +166,20 @@ module Interpret (M : MonadFail) = struct
     { as_num; as_str }
   ;;
 
-  let eval_param_expansion env = function
-    | PositionalParam i -> (get_var_value env (i_to_var i)).as_str
-    | VarNameExpansion name ->
-      val_or_empty
-        ~after:
-          (function
-           | IndexedArray v -> val_or_empty ~after:Fun.id (IntMap.find_opt 0 v)
-           (* for associative arrays, the default value for the subscript is undefined *)
-           | AssocArray _ -> "")
-        (get_var_by_name env name)
-    | VarExpansion var -> (get_var_value env var).as_str
-    | Length var -> string_of_int (String.length (get_var_value env var).as_str)
-    | Substring _ -> failwith "Not imlpemented yet"
-    | SubstrRemoval _ -> failwith "Not imlpemented yet"
-    | Substitute _ -> failwith "Not imlpemented yet"
+  (* a=5 -> a=5 *)
+  (* a=(1 2 3) -> a=(1 2 3) *)
+  (* a=(key=value key2=value2) -> a=(key=valye key2=value) *)
+  let variable_to_string = function
+    | IndexedArray array ->
+      IntMap.fold (fun _ value acc -> value :: acc) array []
+      |> (function
+      | s :: [] -> s
+      | s -> String.concat " " (List.rev s) |> Printf.sprintf "(%s)")
+    | AssocArray array ->
+      StrMap.fold (fun key value acc -> Printf.sprintf "%s=%s" key value :: acc) array []
+      |> List.rev
+      |> String.concat " "
+      |> Printf.sprintf "(%s)"
   ;;
 
   (* helper functions to evaluate list's elements *)
@@ -219,7 +208,91 @@ module Interpret (M : MonadFail) = struct
     eval_elems env el_eval list >>| fun (env, strs) -> env, String.concat "" strs
   ;;
 
-  let rec eval_arithm_expansion env arithm =
+  let rec eval_substring env { name; offset; length = len } =
+    return (get_var_value env name).as_str
+    >>= fun s ->
+    eval_arithm_expansion env offset
+    >>= fun (env, offset) ->
+    (match len with
+     | Some e -> eval_arithm_expansion env e >>| fun (env, n) -> env, Some n
+     | None -> return (env, None))
+    >>= fun (env, len) ->
+    let open String in
+    let offset =
+      match offset with
+      | value when value < 0 -> 0
+      | value when value < length s -> offset
+      | _ -> length s
+    in
+    let len =
+      match len with
+      | Some len when len >= 0 -> Base.min len (length s - offset)
+      | Some len -> length s + len - offset
+      | None -> length s - offset
+    in
+    if len >= 0
+    then return (env, sub s offset len)
+    else if length s = 0
+    then return (env, "")
+    else fail "substring expression < 0"
+
+  and eval_substr_removal env { name; pattern; from; min_or_max } =
+    let open Re in
+    (get_var_value env name).as_str
+    |> function
+    | "" -> ""
+    | s ->
+      let f g =
+        (match from with
+         | FromBegin -> Group.start g 0 = 0
+         | FromEnd -> Group.stop g 0 = String.length s)
+        |> function
+        | true -> ""
+        | false -> Group.get g 0
+      in
+      let size = if min_or_max = Min then shortest else longest in
+      let re = compile (size (Glob.glob pattern)) in
+      replace ~all:false re ~f s
+
+  and eval_substitute env { name; pattern; by; subst_type } =
+    let open Re in
+    (get_var_value env name).as_str
+    |> function
+    | "" -> by
+    | s ->
+      let f g =
+        (match subst_type with
+         | One | All -> true
+         | First -> Group.start g 0 = 0
+         | Last -> Group.stop g 0 = String.length s)
+        |> function
+        | true -> by
+        | false -> Group.get g 0
+      in
+      let re = compile (longest (Glob.glob pattern)) in
+      let all = subst_type = All || subst_type = Last in
+      Re.replace ~all re ~f s
+
+  and eval_param_expansion env = function
+    | PositionalParam i -> return (env, (get_var_value env (i_to_var i)).as_str)
+    | VarNameExpansion name ->
+      return
+        ( env
+        , val_or_empty
+            ~after:
+              (function
+               | IndexedArray v -> val_or_empty ~after:Fun.id (IntMap.find_opt 0 v)
+               (* for associative arrays, the default value for the subscript is undefined *)
+               | AssocArray _ -> "")
+            (get_var_by_name env name) )
+    | VarExpansion var -> return (env, (get_var_value env var).as_str)
+    | Length var ->
+      return (env, string_of_int (String.length (get_var_value env var).as_str))
+    | Substring s -> eval_substring env s
+    | SubstrRemoval s -> return (env, eval_substr_removal env s)
+    | Substitute s -> return (env, eval_substitute env s)
+
+  and eval_arithm_expansion env arithm =
     let rec inner env =
       let eval_both lhs rhs =
         inner env lhs
@@ -274,7 +347,7 @@ module Interpret (M : MonadFail) = struct
 
   and eval_atom_string env = function
     | Text str -> return (env, str)
-    | ParamExpansion param_exp -> return (env, eval_param_expansion env param_exp)
+    | ParamExpansion param_exp -> eval_param_expansion env param_exp
     | CommandSubstitution (Operands operands) -> eval_command_substitution env operands
     | ArithmExpansion arithm ->
       eval_arithm_expansion env arithm >>| fun (env, value) -> env, string_of_int value
@@ -377,13 +450,50 @@ module Interpret (M : MonadFail) = struct
     let env = reset_local_env env in
     f env >>| fun up_env -> set_local_env (if use_updated_env then up_env else env) local
 
+  and eval_script_file env path argv =
+    let read_from in_ch =
+      try Some (really_input_string in_ch (in_channel_length in_ch)) with
+      | Sys_error _ -> None
+      | End_of_file -> None
+    in
+    let set_pos_args env args =
+      args
+      |> List.mapi (fun i value -> i_to_var i, value)
+      |> List.fold_left (eval_atom_var_assign ~is_global:false) env
+    in
+    match read_from (open_in path) with
+    | None -> fail (Printf.sprintf "Cannot read script %s." path)
+    | Some script ->
+      (match Parser.parse script with
+       | Ok script ->
+         let env =
+           { default_session_env with global = { default_env with fds = env.global.fds } }
+         in
+         eval_impl ~env:(set_pos_args env argv) script
+         >>| fun { global = { retcode } } -> exit retcode
+       | Error _ -> fail "Cannot parse script")
+
   and eval_exec_cmd env argv =
+    let set_pos_args env args =
+      args
+      |> List.mapi (fun i value -> i_to_var i, value)
+      |> List.fold_left (eval_atom_var_assign ~is_global:false) env
+    in
+    let environment env =
+      StrMap.fold
+        (fun name var acc -> String.concat "=" [ name; variable_to_string var ] :: acc)
+        env.local
+        []
+      |> Array.of_list
+      |> Array.append (environment ())
+    in
     let eval_exec env argv =
       dup_fds env;
-      (* TODO: Add local variables to environment *)
-      try execvpe (List.hd argv) (Array.of_list argv) (environment ()) with
-      (* Todo: Fix this *)
-      | Unix_error _ -> failwith "unix error"
+      try execvpe (List.hd argv) (Array.of_list argv) (environment env) with
+      | Unix_error (ENOENT, _, _) -> exit 127
+      | Unix_error (ENOEXEC, _, _) | Unix_error (EUNKNOWNERR 26, _, _) ->
+        print env (Printf.sprintf "bash '%s'. Permission denied" (List.hd argv));
+        exit 126
     in
     let rec wait pid =
       try
@@ -401,7 +511,19 @@ module Interpret (M : MonadFail) = struct
         wait pid
     in
     match fork () with
-    | 0 -> eval_exec env argv
+    | 0 ->
+      let resolve_script_name name =
+        if Sys.file_exists name && not (Sys.is_directory name)
+        then (
+          match name with
+          | path when Filename.dirname path = "." -> Some (Filename.basename path)
+          | path when Filename.dirname path = "" -> Some path
+          | _ -> None)
+        else None
+      in
+      (match resolve_script_name (List.hd argv) with
+       | Some path -> eval_script_file (set_pos_args env argv) path argv
+       | None -> eval_exec env argv)
     | pid ->
       let work () =
         Sys.catch_break true;
@@ -409,10 +531,45 @@ module Interpret (M : MonadFail) = struct
       in
       Fun.protect ~finally:(fun () -> Sys.catch_break false) work
 
-  (* TODO: add invert return code *)
-  and eval_atom_operand env { invert = _; env_vars; cmd } =
-    let rec set_env_vars env = function
-      | hd :: tl -> set_env_var env hd >>= fun env -> set_env_vars env tl
+  and eval_redir env =
+    (* -rw-r----- *)
+    let permissions = 0o640 in
+    function
+    | RedirInput (fd, arg) ->
+      eval_single_arg env arg
+      >>= fun (_, file) ->
+      if Sys.file_exists file
+      then return (set_fd env fd (openfile file [ O_RDONLY ] permissions))
+      else fail (Printf.sprintf "%s: No such file or directory" file)
+    | RedirOutput (fd, arg) ->
+      eval_single_arg env arg
+      >>| fun (_, file) -> set_fd env fd (openfile file [ O_CREAT; O_WRONLY ] permissions)
+    | AppendOutput (fd, arg) ->
+      eval_single_arg env arg
+      >>| fun (_, file) ->
+      set_fd env fd (openfile file [ O_CREAT; O_WRONLY; O_APPEND ] permissions)
+    | DupInput (fd_num, arg) | DupOutput (fd_num, arg) ->
+      eval_single_arg env arg
+      >>= fun (_, s) ->
+      (match int_of_string_opt s with
+       | Some i ->
+         (match get_fd_opt env i with
+          | Some fd -> return (set_fd env fd_num fd)
+          | None -> fail (string_of_int i ^ ": Bad file descriptor"))
+       | None -> fail (s ^ ": Ambiguous redirect"))
+
+  and eval_redirs env =
+    List.fold_left (fun env redir -> env >>= fun env -> eval_redir env redir) (return env)
+
+  and eval_atom_operand ~is_first env { invert; env_vars; cmd; redirs } =
+    let process_invert retcode =
+      match invert with
+      | true -> if retcode = 0 then 1 else 0
+      | false -> retcode
+    in
+    let rec set_env_vars ?(is_global = true) env = function
+      | hd :: tl ->
+        set_env_var ~is_global env hd >>= fun env -> set_env_vars ~is_global env tl
       | [] -> return env
     in
     (* [to_pos_arg i value] -> ({name="i+1", subscript="0"}, value) *)
@@ -422,33 +579,51 @@ module Interpret (M : MonadFail) = struct
        They will be transformed to positional arguments $1=word1; $2=word2.
        These arguments will be set in local environment
        *)
-    let set_pos_args env tl =
-      tl
+    let set_pos_args env args =
+      args
       |> List.mapi to_pos_arg
       |> List.fold_left (eval_atom_var_assign ~is_global:false) env
     in
-    let eval_function env body args =
-      process_local_env env (fun env -> eval_impl ~env:(set_pos_args env args) body)
+    let eval_function env env_vars body args =
+      process_local_env env (fun env ->
+        set_env_vars ~is_global:false env env_vars
+        >>= fun env -> eval_impl ~env:(set_pos_args env args) body)
     in
+    let { fds } = env.global in
+    eval_redirs env redirs
+    >>= fun env ->
     eval_cmd env cmd
     >>= fun (env, argv) ->
-    match argv with
-    | hd :: tl ->
-      (match get_fn env hd with
-       (* TODO: add script processing  *)
-       | None -> eval_exec_cmd env argv
-       | Some body -> eval_function env body tl)
-    | [] -> set_env_vars env env_vars >>| fun env -> set_retcode env 0
+    (match argv with
+     | hd :: tl ->
+       (match get_fn env hd with
+        | None ->
+          process_local_env env (fun env ->
+            set_env_vars ~is_global:false env env_vars
+            >>= fun env -> eval_exec_cmd env argv)
+        | Some body -> eval_function env env_vars body tl)
+     | [] ->
+       let temp_env = env in
+       set_env_vars env env_vars
+       >>| fun env -> set_retcode (if is_first then env else temp_env) 0)
+    >>| fun env -> set_fds (set_retcode env (process_invert env.global.retcode)) fds
 
-  and eval_operand env =
+  (* ~is_first -- is first pipe
+     ~can_be_last_operand -- can be last operand *)
+  and eval_operand ~is_first ?(can_be_last_operand = false) env =
     let or_and lhs rhs cmp =
-      eval_operand env lhs
-      >>= fun env -> if cmp env.global.retcode then eval_operand env rhs else return env
+      eval_operand ~is_first env lhs
+      >>= fun env ->
+      if cmp env.global.retcode
+      then eval_operand ~is_first ~can_be_last_operand env rhs
+      else return env
     in
     function
-    | AtomOperand op -> eval_atom_operand env op
-    | OrOperand (lhs, rhs) -> or_and lhs rhs (( = ) 0)
-    | AndOperand (lhs, rhs) -> or_and lhs rhs (( != ) 0)
+    | AtomOperand op ->
+      eval_atom_operand ~is_first:(is_first && not can_be_last_operand) env op
+    | CompoundOperand c -> eval_compound env c
+    | OrOperand (lhs, rhs) -> or_and lhs rhs (( != ) 0)
+    | AndOperand (lhs, rhs) -> or_and lhs rhs (( = ) 0)
 
   and eval_pipes env operands =
     (*
@@ -483,7 +658,11 @@ module Interpret (M : MonadFail) = struct
     let result_out = get_std_fd env StdOut in
     let fd_in, fd_out = pipe () in
     (* update env, set pipe's ouput as stdout *)
-    eval_operand (set_std_fd env StdOut fd_out) (List.hd operands)
+    eval_operand
+      ~can_be_last_operand:true
+      ~is_first:true
+      (set_std_fd env StdOut fd_out)
+      (List.hd operands)
     >>= fun env ->
     close fd_out;
     (* we already processed first operand *)
@@ -496,7 +675,11 @@ module Interpret (M : MonadFail) = struct
     let rec eval_pipe env operand = function
       | hd :: tl ->
         let fd_in, fd_out = pipe () in
-        eval_operand (set_std_fd env StdOut fd_out) operand
+        eval_operand
+          ~can_be_last_operand:true
+          ~is_first:false
+          (set_std_fd env StdOut fd_out)
+          operand
         >>= fun _ ->
         close (get_std_fd env StdIn);
         close fd_out;
@@ -505,7 +688,7 @@ module Interpret (M : MonadFail) = struct
         (* we don't need to open pipe for last operand
          this is why we consider this case (evaluating last operand)
          separately.*)
-        eval_operand env operand
+        eval_operand ~is_first:false env operand
         >>| fun env ->
         close (get_std_fd env StdIn);
         env
@@ -513,8 +696,8 @@ module Interpret (M : MonadFail) = struct
     eval_pipe env (List.hd operands) (List.tl operands)
 
   and eval_operands env = function
-    | hd :: [] -> eval_operand env hd
-    | [] -> failwith "After parsing at least 1 operand must be defined"
+    | hd :: [] -> eval_operand ~is_first:true env hd
+    | [] -> fail "After parsing at least 1 operand must be defined"
     | operands -> eval_pipes env operands
 
   and eval_arithm_compound env arithm =
@@ -583,18 +766,36 @@ module Interpret (M : MonadFail) = struct
       if env.global.retcode = 0 then eval_any_cmds env cmds else eval_if_compound env tl
     | [] -> return env
 
+  and eval_case_in env { by; cases } =
+    let open Re in
+    eval_single_arg env by
+    >>= fun (env, by) ->
+    let rec eval_item env = function
+      | (s_args, any_cmd) :: tl ->
+        eval_elems env eval_single_arg s_args
+        >>= fun (env, patterns) ->
+        List.filter (fun p -> execp (compile (Glob.glob ~anchored:true p)) by) patterns
+        |> (function
+        | [] -> eval_item env tl
+        | _ -> eval_any_cmd env any_cmd)
+      | [] -> return (set_retcode env 0)
+    in
+    eval_item env cases
+
   and eval_compound env = function
     | Group _ ->
-      failwith
+      fail
         {|Not supported (the assignment states that support Grouping Commands is not needed)|}
     | Loop loop -> eval_loop env loop
     | IfCompound if_compound -> eval_if_compound env if_compound
-    | CaseIn _ -> failwith "Not implemented yet"
+    | CaseIn case_in -> eval_case_in env case_in
     | ArithmCompound arithm -> eval_arithm_compound env arithm
 
   and eval_any_cmd env = function
-    | Simple (Operands operands) -> eval_operands env operands
-    | Compound compound -> eval_compound env compound
+    | Simple (Operands operands) ->
+      eval_operands env operands >>| fun n_env -> set_fds n_env env.global.fds
+    | Compound (compound, redirs) ->
+      eval_redirs env redirs >>= fun env -> eval_compound env compound
 
   and eval_any_cmds env = function
     | hd :: tl -> eval_any_cmd env hd >>= fun env -> eval_any_cmds env tl
@@ -615,7 +816,10 @@ module Interpret (M : MonadFail) = struct
     eval_inner ~env script
   ;;
 
-  let eval script = eval_impl script >>| fun { global } -> global
+  let eval ?(env = default_env) script =
+    eval_impl ~env:{ default_session_env with global = env } script
+    >>| fun { global } -> global
+  ;;
 end
 
 (** --------------- Tests --------------- **)
@@ -631,7 +835,8 @@ let test_ok, test_fail =
     | Ok script -> eval_impl script
     | Error e ->
       Parser.pp_error Format.std_formatter e;
-      failwith "Error while parsing test input (assuming the test gets the correct input)"
+      Result.fail
+        "Error while parsing test input (assuming the test gets the correct input)"
   in
   let ok ?(local_vars = StrMap.empty) ?(global_vars = StrMap.empty) ?(retcode = 0) input =
     match test_inner input with
@@ -984,8 +1189,8 @@ let%test _ =
 
 let%test _ =
   test_ok
-    {|a=hello |echo why|cat|}
-    ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "hello") ])
+    {|f=`a=hello |echo why|cat`|}
+    ~global_vars:(StrMap.from_list [ "f", IndexedArray (IntMap.singleton 0 "why") ])
 ;;
 
 let%test _ =
@@ -1027,5 +1232,641 @@ let%test _ =
       (StrMap.from_list
          [ "a", AssocArray (StrMap.singleton "key" "value")
          ; "b", IndexedArray (IntMap.singleton 0 "5")
+         ])
+;;
+
+(* Test substring *)
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:3}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "som")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:-1}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "som")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:-4}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:2:-1}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "m")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:-3}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "some")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:4}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:5}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:1}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "s")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:-3}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "s")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:-4}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=some
+    b=${a:0:200+500}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "some")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|b=${a:0:7}|}
+    ~global_vars:(StrMap.from_list [ "b", IndexedArray (IntMap.singleton 0 "") ])
+;;
+
+(* Tests for substring removal *)
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a#*}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "abcde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a#a}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "bcde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a#abcd}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "e")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a#?}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "bcde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a#[0-9a-Z]}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "bcde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a#[a-Z0-9]b[c-c]}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "de")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a##*}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a##[a-c]?}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "cde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a%e}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "abcd")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a%de}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "abc")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a%%*}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a%%*}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "")
+         ])
+;;
+
+(* Test substitution *)
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a/ab}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "cde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a/ab}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "cde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a/bc/abcd}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "aabcdde")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=abcde
+    b=${a/bc/5798}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "abcde")
+         ; "b", IndexedArray (IntMap.singleton 0 "a5798de")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kawhatdu
+    b=${a/what/ka}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kawhatdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "kakadu")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kawhatdu
+    b=${a/*/ka}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kawhatdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "ka")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kawhatdu
+    b=${a/****/ka}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kawhatdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "ka")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=`echo`
+    b=${a/*/ka}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "")
+         ; "b", IndexedArray (IntMap.singleton 0 "ka")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=`echo`
+    b=${a/?/ka}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "")
+         ; "b", IndexedArray (IntMap.singleton 0 "ka")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=echo
+    b=${a//*/notecho}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "echo")
+         ; "b", IndexedArray (IntMap.singleton 0 "notecho")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=echo
+    b=${a//?/ab}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "echo")
+         ; "b", IndexedArray (IntMap.singleton 0 "abababab")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kkdu
+    b=${a//k/ka}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kkdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "kakadu")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kkdu
+    b=${a//k}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kkdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "du")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kkdu
+    b=${a/#k/so}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kkdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "sokdu")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=kkdu
+    b=${a/%kdu/so}|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "kkdu")
+         ; "b", IndexedArray (IntMap.singleton 0 "kso")
+         ])
+;;
+
+(* Test case in *)
+
+let%test _ =
+  test_ok
+    {|case ${LO} in
+      lo|fo) a="four";;
+      *|ro) b=hello;;
+      esac|}
+    ~global_vars:(StrMap.from_list [ "b", IndexedArray (IntMap.singleton 0 "hello") ])
+;;
+
+let%test _ =
+  test_ok
+    {|
+    LO=lo
+    case ${LO} in
+      lo|fo) a="four";;
+      *|ro) b=hello;;
+      esac|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "LO", IndexedArray (IntMap.singleton 0 "lo")
+         ; "a", IndexedArray (IntMap.singleton 0 "four")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|
+    LO=foo
+    case ${LO} in
+      lo|fo*) a="four";;
+      *|ro) b=hello;;
+      esac|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "LO", IndexedArray (IntMap.singleton 0 "foo")
+         ; "a", IndexedArray (IntMap.singleton 0 "four")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|
+    LO='it works!'
+    case ${LO} in
+      lo|'it works!') a="four";;
+      *|ro) b=hello;;
+      esac|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "LO", IndexedArray (IntMap.singleton 0 "it works!")
+         ; "a", IndexedArray (IntMap.singleton 0 "four")
+         ])
+;;
+
+(* Test error handler *)
+
+let%test _ = test_ok {|echo2 hello|} ~retcode:127
+let%test _ = test_ok {|! echo2 hello|} ~retcode:0
+
+(* Set local variables to function *)
+
+let%test _ =
+  test_ok
+    {|function what() {
+      b=`echo $some`
+    }
+    some=10
+    what|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "some", IndexedArray (IntMap.singleton 0 "10")
+         ; "b", IndexedArray (IntMap.singleton 0 "10")
+         ])
+;;
+
+(* set some=10 to function local variables, after function executing they will be removed *)
+let%test _ =
+  test_ok
+    {|function what() {
+      b=`echo $some`
+    }
+    some=10 what|}
+    ~global_vars:(StrMap.from_list [ "b", IndexedArray (IntMap.singleton 0 "10") ])
+;;
+
+(* let%test _ = test_ok {|kak=10 printenv | wc|} *)
+
+(* let%test _ =
+  test_ok {|how=10 some=(5 5) done=(key=5) done2=(key=5 key2=19) printenv | wc|}
+;; *)
+
+let%test _ =
+  test_ok
+    {|echo echo dshfjklhjlkh >scr.sh
+  chmod +x scr.sh
+  a=`./scr.sh`
+ |}
+    ~global_vars:
+      (StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "dshfjklhjlkh") ])
+;;
+
+let%test _ =
+  test_ok
+    {|a=`echo hello2 >hello2.txt|echo hello3 > some44.txt | echo some`
+  b=`cat hello2.txt`
+  c=`cat some44.txt`|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "a", IndexedArray (IntMap.singleton 0 "some")
+         ; "b", IndexedArray (IntMap.singleton 0 "hello2")
+         ; "c", IndexedArray (IntMap.singleton 0 "hello3")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|
+  function what() {
+    echo hellowht
+  }
+  >some.txt what
+  a=`cat some.txt`
+|}
+    ~global_vars:(StrMap.from_list [ "a", IndexedArray (IntMap.singleton 0 "hellowht") ])
+;;
+
+let%test _ =
+  test_ok
+    {|
+  function what() {
+    out1=s1.txt
+    echo hellowht >$out1
+    a=`cat $out1`
+    echo notecho2
+  }
+  out2=s2.txt
+  >$out2 what
+  d=`cat $out2`
+  f=`echo hello`
+|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "out1", IndexedArray (IntMap.singleton 0 "s1.txt")
+         ; "out2", IndexedArray (IntMap.singleton 0 "s2.txt")
+         ; "a", IndexedArray (IntMap.singleton 0 "hellowht")
+         ; "d", IndexedArray (IntMap.singleton 0 "notecho2")
+         ; "f", IndexedArray (IntMap.singleton 0 "hello")
+         ])
+;;
+
+(* it works! *)
+(* let%test _ = test_ok {|ls >dirlist 2>&1|} *)
+
+let%test _ =
+  test_ok
+    {|c=27 && echo hello | cat|}
+    ~global_vars:(StrMap.from_list [ "c", IndexedArray (IntMap.singleton 0 "27") ])
+;;
+
+let%test _ =
+  test_ok
+    {|c=27 && d=28 && echo hello | cat|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "c", IndexedArray (IntMap.singleton 0 "27")
+         ; "d", IndexedArray (IntMap.singleton 0 "28")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|c=27 && e=28 && echo hello | e=2 && d=10|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "c", IndexedArray (IntMap.singleton 0 "27")
+         ; "e", IndexedArray (IntMap.singleton 0 "28")
+         ])
+;;
+
+let%test _ =
+  test_ok
+    {|c=27 || e=28 && echo hello | e=2 && d=10|}
+    ~global_vars:(StrMap.from_list [ "c", IndexedArray (IntMap.singleton 0 "27") ])
+;;
+
+let%test _ =
+  test_ok
+    {|c=27 || e=28 && echo hello | e=2 && d=10|}
+    ~global_vars:(StrMap.from_list [ "c", IndexedArray (IntMap.singleton 0 "27") ])
+;;
+
+let%test _ =
+  test_ok
+    {|
+    for e in some what;
+    do
+      echo $e
+    done>somewhat.txt
+    a=`cat somewhat.txt`|}
+    ~global_vars:
+      (StrMap.from_list
+         [ "e", IndexedArray (IntMap.singleton 0 "what")
+         ; "a", IndexedArray (IntMap.singleton 0 "some\nwhat")
          ])
 ;;

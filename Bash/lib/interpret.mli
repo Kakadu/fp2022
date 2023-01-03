@@ -1,4 +1,4 @@
-(** Copyright 2021-2022, Kakadu and contributors *)
+(** Copyright 2021-2022, Chizhov Anton *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
@@ -43,5 +43,6 @@ module Interpret (M : MonadFail) : sig
     }
   [@@deriving show { with_path = false }]
 
-  val eval : script -> environment M.t
+  val default_env : environment
+  val eval : ?env:environment -> script -> environment M.t
 end

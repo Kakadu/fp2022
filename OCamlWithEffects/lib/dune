@@ -1,0 +1,19 @@
+(library
+ (name OCamlWithEffectsLib)
+ (public_name OCamlWithEffects.Lib)
+ (modules
+  Ast
+  Parser
+  Interpret
+  Printer
+  Inferencer
+  Typing
+  Util
+  Pprintast
+  InterpreterPP
+  Stdlib)
+ (modules_without_implementation ast)
+ (libraries base angstrom)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq))
+ (inline_tests))

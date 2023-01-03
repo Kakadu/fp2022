@@ -1,16 +1,13 @@
 #### Заняты "академиками"
 
-1. C++ и наследование (Шишкин) <details><summary>Подробнее</summary>
+1. C++ и наследование <details><summary>Подробнее</summary>
    * Объявления функций, приваивание, рекурсия, стандартные типы, что-то для печати на консоль.
    * Объекты, поля, методы
    * Анонимные функции можно не делать
    * Наследование: public, private, protected, virtual
       * diamond problem1. 
-1. F# (Быков на F#) <details><summary open>Подробнее</summary></details>
+1. F# (Быков на F#) 
 1. Python (Бакаев)
-   <details><summary>Подробнее</summary>
-   this one starts expanded because of the "open"
-   </details>
 1. Стрёмное подмножество c# <details><summary>Дмитрий Кузнецов</summary>
    * Async/await
    * Стрёмный LINQ синтаксис: `select ... from ... where ...`
@@ -83,7 +80,29 @@
 		| Odd -> printf "%d is odd\n" input
 		```
 	</details>
-1. OCaml + effects (2 человека)
+1. OCaml + effects (Илья Дудников, Данила Печенев)
+   * Достижения для промежуточного дедлайна (20 ноября):
+      * Написали AST (для miniML)
+      * Написали парсер
+      * Написали интерпретатор
+      * Написали unit-тесты на парсер
+      * Написали интеграционные тесты
+         * Факториал
+         * Фибоначчи
+         * Базовые функции для работы с List
+         * Базовые матричные операции
+         * и другие
+   * Достижения на 27 декабря:
+      * Написали парсер для OCaml + effects
+      * Написали вывод типов для OCaml + effects
+      * Написали интепретатор для OCaml + effects
+      * Написали unit-тесты 
+      * Написали интеграционные тесты на OCaml + effects
+      * Написали pretty-printer'ы:
+         * Для типов
+         * Для AST
+         * Для типов и ошибок в интепретаторе
+      * Сделали stdlib
    * супер-модное в наши дни движение в мире ФП
    * По сути, это исключения, но в момент обработки которых у нас есть функция, которой можно был передать значение, которое должно было бы быть вместо бросания исключение, и продолжить исполнение с места бросания исключения.
    * Туториал в контексте OCaml https://github.com/ocamllabs/ocaml-effects-tutorial
@@ -121,7 +140,15 @@
      - : string = "42"
      ``` 
      </details> 
-1.    
+1.
+1. OCaml + полиморфныая рекурсия
+
+   Полиморфно-рекурсивные функции отличаются от обычных тем, что вызывают себя рекурсивно с разными типовыми параметрами. Из-за этого задача вывода наиболее общего типа становится неразрешимой и приходится писать типовые аннотация. 
+Нужно сделать
+	* Поддержать синаксис miniML, где можно руками указывать типы аргументов (так называемый type ascription)
+        * Тайпчекер, который принимает полиморфно-рекурсивные функции и взаимно-рекурсивные функции.
+	* Базовые типы данных для написания тестов (списки и пары)
+	* Интерпретатор будет такой же, как и в других задачах про интепретатор языков а ля OCaml.
 1. OCaml + printf
 	* MiniML c базовыми типами, (целые числа, строки) и стандартными алгебраическими (option, list)
 	* Поддержка в компиляторе функции форматированой печати (по аналогии с камлёвым модулем Format). Разумеется, она должна быть type safe
@@ -430,6 +457,112 @@
 	* Поддержать объявление и вызов функций make (скорее всего [вот этот пример](https://github.com/Kakadu/ocanren-perf/blob/master/Makefile) достаточно полный)
 	* Так как язык Makefileов выглядит достаточно просто, то надо еще реализовать клон make, который можно использовать как билд-систему. Протестировать сборку C и OCaml проектов клоном make
 	</details>
+1. Solidity (Шишкин)
+	- Стандартные типы и операции над ними (uint, bool, string, mapping, array)
+	- Функции (рекурсия)
+	- Модификаторы доступа (public, private)
+	- Переменные и константы
+	- require (возвращает ошибку и откатывает все изменения)
+	- if, for
+	- Интерактор позволяющий:
+		1. Вызывать public функции
+		1. Обращаться к public членам
+		1.  Изменять public члены
+
+	<details><summary>Пример контракта</summary>
+
+	```Solidity
+	contract Example {
+
+		uint public value = 0;
+		function storeValue(uint x) public {	
+			value = x;
+			require(value < 100, "Huge value");
+		}
+
+		mapping(uint => uint) private cache;
+		function privateFib(uint arg) private returns (uint) {
+			if (arg == 0 || arg == 1) {
+				return 1;
+			}
+			uint current = cache[arg];
+			if (current == 0){
+				uint result = privateFib(arg - 1) + privateFib(arg - 2);
+				cache[arg] = result;
+				return result;
+			}
+			else {
+				return current;
+			}
+		}
+
+		function fib(uint arg) public returns (uint) {
+			return privateFib(arg);
+		}
+
+		uint public constant arrSize = 10;	
+		string[arrSize] private arr;
+
+		function storeInArr(uint start, uint stop, string calldata newValue) public {
+			for (uint i = start; i < stop; i++) {
+				require(i < arrSize, "Incorrect stop");
+				arr[i] = newValue;
+			}
+		}
+
+		function readFromArr(uint index) public returns (string memory) {
+			require(index < arrSize);
+			return arr[index];
+		}
+
+	}
+	```
+	</details>
+
+	<details><summary>Пример взаимодействия</summary>
+
+	```
+	~> myAwesomeSolidityInterpreter Example.sol
+	Example.sol successfully uploaded!
+	Available functions:
+		storeValue(uint)
+		loadValue() returns (uint)
+		fib(uint) returns (uint)
+		storeInArr(uint, uint, string)
+		readFromArr(uint) returns (string)
+	Available members:
+		value
+		arrSize
+
+	> storeValue(10)
+	()
+	> value
+	10
+	> storeValue(101)
+	Reverted with: Huge value
+	> value
+	10
+	> fib(2)
+	2
+	> privateFib(2)
+	Reverted with: access denied
+	> unknownFunction()
+	Reverted with: unknown function
+	> unknownMember = 3
+	Reverted with: unknown member
+	> storeInArr(0, 3, "Haskell > OCaml")
+	()
+	> readFromArr(0)
+	Haskell > OCaml
+	> storeInArr(0, 12, "Haskell < OCaml")
+	Reverted with: Incorrect stop
+	> readFromArr(0)
+	Haskell > OCaml
+	> <Ctrl+D>
+	Bye-bye!
+	~>
+	```
+	</details>
 
 ##### Гробы, которые никто не возьмет
 
@@ -521,12 +654,14 @@
 1. С# с многофайловостью, [мультиметодами](https://en.wikipedia.org/wiki/Multiple_dispatch#C#) и экстеншинами
 1. OCaml с первоклассными модулями
 1. 
+1. BibTex (описание, примеры и способы улучшения рассказал [Guy Steel](https://www.youtube.com/watch?v=OhZQabtOMdI))
 1. Aspectual Caml?
 1. Aspect C# ?
 1. C# c [Goto](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/goto) и ещё чем-нибудь
 1. Scala где есть и аргументы call-by-value, и аргументы call-by-name. И ещё что-нибудь
 1. Refinement types by [Ranjit Jhala](https://github.com/ranjitjhala/sprite-lang)
 1. Sed (а тестировать будем примером реализации [brainfuck на sed](https://github.com/stedolan/bf.sed))
+1. [Gcaml](http://www.yl.is.s.u-tokyo.ac.jp/~furuse/gcaml/index.html)
 1. Smalltalk
 2. Ideal Parallel Algol
 3. AWK
@@ -548,6 +683,8 @@
 21. Wolfram Mathematica (там синтаксис [очень стрёмный](https://22century.ru/popular-science-publications/wolfram-mathematica))
 22. Erlang [на основе карамели](https://discuss.ocaml.org/t/ann-erlang-0-0-14-a-toolkit-to-manipulate-erlang-sources/)
 23. Curry/Mercury?
+24. [Jsonet](https://jsonnet.org/ref/language.html) -- template language
+25. Copattern maching по моему докладу		
 
 
 ##### Прочие замечания

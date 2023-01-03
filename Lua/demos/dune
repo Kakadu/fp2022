@@ -1,0 +1,14 @@
+(executable
+ (name demoInterp)
+ (modules demoInterp)
+ (public_name demoInterp)
+ (libraries lua_lib stdio))
+
+(executable
+ (name demoParse)
+ (modules demoParse)
+ (public_name demoParse)
+ (libraries lua_lib stdio))
+
+(cram
+ (deps ./demoInterp.exe ./demoParse.exe))
