@@ -228,8 +228,7 @@ and check_assign l r =
 and check_send chan x =
   let* chant = check_expr chan in
   match chant with
-  | Some (ChanTyp eltyp) -> 
-    require_expr_typ eltyp x
+  | Some (ChanTyp eltyp) -> require_expr_typ eltyp x
   | Some _ -> add_err "Can only send (<-) into a channel"
   | None -> return ()
 
@@ -251,9 +250,23 @@ let check_global_var e =
   | _ -> add_err "At top level global variables can only have constant initializers"
 ;;
 
+let check_func_decl name s b =
+  let check_main_sign { args; ret } =
+    match args, ret with
+    | [], Void -> return ()
+    | _, _ -> add_err "main() function must accept zero arguments and return nothing"
+  in
+  let* _ =
+    match Ident.name name with
+    | "main" -> check_main_sign s
+    | _ -> return ()
+  in
+  check_func_lit s b *> return ()
+;;
+
 let check_toplevel = function
   | GlobalVarDecl (_, e) -> check_global_var e
-  | FuncDecl (_, s, b) -> check_func_lit s b *> return ()
+  | FuncDecl (n, s, b) -> check_func_decl n s b
 ;;
 
 let check_file file = fold_state file ~f:check_toplevel
