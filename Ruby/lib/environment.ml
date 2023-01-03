@@ -3,28 +3,19 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
+open Map
 open Base
 
-module State = struct
-  type storage = (string, value, String.comparator_witness) Map.t list
+type state = { local_vars : (string, value, String.comparator_witness) Map.t }
 
-  let create : storage = [ Map.empty (module String) ]
-  let add_state ~global ~local = local @ global
+let empty_state : state = { local_vars = Map.empty (module String) }
 
-  let rec get_variable (st : storage) (name : string) : value =
-    match st with
-    | [] -> failwith ("Undefined variable " ^ name)
-    | table :: tail ->
-      (match Map.find table name with
-       | Some v -> v
-       | None -> get_variable tail name)
-  ;;
+let get_variable (st : state) (name : string) : value =
+  match Map.find st.local_vars name with
+  | Some v -> v
+  | None -> failwith "Variable does not exist"
+;;
 
-  let set_variable (st : storage) (name : string) (v : value) : storage =
-    match st with
-    | [] -> failwith "Can't set in empty storage"
-    | local :: tail ->
-      let new_local = Map.set local ~key:name ~data:v in
-      new_local :: tail
-  ;;
-end
+let set_local_var (st : state) (name : string) (new_v : value) : state =
+  { local_vars = Map.set st.local_vars ~key:name ~data:new_v }
+;;

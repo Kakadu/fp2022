@@ -6,5 +6,6 @@ open Ast
 
 val match_binop : string -> value -> value -> value
 val conditional : value -> ast -> ast -> ast
-val indexing : value -> value -> value
+val index_get : value -> value -> value
+val index_set : value -> value -> value -> value
 val process_method_access : value -> string -> value

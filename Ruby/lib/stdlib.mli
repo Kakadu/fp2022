@@ -2,4 +2,4 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-val initial_state : Environment.State.storage
+val initial_state : Environment.state

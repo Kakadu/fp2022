@@ -31,9 +31,10 @@ let std_variables =
 ;;
 
 let initial_state =
-  let step (st : State.storage) (vt : string * value) =
+  let step (st : state) (vt : string * value) =
     match vt with
-    | name, v -> State.set_variable st name v
+    (** replace with set class var *)
+    | name, v -> set_local_var st name v
   in
-  List.fold_left step State.create std_variables
+  List.fold_left step empty_state std_variables
 ;;

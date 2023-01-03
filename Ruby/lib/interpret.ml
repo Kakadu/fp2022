@@ -7,7 +7,7 @@ open Builtinops
 open Environment
 open Utils
 
-let rec eval (st : State.storage) (code : ast) : value * State.storage =
+let rec eval (st : state) (code : ast) : value * state =
   let rec eval_function
     (f_name : string)
     (p_names : string list)
@@ -19,24 +19,23 @@ let rec eval (st : State.storage) (code : ast) : value * State.storage =
       if not (List.length p_names = List.length p_values)
       then failwith "Wrong number of arguments."
     in
-    let state = State.add_state ~global:st ~local:State.create in
     let state =
-      State.set_variable
-        state
+      set_local_var
+        empty_state
         f_name
         (Function (f_name, p_names, eval_function f_name p_names body))
     in
     let params = List.combine p_names p_values in
-    let step st (n, v) = State.set_variable st n v in
+    let step st (n, v) = set_local_var st n v in
     let initiated = List.fold_left step state params in
     fst (eval initiated body)
   in
   match code with
   | Literal (lit_t, v) -> value_of_literal lit_t v, st
-  | Var n -> State.get_variable st n, st
+  | Var n -> get_variable st n, st
   | VarAssign (i, v) ->
     let var_value, st = eval st v in
-    let new_state = State.set_variable st i var_value in
+    let new_state = set_local_var st i var_value in
     var_value, new_state
   | Binop (op, l, r) ->
     let op_f = match_binop op in
@@ -68,15 +67,13 @@ let rec eval (st : State.storage) (code : ast) : value * State.storage =
         ([], st)
         lst
     in
-    Array (List.rev values), new_st
+    Array (ref (List.rev values)), new_st
   | Indexing (box, ind) ->
     let b_v, n_st = eval st box in
     let i_v, n_st = eval n_st ind in
-    indexing b_v i_v, n_st
+    index_get b_v i_v, n_st
   | FuncDeclaration (name, params, body) ->
-    ( Nil
-    , State.set_variable st name (Function (name, params, eval_function name params body))
-    )
+    Nil, set_local_var st name (Function (name, params, eval_function name params body))
   | MethodAccess (obj, meth) ->
     (match eval st obj with
      | obj, new_st -> process_method_access obj meth, new_st)
@@ -94,6 +91,11 @@ let rec eval (st : State.storage) (code : ast) : value * State.storage =
     (match left with
      | Function (_, _, f) -> f params, n_st
      | _ -> typefail "")
+  | IndexAssign (box, index, new_value) ->
+    let box_v, n_st = eval st box in
+    let index_v, n_st = eval n_st index in
+    let new_v, n_st = eval n_st new_value in
+    index_set box_v index_v new_v, n_st
 ;;
 
 let run (code : ast) = fst (eval Stdlib.initial_state code)
@@ -171,6 +173,16 @@ let%test "indexing array" = test_eval "[1, 2, 3, 4][1]" "2"
 let%test "indexing variable" = test_eval "x = [1, 3, 4]; x[1]" "3"
 let%test "indexing string" = test_eval "\"Hello\"[2]" "l"
 let%test "indexing expression" = test_eval "([1, 2] + [3, 4])[2]" "3"
+let%test "index set" = test_eval "x = [1, 2, 3]; x[2] = 0; x" "[1, 2, 0]"
+
+let%test "index set between variables" =
+  test_eval "x = [1, 2, 3]; y = x; y[0] = 4; x" "[4, 2, 3]"
+;;
+
+let%test "index set in 2d array" =
+  test_eval "x = [[1], 2, 3]; (x[0])[0] = 4; x" "[[4], 2, 3]"
+;;
+
 let%test "one arg function" = test_eval "def f(x)\nx+1\nend; f(10)" "11"
 let%test "multiple args function" = test_eval "def f(x, y)\nx - y\nend; f(10, 3)" "7"
 

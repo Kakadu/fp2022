@@ -10,7 +10,7 @@ let rec string_of_value = function
   | String v -> v
   | Nil -> "nil"
   | Array l ->
-    String.concat "" [ "["; List.map string_of_value l |> String.concat ", "; "]" ]
+    String.concat "" [ "["; List.map string_of_value !l |> String.concat ", "; "]" ]
   | Function (name, params, _) ->
     String.concat "" [ name; "("; String.concat ", " params; ")" ]
 ;;

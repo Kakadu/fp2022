@@ -22,7 +22,7 @@ let plus x y =
   match x, y with
   | Integer x, Integer y -> Integer (x + y)
   | String x, String y -> String (String.cat x y)
-  | Array x, Array y -> Array (x @ y)
+  | Array x, Array y -> Array (ref (!x @ !y))
   | _ -> binop_typefail "+" x y
 ;;
 
@@ -36,7 +36,7 @@ let multiply x y =
   match x, y with
   | Integer x, Integer y -> Integer (x * y)
   | String x, Integer y -> String (List.init y (fun _ -> x) |> String.concat "")
-  | Array x, Integer y -> Array (List.init y (fun _ -> x) |> List.concat)
+  | Array x, Integer y -> Array (ref (List.init y (fun _ -> !x) |> List.concat))
   | _ -> binop_typefail "*" x y
 ;;
 
@@ -133,11 +133,21 @@ let conditional (c : value) (t : ast) (e : ast) =
   | _ -> typefail "Conditional expects bool as condition"
 ;;
 
-let indexing (v : value) (ind : value) =
+let index_get (v : value) (ind : value) =
   match v, ind with
-  | Array v, Integer i -> List.nth v i
+  | Array v, Integer i -> List.nth !v i
   | String v, Integer i -> String (String.get v i |> String.make 1)
   | _ -> binop_typefail "index" v ind
+;;
+
+let replace l pos a = List.mapi (fun i x -> if i = pos then a else x) l
+
+let index_set (v : value) (ind : value) (new_v : value) : value =
+  match v, ind, new_v with
+  | Array v, Integer i, x ->
+    v := replace !v i x;
+    Array v
+  | _ -> typefail "Wrong arguments in index set"
 ;;
 
 let process_method_access (obj : value) (m_name : string) : value =
@@ -161,7 +171,8 @@ let process_method_access (obj : value) (m_name : string) : value =
          |> String.to_seq
          |> List.of_seq
          |> List.map (String.make 1)
-         |> List.map (fun s -> String s))
+         |> List.map (fun s -> String s)
+         |> ref)
      | _ -> method_not_exist "Integer")
   | String s ->
     (match m_name with
@@ -185,8 +196,8 @@ let process_method_access (obj : value) (m_name : string) : value =
   | Array arr ->
     (match m_name with
      | "class" -> String "Array"
-     | "to_s" -> String ("[" ^ String.concat ", " (List.map string_of_value arr) ^ "]")
-     | "length" | "size" -> Integer (List.length arr)
+     | "to_s" -> String ("[" ^ String.concat ", " (List.map string_of_value !arr) ^ "]")
+     | "length" | "size" -> Integer (List.length !arr)
      | _ -> method_not_exist "Array")
   | Function (name, param_list, _) ->
     (match m_name with
