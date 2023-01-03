@@ -1,5 +1,6 @@
 open Asm.Interpreter
 open Asm.Parser
+open Int64
 
 (* answer in RAX *)
 let fib =
@@ -54,10 +55,10 @@ let () =
   let open Interpret (Result) in
   let env = prep r_list in
   match eval fib with
-  | Parsed ast -> (
+  | Parsed (Ast ast) -> (
       match interpret env [] ast with
-      | Ok (env, st) ->
-          List.iter print_endline (List.map (fun (_, v) -> show_var v) st);
+      | Ok (env, s, _) ->
+          List.iter print_endline (List.map to_string s);
           print_string @@ show_envr env
       | Error msg -> print_string msg)
   | Failed msg -> print_string msg
