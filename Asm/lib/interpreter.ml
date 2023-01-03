@@ -107,11 +107,13 @@ module Interpreter (M : MonadError) = struct
       (match value with
        | None -> error "Trying to pop when the stack is empty"
        | Some v ->
-         return
-           { state with
-             stack = ListStack.pop state.stack
-           ; reg_map = reg_val_set r v state.reg_map
-           })
+         (match ListStack.pop state.stack with
+          | None ->
+            error
+              "Critical error: ListStack.pop failed while the previous ListStack.peek \
+               succeded"
+          | Some s ->
+            return { state with stack = s; reg_map = reg_val_set r v state.reg_map }))
     | _ -> error "Pop command operand must be a register"
   ;;
 
@@ -199,7 +201,13 @@ module Interpreter (M : MonadError) = struct
   let eval_ret state =
     match ListStack.peek state.cstack with
     | None -> error "Cannot return from function, the call stack is empty"
-    | Some instrs -> return ({ state with cstack = ListStack.pop state.cstack }, instrs)
+    | Some instrs ->
+      (match ListStack.pop state.cstack with
+       | None ->
+         error
+           "Critical error: ListStack.pop failed while the previous ListStack.peek \
+            succeded"
+       | Some s -> return ({ state with cstack = s }, instrs))
   ;;
 
   let rec eval state = function

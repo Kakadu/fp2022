@@ -8,9 +8,7 @@ module ListStack : sig
   val empty : 'a t
   val push : 'a -> 'a t -> 'a t
   val peek : 'a t -> 'a option
-
-  (* You must be sure that the stack is not empty when calling the function *)
-  val pop : 'a t -> 'a t
+  val pop : 'a t -> 'a t option
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
 
