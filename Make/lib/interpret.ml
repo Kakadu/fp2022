@@ -25,7 +25,7 @@ But it is easier to works with lists *)
 type rule_as_lists =
   { targets : string list
   ; prerequisites : string list
-  ; recipes : string list
+  ; recipes : recipe list
   }
 
 (** Transform list of ast's rules to rule_as_lists list
@@ -93,7 +93,7 @@ let get_unique_filenames rules =
 module Node : sig
   type t =
     { target : string
-    ; recipes : string list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
+    ; recipes : recipe list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
     }
   [@@deriving compare, hash, sexp]
 
@@ -103,7 +103,7 @@ end = struct
   module T = struct
     type t =
       { target : string
-      ; recipes : string list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
+      ; recipes : recipe list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
       }
     [@@deriving compare, hash, sexp]
   end
@@ -203,8 +203,14 @@ let recompile (node : G.Node.t) is_default_goal =
     let rec traverse_recipes = function
       | [] -> ()
       | recipe :: tl ->
-        print_endline recipe;
-        let rc = Sys.command recipe in
+        let cmd =
+          match recipe with
+          | Echo x ->
+            print_endline x;
+            x
+          | Silent x -> x
+        in
+        let rc = Sys.command cmd in
         if rc <> 0 then raise (Recipe (target, rc)) else traverse_recipes tl
     in
     traverse_recipes recipes

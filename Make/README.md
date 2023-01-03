@@ -28,7 +28,6 @@ TODO:
 - Add special variables
     - `.DEFAULT_GOAL`
     - `.PHONY`
-- Add recipe echoing aka prefixing recipe with `@`
 - Add implicit rules
     - Add pattern rule definition (when the target contains `%`)
     - Add automatic variable `$*`
@@ -47,6 +46,7 @@ Done:
     - Support multiline prerequisite definitions
     - Support multiline recipes
     - Support recipe definiton via `;` on the targets line
+    - Support recipe echoing aka prefixing recipe with `@`
     - Ignore comment lines
 - Explicit rules interpreting
     - Dropping circular dependencies

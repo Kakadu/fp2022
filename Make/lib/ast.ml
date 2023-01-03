@@ -4,13 +4,18 @@
 
 open Base
 
+type recipe =
+  | Echo of string
+  | Silent of string
+[@@deriving show { with_path = false }, variants, sexp]
+
 (* <target> [<target[s]>...]: [<prerequisite[s]>...]
     [<recipe[s]>...]
  *)
 type rule =
   { targets : string * string list
   ; prerequisites : string list
-  ; recipes : string list
+  ; recipes : recipe list
   }
 [@@deriving show { with_path = false }]
 

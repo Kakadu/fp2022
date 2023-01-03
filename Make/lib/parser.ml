@@ -119,7 +119,10 @@ let prerequisites =
  After targets:prerequisites parsing, recipes
  are new lines __starting with the tab__.
  However, if the same line starts with semicolon, it's also
- considered as a recipe
+ considered as a recipe.
+
+ When a line starts with ‘@’, the echoing of that line is suppressed.
+ The ‘@’ is discarded before the line is passed to the shell.
 *)
 let recipes =
   let empty_line =
@@ -127,10 +130,24 @@ let recipes =
     wrap ws_line eols <|> discard (many1 end_of_line)
   in
   let recipe_delim = many (empty_line <|> comment) in
-  let recipe = take_while (all_pred [ not_newline; Fun.negate is_backslash ]) in
+  let recipe =
+    let str_p = take_while (all_pred [ not_newline; Fun.negate is_backslash ]) in
+    let echo_p = char '@' *> str_p >>| silent in
+    let silent_p = str_p >>| echo in
+    echo_p <|> silent_p
+  in
   let first_recipe_line = option [] (char ';' *> recipe >>| fun str -> [ str ]) in
   let one_recipe_line = char '\t' *> recipe in
-  let recipe_line = multiline one_recipe_line ( ^ ) recipe_delim "" in
+  let concat a b =
+    let string_of_recipe = function
+      | Echo x -> x
+      | Silent x -> x
+    in
+    match a with
+    | Echo x -> x ^ string_of_recipe b |> echo
+    | Silent x -> x ^ string_of_recipe b |> silent
+  in
+  let recipe_line = multiline one_recipe_line concat recipe_delim (echo "") in
   lift2 ( @ ) first_recipe_line (sep_and_trim recipe_delim recipe_line)
 ;;
 
@@ -298,20 +315,20 @@ let%test _ = parse_fail ":  \t fdsf \n"
 
 (* recipes parser test *)
 let parser = recipes
-let parse_ok = test_ok (Format.pp_print_list (fun _ -> print_string)) parser
-let parse_fail = test_fail (Format.pp_print_list (fun _ -> print_string)) parser
+let parse_ok = test_ok (Format.pp_print_list pp_recipe) parser
+let parse_fail = test_fail (Format.pp_print_list pp_recipe) parser
 
-let%test _ = parse_ok "\tabc" [ "abc" ]
-let%test _ = parse_ok "\tabc\n" [ "abc" ]
-let%test _ = parse_ok "\t\t\tabc\n" [ "\t\tabc" ]
-let%test _ = parse_ok "\tabc\n  #abcde\n" [ "abc" ]
-let%test _ = parse_ok "\tabc\n#x\n" [ "abc" ]
-let%test _ = parse_ok "\n   \n\t   abc\t\t#abc" [ "   abc\t\t#abc" ]
-let%test _ = parse_ok "\n   \n\t#comment\n" [ "#comment" ]
-let%test _ = parse_ok "#cmnt\n\n\tabc\n" [ "abc" ]
-let%test _ = parse_ok "\ta\n\tb\n\tc\n  " [ "a"; "b"; "c" ]
+let%test _ = parse_ok "\tabc" [ Echo "abc" ]
+let%test _ = parse_ok "\tabc\n" [ Echo "abc" ]
+let%test _ = parse_ok "\t\t\tabc\n" [ Echo "\t\tabc" ]
+let%test _ = parse_ok "\tabc\n  #abcde\n" [ Echo "abc" ]
+let%test _ = parse_ok "\tabc\n#x\n" [ Echo "abc" ]
+let%test _ = parse_ok "\n   \n\t   abc\t\t#abc" [ Echo "   abc\t\t#abc" ]
+let%test _ = parse_ok "\n   \n\t#comment\n" [ Echo "#comment" ]
+let%test _ = parse_ok "#cmnt\n\n\tabc\n" [ Echo "abc" ]
+let%test _ = parse_ok "\ta\n\tb\n\tc\n  " [ Echo "a"; Echo "b"; Echo "c" ]
 let%test _ = parse_ok "\n\n\n    \n" []
-let%test _ = parse_ok "\n   \t\n\ta" [ "a" ]
+let%test _ = parse_ok "\n   \t\n\ta" [ Echo "a" ]
 let%test _ = parse_fail "\n#abc\n  not a recipe cause not \t \n"
 
 (* combined targets;prerequisites;recipes parser test *)
@@ -331,13 +348,19 @@ let%test _ =
 let%test _ =
   parse_ok
     "a: a\n\t echo abc\\\n\tcde"
-    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ " echo abccde" ] }
+    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ Echo " echo abccde" ] }
+;;
+
+let%test _ =
+  parse_ok
+    "a: a\n\t@echo abc\\\n\tcde"
+    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ Silent "echo abccde" ] }
 ;;
 
 let%test _ =
   parse_ok
     "a: a\n\tabc  \\\n\tcde  \\\n\tefg"
-    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ "abc  cde  efg" ] }
+    { targets = "a", []; prerequisites = [ "a" ]; recipes = [ Echo "abc  cde  efg" ] }
 ;;
 
 let%test _ =
@@ -355,7 +378,7 @@ let%test _ =
 let%test _ =
   parse_ok
     "a:b\n#abc\n\n\trec1\n\trec2"
-    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ "rec1"; "rec2" ] }
+    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo "rec1"; Echo "rec2" ] }
 ;;
 
 let%test _ =
@@ -373,19 +396,31 @@ let%test _ =
 let%test _ =
   parse_ok
     "a:a \\\n b c\n\tabc\n  \t"
-    { targets = "a", []; prerequisites = [ "a"; "b"; "c" ]; recipes = [ "abc" ] }
+    { targets = "a", []; prerequisites = [ "a"; "b"; "c" ]; recipes = [ Echo "abc" ] }
 ;;
 
 let%test _ =
   parse_ok
     "a : b; abc"
-    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ " abc" ] }
+    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo " abc" ] }
+;;
+
+let%test _ =
+  parse_ok
+    "a : b\n\t abc\n\t@abc\\\n\tcde"
+    { targets = "a", []
+    ; prerequisites = [ "b" ]
+    ; recipes = [ Echo " abc"; Silent "abccde" ]
+    }
 ;;
 
 let%test _ =
   parse_ok
     "a : b; abc\n\t kek\\\n\tkek"
-    { targets = "a", []; prerequisites = [ "b" ]; recipes = [ " abc"; " kekkek" ] }
+    { targets = "a", []
+    ; prerequisites = [ "b" ]
+    ; recipes = [ Echo " abc"; Echo " kekkek" ]
+    }
 ;;
 
 (* combined targets;prerequisites;recipes parser test that returns list of exprs test *)
@@ -415,14 +450,14 @@ let%test _ =
   parse_ok
     {|a:b #	abc	  
 	c|}
-    [ Rule { targets = "a", []; prerequisites = [ "b" ]; recipes = [ "c" ] } ]
+    [ Rule { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo "c" ] } ]
 ;;
 
 let%test _ =
   parse_ok
     {|a   	:
 	c|}
-    [ Rule { targets = "a", []; prerequisites = []; recipes = [ "c" ] } ]
+    [ Rule { targets = "a", []; prerequisites = []; recipes = [ Echo "c" ] } ]
 ;;
 
 let%test _ =
@@ -430,7 +465,9 @@ let%test _ =
     {|a:b
 	
 		a|}
-    [ Rule { targets = "a", []; prerequisites = [ "b" ]; recipes = [ ""; "\ta" ] } ]
+    [ Rule
+        { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo ""; Echo "\ta" ] }
+    ]
 ;;
 
 let%test _ =
@@ -439,7 +476,8 @@ let%test _ =
 	
 		a
      	c:d|}
-    [ Rule { targets = "a", []; prerequisites = [ "b" ]; recipes = [ ""; "\ta" ] }
+    [ Rule
+        { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo ""; Echo "\ta" ] }
     ; Rule { targets = "c", []; prerequisites = [ "d" ]; recipes = [] }
     ]
 ;;
@@ -459,8 +497,8 @@ let%test _ =
 	echo b
      
 #kek|}
-    [ Rule { targets = "a", []; prerequisites = [ "b" ]; recipes = [ "\t\techo a" ] }
-    ; Rule { targets = "b", []; prerequisites = []; recipes = [ "echo b" ] }
+    [ Rule { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo "\t\techo a" ] }
+    ; Rule { targets = "b", []; prerequisites = []; recipes = [ Echo "echo b" ] }
     ]
 ;;
 
@@ -481,22 +519,22 @@ clean:
     [ Rule
         { targets = "some_file", []
         ; prerequisites = []
-        ; recipes = [ "echo \"hello\""; "touch some_file" ]
+        ; recipes = [ Echo "echo \"hello\""; Echo "touch some_file" ]
         }
     ; Rule
         { targets = "file1", [ "file3" ]
         ; prerequisites = [ "header" ]
-        ; recipes = [ "touch file1"; "touch file3" ]
+        ; recipes = [ Echo "touch file1"; Echo "touch file3" ]
         }
     ; Rule
         { targets = "file2", []
         ; prerequisites = [ "header" ]
-        ; recipes = [ "touch file2" ]
+        ; recipes = [ Echo "touch file2" ]
         }
     ; Rule
         { targets = "clean", []
         ; prerequisites = []
-        ; recipes = [ "rm -f file1 file2 file3 some_file" ]
+        ; recipes = [ Echo "rm -f file1 file2 file3 some_file" ]
         }
     ]
 ;;
@@ -530,7 +568,7 @@ let%test _ =
 let%test _ =
   parse_ok
     "a   \t:\n\tc"
-    ({ targets = "a", []; prerequisites = []; recipes = [ "c" ] }, [])
+    ({ targets = "a", []; prerequisites = []; recipes = [ Echo "c" ] }, [])
 ;;
 
 let%test _ =
@@ -538,7 +576,7 @@ let%test _ =
     {|a:b
 	
 		a|}
-    ({ targets = "a", []; prerequisites = [ "b" ]; recipes = [ ""; "\ta" ] }, [])
+    ({ targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo ""; Echo "\ta" ] }, [])
 ;;
 
 let%test _ =
@@ -547,7 +585,7 @@ let%test _ =
 	
 		a
      	c:d|}
-    ( { targets = "a", []; prerequisites = [ "b" ]; recipes = [ ""; "\ta" ] }
+    ( { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo ""; Echo "\ta" ] }
     , [ Rule { targets = "c", []; prerequisites = [ "d" ]; recipes = [] } ] )
 ;;
 
@@ -566,8 +604,8 @@ let%test _ =
 	echo b
      
 #kek|}
-    ( { targets = "a", []; prerequisites = [ "b" ]; recipes = [ "\t\techo a" ] }
-    , [ Rule { targets = "b", []; prerequisites = []; recipes = [ "echo b" ] } ] )
+    ( { targets = "a", []; prerequisites = [ "b" ]; recipes = [ Echo "\t\techo a" ] }
+    , [ Rule { targets = "b", []; prerequisites = []; recipes = [ Echo "echo b" ] } ] )
 ;;
 
 let%test _ =
@@ -589,22 +627,22 @@ clean:
 	rm -f file1 file2 file3 some_file|}
     ( { targets = "some_file", []
       ; prerequisites = []
-      ; recipes = [ "echo \"hello\""; "touch some_file"; "#shell comment" ]
+      ; recipes = [ Echo "echo \"hello\""; Echo "touch some_file"; Echo "#shell comment" ]
       }
     , [ Rule
           { targets = "file1", [ "file3" ]
           ; prerequisites = [ "header"; "header2" ]
-          ; recipes = [ "touch file1"; "touch file3" ]
+          ; recipes = [ Echo "touch file1"; Echo "touch file3" ]
           }
       ; Rule
           { targets = "file2", []
           ; prerequisites = [ "header" ]
-          ; recipes = [ "touch file2" ]
+          ; recipes = [ Echo "touch file2" ]
           }
       ; Rule
           { targets = "clean", []
           ; prerequisites = []
-          ; recipes = [ "rm -f file1 file2 file3 some_file" ]
+          ; recipes = [ Echo "rm -f file1 file2 file3 some_file" ]
           }
       ] )
 ;;

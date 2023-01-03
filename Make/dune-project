@@ -28,6 +28,7 @@
   ppx_deriving
   ppx_compare
   ppx_sexp_conv
+  ppx_variants_conv
   ppx_hash
   graphlib
   core
