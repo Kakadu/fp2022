@@ -339,16 +339,14 @@ and eval_send chan x =
 let eval_file file =
   (* Define globals *)
   let vars =
-    List.filter_map file ~f:(fun x ->
-      match x with
+    List.filter_map file ~f:(function
       | GlobalVarDecl v -> Some v
       | _ -> None)
   in
   let* _ = fold_state vars ~f:eval_vardecl in
   (* Define functions *)
   let funcs =
-    List.filter_map file ~f:(fun x ->
-      match x with
+    List.filter_map file ~f:(function
       | FuncDecl f -> Some f
       | _ -> None)
   in

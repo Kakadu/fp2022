@@ -370,7 +370,7 @@ let eds =
       let op, s = first in
       let chainer = List.fold_left fold_binops (binop op s) rest in
       chainl1 atom chainer
-    | _ -> assert false
+    | _ -> atom
   in
   let binops d confs = List.fold_left binop_chainl (unary_expr d) confs in
   (* From higher precedence to lower *)
