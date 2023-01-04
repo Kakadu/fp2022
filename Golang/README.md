@@ -18,5 +18,4 @@ Author: Egor Porsev, furetur@gmail.com
   - Functions as values
   - Local functions
   - Recursion
-  - Closures
 - Goroutines and channels
