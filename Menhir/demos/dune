@@ -1,0 +1,21 @@
+(executable
+ (name demoInterpret)
+ (modules demoInterpret)
+ (public_name demoInterpret)
+ (libraries menhir_lib))
+
+(executable
+ (name demoParse)
+ (modules demoParse)
+ (public_name demoParse)
+ (libraries menhir_lib))
+
+(cram
+ (deps
+  ./demoParse.exe
+  ./demoInterpret.exe
+  ./demo_inputs/demo_input.mly
+  ./demo_inputs/demo_input1.mly
+  ./demo_inputs/demo_input2.mly
+  ./demo_inputs/demo_input3.mly
+  ./demo_inputs/demo_input4.mly))

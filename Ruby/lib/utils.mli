@@ -4,4 +4,3 @@
 
 val string_of_value : Ast.value -> string
 val value_of_literal : Ast.ruby_literal -> string -> Ast.value
-val typefail : string -> 'a

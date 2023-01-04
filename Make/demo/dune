@@ -1,0 +1,14 @@
+(executable
+ (name demoParse)
+ (modules demoParse)
+ (public_name demoParse)
+ (libraries make_lib stdio))
+
+(executable
+ (name demoInterpret)
+ (modules demoInterpret)
+ (public_name demoInterpret)
+ (libraries make_lib stdio core))
+
+(cram
+ (deps ./demoParse.exe ./demoInterpret.exe))

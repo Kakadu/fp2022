@@ -1,0 +1,11 @@
+(library
+ (name menhir_lib)
+ (public_name Menhir.Lib)
+ (modules Ast Interpret Parser Lexer)
+ (libraries base re str unix stdio menhirLib sedlex)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show sedlex.ppx))
+ (inline_tests))
+
+(menhir
+ (modules parser))

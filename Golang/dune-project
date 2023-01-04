@@ -1,0 +1,32 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Porsev Egor")
+
+(maintainers "Porsev Egor")
+
+(bug_reports "none")
+
+(homepage "none")
+
+(package
+ (name Golang)
+ (synopsis "Golang interpreter")
+ (description "A Golang interpreter")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ))
