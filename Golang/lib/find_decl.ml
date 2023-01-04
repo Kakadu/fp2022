@@ -82,6 +82,5 @@ let find f id =
   let { found; _ }, _ = run_pass (findin_file f) ~init:{ target = id; found = [] } in
   match found with
   | [] -> None
-  | [ d ] -> Some d
-  | _ -> failwith ("Many declarations of the same identifier found: " ^ show_ident id)
+  | d :: _ -> Some d
 ;;
