@@ -167,7 +167,6 @@ let command =
   let w = String.uppercase_ascii x in
   match w with
   | "RET" -> return RET
-  | "SYSCALL" -> return SYSCALL
   | "PUSH" -> reg >>= fun (Dyn x) -> return @@ PUSH x
   | "POP" -> reg >>= fun (Dyn x) -> return @@ POP x
   | "INC" -> reg >>= fun (Dyn x) -> return @@ INC x

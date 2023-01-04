@@ -42,7 +42,6 @@ type double_arg =
 
 type mnemonic =
   | RET
-  | SYSCALL
   | PUSH : _ reg -> mnemonic
   | POP : _ reg -> mnemonic
   | INC : _ reg -> mnemonic
@@ -128,7 +127,6 @@ let show_double_arg = function
 
 let show_mnemonic : mnemonic -> string = function
   | RET -> "(RET)"
-  | SYSCALL -> "(SYSCALL)"
   | PUSH x -> Printf.sprintf {|(PUSH %s)|} (show_reg x)
   | POP x -> Printf.sprintf {|(POP %s)|} (show_reg x)
   | INC x -> Printf.sprintf {|(INC %s)|} (show_reg x)

@@ -293,7 +293,6 @@ module Interpret (M : MONADERROR) = struct
     | Command x :: _ -> (
         match x with
         | RET -> return (env, s, [])
-        | SYSCALL -> return (env, s, tl)
         | PUSH x -> find_r64 env x >>= fun v -> return (env, v :: s, tl)
         | POP x ->
             change_reg64 env (List.hd s) x >>= fun env ->
