@@ -86,7 +86,7 @@ module Interpret (M : MONADERROR) = struct
     | Reg16 x -> return (Printf.sprintf "R%s" x)
     | Reg32 x -> return (Printf.sprintf "R%c%c" x.[1] x.[2])
     | Reg64 x -> return x
-    | _ -> error "Isnt reg64 or less"
+    | Reg128 x -> return x
 
   let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false
 
@@ -107,7 +107,7 @@ module Interpret (M : MONADERROR) = struct
     | _ -> error "Isnt reg64 or less"
 
   let find_r128 : var MapVar.t -> asmreg128 reg -> Int64.t list M.t =
-   fun env (Reg128 reg) ->
+   fun env reg ->
     let f num =
       let rec helper n ac =
         match ac with
@@ -116,7 +116,8 @@ module Interpret (M : MONADERROR) = struct
       in
       helper num 0
     in
-    return (MapVar.find reg env) >>= function
+    full_name reg >>= fun name ->
+    return (MapVar.find name env) >>= function
     | Reg128 (x, y) -> return @@ f x @ f y
     | _ -> error "Isnt reg128"
 
@@ -153,24 +154,30 @@ module Interpret (M : MONADERROR) = struct
 
   let change_reg64 :
       type a. var MapVar.t -> Int64.t -> a reg -> var MapVar.t M.t =
-   fun env v ->
-    let insert ov v l r =
-      let amask v l r = lognot (mask v l r) in
-      let inc = add 1L in
-      inc @@ add (amask ov l r) (shift_left (mask v (l - r) 0) r)
+    let mask x y l r =
+      let y =
+        logand y (of_string @@ Printf.sprintf "0b0%s" (String.make (l - r) '1'))
+      in
+      let y = shift_left y r in
+      let z =
+        logand (shift_right x r)
+          (of_string @@ Printf.sprintf "0b0%s" (String.make (l - r) '1'))
+      in
+      let x = sub x (shift_left z r) in
+      add x y
     in
     let f env reg v l r =
       full_name reg >>= fun name ->
       find_r64 env reg >>= fun ov ->
-      return @@ insert ov v l r >>= fun v ->
+      return @@ mask ov v l r >>= fun v ->
       return @@ MapVar.add name (Reg64 v) env
     in
-    function
-    | Reg8 x -> if rreg x then f env (Reg8 x) v 8 0 else f env (Reg8 x) v 16 8
-    | Reg16 x -> f env (Reg16 x) v 16 0
-    | Reg32 x -> f env (Reg32 x) v 32 0
-    | Reg64 x -> f env (Reg64 x) v 64 0
-    | _ -> error "Isnt reg64 or less"
+    fun env v -> function
+      | Reg8 x -> if rreg x then f env (Reg8 x) v 8 0 else f env (Reg8 x) v 16 8
+      | Reg16 x -> f env (Reg16 x) v 16 0
+      | Reg32 x -> f env (Reg32 x) v 32 0
+      | Reg64 x -> f env (Reg64 x) v 64 0
+      | _ -> error "Isnt reg64 or less"
 
   let change_reg128 :
       var MapVar.t -> Int64.t list -> asmreg128 reg -> var MapVar.t M.t =
@@ -217,9 +224,16 @@ module Interpret (M : MONADERROR) = struct
       | Id label :: tl when label = l -> return tl
       | _ :: tl -> assoc l tl
     in
-    let f x af =
+    let f :
+        type a.
+        a reg ->
+        (Int64.t -> Int64.t) ->
+        (var MapVar.t * Int64.t list * code_section list) M.t =
+     fun x af ->
       match x with
-      | Ast.Reg128 x -> error ""
+      | Ast.Reg128 _ ->
+          find_r128 env x >>= fun l ->
+          change_reg128 env (List.map af l) x >>= fun env -> return (env, s, tl)
       | _ ->
           find_r64 env x >>= fun v ->
           let nv = af v in
@@ -253,10 +267,10 @@ module Interpret (M : MONADERROR) = struct
         | POP x ->
             change_reg64 env (List.hd s) x >>= fun env ->
             return (env, List.tl s, tl)
-        | INC x -> f x (fun x -> add (mul x 2L) 1L)
-        | DEC x -> f x (fun x -> sub (mul x 2L) 1L)
-        | NOT x -> f x (fun x -> lognot (mul x 2L))
-        | NEG x -> f x (fun x -> neg (mul x 2L))
+        | INC x -> f x (add 1L)
+        | DEC x -> f x (sub 1L)
+        | NOT x -> f x lognot
+        | NEG x -> f x neg
         | JMP x -> jmp x (fun _ -> true)
         | JE x | JZ x -> jmp x (fun (x, _) -> x)
         | JNE x -> jmp x (fun (x, _) -> not x)
@@ -264,18 +278,29 @@ module Interpret (M : MONADERROR) = struct
         | JGE x -> jmp x (fun (_, y) -> y)
         | JL x -> jmp x (fun (_, y) -> not y)
         | JLE x -> jmp x (fun (x, y) -> x & not y)
-        | MOV x -> ff x (fun x y -> add x y)
-        | ADD x -> ff x (fun x y -> add x (mul y 2L))
-        | SUB x -> ff x (fun x y -> mul (sub x (mul y 2L)) minus_one)
-        | IMUL x -> ff x (fun x y -> mul (add x 1L) y)
-        | AND x -> ff x (fun x y -> add (logand x y) y)
-        | OR x -> ff x (fun x y -> add (logor x y) y)
-        | XOR x -> ff x (fun x y -> add (logxor x y) y)
-        | SHL (x, y) ->
-            ev env y >>= fun y -> f x (fun x -> add x (shift_left x (to_int y)))
-        | SHR (x, y) ->
+        | MOV x -> ff x (fun x _ -> x)
+        | ADD x -> ff x add
+        | SUB x -> ff x (fun x y -> sub y x)
+        | IMUL x -> ff x mul
+        | AND x -> ff x logand
+        | OR x -> ff x logor
+        | XOR x -> ff x logxor
+        | SHL (x, y) -> (
             ev env y >>= fun y ->
-            f x (fun x -> add x (shift_right x (to_int y)))
+            match x with
+            | Reg128 _ ->
+                find_r128 env x >>= fun l ->
+                let nr = List.tl l @ [ 0L ] in
+                change_reg128 env nr x >>= fun env -> return (env, s, tl)
+            | _ -> f x (fun x -> add x (shift_left x (to_int y))))
+        | SHR (x, y) -> (
+            ev env y >>= fun y ->
+            match x with
+            | Reg128 _ ->
+                find_r128 env x >>= fun l ->
+                let nr = 0L :: (List.rev @@ List.tl (List.rev l)) in
+                change_reg128 env nr x >>= fun env -> return (env, s, tl)
+            | _ -> f x (fun x -> add x (shift_right x (to_int y))))
         | CMP x ->
             u_da x >>= fun (Dyn x, y) ->
             find_r64 env x >>= fun x ->
