@@ -8,4 +8,5 @@ class Rectangle
     end
 end
 
-Rectangle
+rect = Rectangle.new(10, 20)
+rect.surface ()

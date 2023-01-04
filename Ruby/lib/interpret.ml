@@ -274,13 +274,14 @@ module Eval (M : MONADERROR) = struct
       let func = Function (name, params, body) in
       (match level with
        | TopLevel -> set_local_var st name func >>= fun n_st -> return (Nil, n_st)
-       | Method -> set_class_var st name func >>= fun n_st -> return (Nil, n_st))
+       | Method -> set_class_var st name func >>= fun n_st -> return (Nil, n_st)
+       | Lambda -> return (func, st))
     | MethodAccess (obj, meth, params) ->
       eval_multiple params st
       >>= fun (params, n_st) ->
       eval n_st obj
       >>= fun (obj, n_st) ->
-      process_method_access obj meth params n_st >>= fun v -> return (v, n_st)
+      process_method_access obj meth (List.rev params) n_st >>= fun v -> return (v, n_st)
     | Invocation (box_inv, params) ->
       eval st box_inv
       >>= fun (left, n_st) ->
@@ -299,15 +300,6 @@ module Eval (M : MONADERROR) = struct
       eval n_st new_value
       >>= fun (new_v, n_st) -> index_set box_v index_v new_v >>= fun v -> return (v, n_st)
     | ClassDeclaration (name, members) ->
-      let is_initialize = function
-        | FuncDeclaration (Method, "initialize", _, _) -> true
-        | _ -> false
-      in
-      let members =
-        match List.find_opt is_initialize members with
-        | Some _ -> members
-        | None -> FuncDeclaration (Method, "initialize", [], Seq []) :: members
-      in
       let class_state = ref empty_class_state in
       (* dumb state will mutate class state through ref *)
       let dumb_state = add_class_scope (from_global st) class_state in
@@ -372,11 +364,11 @@ module Eval (M : MONADERROR) = struct
        | "length" -> return (Integer (String.length s))
        | "starts_with" ->
          (match params with
-          | String pref :: [] -> return (Bool (String.starts_with ~prefix:pref s))
+          | String pref :: _ -> return (Bool (String.starts_with ~prefix:pref s))
           | _ -> error "Wrong number of arguments or wrong types")
        | "ends_with" ->
          (match params with
-          | String suff :: [] -> return (Bool (String.ends_with ~suffix:suff s))
+          | String suff :: _ -> return (Bool (String.ends_with ~suffix:suff s))
           | _ -> error "Wrong number of arguments or wrong types")
        | _ -> method_not_exist "String")
     | Array arr ->
@@ -400,15 +392,18 @@ module Eval (M : MONADERROR) = struct
        | "class" -> return (String "NilClass")
        | _ -> method_not_exist "NilClass")
     | Class init_state ->
-      get_from_class_state init_state "initialize"
-      >>= fun init_func ->
-      (match init_func with
-       | Function (name, param_names, body) ->
-         let class_state = ref init_state in
-         let st = add_class_scope st class_state in
-         eval_function name param_names body st params
-         >>= fun _ -> return (ClassInstance class_state)
-       | _ -> error "initialize must be a function")
+      (match m_name with
+       | "new" ->
+         get_from_class_state init_state "initialize"
+         >>= fun init_func ->
+         (match init_func with
+          | Function (name, param_names, body) ->
+            let class_state = ref init_state in
+            let st = add_class_scope st class_state in
+            eval_function name param_names body st params
+            >>= fun _ -> return (ClassInstance class_state)
+          | _ -> error "initialize must be a function")
+       | _ -> method_not_exist "Class")
     | ClassInstance cls_state ->
       let enriched_scope = add_class_scope st cls_state in
       get_from_class_state !cls_state m_name

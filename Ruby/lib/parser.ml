@@ -58,7 +58,7 @@ let field_name =
 ;;
 
 let keywords =
-  [ "if"; "then"; "else"; "end"; "true"; "false"; "while"; "do"; "def"; "class" ]
+  [ "if"; "then"; "else"; "end"; "true"; "false"; "while"; "do"; "def"; "class"; "yield" ]
 ;;
 
 let identifier_t =
@@ -98,36 +98,83 @@ let chainl1 e op =
 
 let parens p = token "(" *> p <* token ")"
 let maybe p = p <|> return ""
+let yield_funcname = "#yield"
+let empty_lambda = FuncDeclaration (Lambda, yield_funcname, [], Seq [])
 
 let seq_of_expr =
   fix (fun seq_of_expr ->
     let expr =
       fix (fun expr ->
+        (* --- Array declaration --- *)
+        let array_t = token "[" *> sep_by (token ",") expr <* token "]" in
+        let array_v = array_t >>| fun arr -> ArrayDecl arr in
+        (* --- Indexing --- *)
+        let index_p =
+          choice
+            ~failure_msg:"Unrecognized index target"
+            [ var_cal
+            ; (ruby_string >>| fun s -> Literal (StringL, s))
+            ; array_v
+            ; parens expr
+            ]
+          >>= fun box -> token "[" *> expr <* token "]" >>| fun ind -> box, ind
+        in
+        let index_get = index_p >>| fun (box, ind) -> Indexing (box, ind) in
+        let index_set =
+          index_p
+          >>= fun (box, ind) ->
+          token "=" *> expr >>| fun new_value -> IndexAssign (box, ind, new_value)
+        in
         (* --- Args --- *)
         let args = token "(" *> sep_by (token ",") expr <* token ")" in
-        (* --- Method access --- *)
-        let method_access =
-          choice [ literal; var_cal; parens expr ]
-          >>= fun obj ->
-          token "." *> field_name
-          >>= fun meth -> args >>| fun arg_list -> MethodAccess (obj, meth, arg_list)
-        in
         (* --- Functions --- *)
-        let parameters_decl = token "(" *> sep_by (token ",") identifier_t <* token ")" in
+        let parameters_decl s e = token s *> sep_by (token ",") identifier_t <* token e in
+        let lambda_inner =
+          option [] (parameters_decl "|" "|")
+          >>= fun params ->
+          maybe new_lines *> seq_of_expr
+          <* maybe new_lines
+          >>| fun body -> FuncDeclaration (Lambda, yield_funcname, params, body)
+        in
+        let lambda_declaration =
+          token "{" *> lambda_inner
+          <* token "}"
+          <|> (token "do" *> lambda_inner <* token "end")
+        in
         let function_declaration =
           token "def" *> identifier_t
           >>= fun func_name ->
-          option [] parameters_decl
+          option [] (parameters_decl "(" ")")
           >>= fun params ->
           maybe new_lines *> seq_of_expr
           <* maybe new_lines
           <* token "end"
-          >>| fun f_body -> FuncDeclaration (TopLevel, func_name, params, f_body)
+          >>| fun f_body ->
+          FuncDeclaration (TopLevel, func_name, params @ [ yield_funcname ], f_body)
+        in
+        (* --- Method access --- *)
+        let method_access =
+          choice [ literal; var_cal; array_v; index_get; parens expr ]
+          >>= fun obj ->
+          token "." *> field_name
+          >>= fun meth ->
+          args
+          >>= fun arg_list ->
+          option empty_lambda lambda_declaration
+          >>| fun lambda -> MethodAccess (obj, meth, arg_list @ [ lambda ])
         in
         let invocation =
           choice [ var_cal; method_access; parens expr ]
           >>= fun inv_box ->
-          args >>| fun param_values -> Invocation (inv_box, param_values)
+          args
+          >>= fun param_values ->
+          option empty_lambda lambda_declaration
+          >>| fun lambda -> Invocation (inv_box, param_values @ [ lambda ])
+        in
+        (* --- Yield keyword --- *)
+        let yield =
+          token "yield" *> option [] args
+          >>| fun args -> Invocation (Var yield_funcname, args)
         in
         (* --- Var assn --- *)
         let assn =
@@ -160,26 +207,6 @@ let seq_of_expr =
                   >>= fun elseB -> return (Conditional (condition, thenB, elseB))))
           <* token "end"
         in
-        (* --- Array declaration --- *)
-        let array_t = token "[" *> sep_by (token ",") expr <* token "]" in
-        let array_v = array_t >>| fun arr -> ArrayDecl arr in
-        (* --- Indexing --- *)
-        let index_p =
-          choice
-            ~failure_msg:"Unrecognized index target"
-            [ var_cal
-            ; (ruby_string >>| fun s -> Literal (StringL, s))
-            ; array_v
-            ; parens expr
-            ]
-          >>= fun box -> token "[" *> expr <* token "]" >>| fun ind -> box, ind
-        in
-        let index_get = index_p >>| fun (box, ind) -> Indexing (box, ind) in
-        let index_set =
-          index_p
-          >>= fun (box, ind) ->
-          token "=" *> expr >>| fun new_value -> IndexAssign (box, ind, new_value)
-        in
         (* --- Binops ---*)
         let factor =
           choice
@@ -207,6 +234,17 @@ let seq_of_expr =
           <* maybe new_lines
           <* token "end"
           >>| fun members ->
+          let is_initialize = function
+            | FuncDeclaration (Method, "initialize", _, _) -> true
+            | _ -> false
+          in
+          let members =
+            match List.find_opt is_initialize members with
+            | Some _ -> members
+            | None ->
+              FuncDeclaration (Method, "initialize", [ yield_funcname ], Seq [])
+              :: members
+          in
           ClassDeclaration
             ( class_name
             , List.map
@@ -216,10 +254,6 @@ let seq_of_expr =
                  | x -> x)
                 members )
         in
-        (* let class_declaration =
-          token "class" *> identifier_t <* token "end"
-          >>| fun class_name -> ClassDeclaration (class_name, [])
-        in *)
         (* --- Expr definition --- *)
         choice
           ~failure_msg:"Unrecognized expression"
@@ -230,6 +264,7 @@ let seq_of_expr =
           ; parens expr
           ; while_loop
           ; array_v
+          ; yield
           ])
     in
     maybe new_lines *> sep_by expr_separator expr <* maybe new_lines >>| fun s -> Seq s)

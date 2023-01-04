@@ -32,6 +32,7 @@ type ast =
 and func_scope =
   | TopLevel (** TopLevelFunction*)
   | Method (** ClassMethod *)
+  | Lambda (** AnonymousFunction *)
 
 (** Data types used in runtime *)
 type value =
