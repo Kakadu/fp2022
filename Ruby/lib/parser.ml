@@ -264,8 +264,4 @@ let seq_of_expr =
     maybe new_lines *> sep_by expr_separator expr <* maybe new_lines >>| fun s -> Seq s)
 ;;
 
-let parse (str : string) : ast =
-  match parse_string ~consume:All seq_of_expr str with
-  | Ok v -> v
-  | Error msg -> failwith msg
-;;
+let parse (str : string) = parse_string ~consume:All seq_of_expr str

@@ -218,6 +218,7 @@ module Eval (M : MONADERROR) = struct
         eval st code >>= fun (new_v, new_st) -> return (new_v :: acc, new_st)
       in
       List.fold_left eval_step (return ([], st)) codes
+      >>= fun (vl, st) -> return (List.rev vl, st)
     in
     let assign_var (st : state) (i : string) (var_value : value) =
       let new_state =
@@ -245,7 +246,8 @@ module Eval (M : MONADERROR) = struct
       (match lst with
        | [] -> return (Nil, st)
        | lst ->
-         eval_multiple lst st >>= fun (v_lst, new_st) -> return (v_lst |> List.hd, new_st))
+         eval_multiple lst st
+         >>= fun (v_lst, new_st) -> return (v_lst |> List.rev |> List.hd, new_st))
     | WhileLoop (cond, body) ->
       let rec iteration s =
         eval s cond
@@ -257,8 +259,7 @@ module Eval (M : MONADERROR) = struct
       in
       iteration st >>= fun new_st -> return (Nil, new_st)
     | ArrayDecl lst ->
-      eval_multiple lst st
-      >>= fun (arr_v, new_st) -> return (Array (List.rev arr_v), new_st)
+      eval_multiple lst st >>= fun (arr_v, new_st) -> return (Array arr_v, new_st)
     | Indexing (box, ind) ->
       eval st box
       >>= fun (b_v, n_st) ->
@@ -277,7 +278,7 @@ module Eval (M : MONADERROR) = struct
       >>= fun (params, n_st) ->
       eval n_st obj
       >>= fun (obj_v, n_st) ->
-      process_method_access obj_v meth (List.rev params) n_st
+      process_method_access obj_v meth params n_st
       >>= fun (v, new_class_state) ->
       (match obj, obj_v with
        | Var varname, ClassInstance _ ->
@@ -318,7 +319,7 @@ module Eval (M : MONADERROR) = struct
     then error "Wrong number of arguments."
     else (
       let state = set_local_var st f_name (Function (f_name, p_names, body)) in
-      let params = List.combine p_names (List.rev p_values) in
+      let params = List.combine p_names p_values in
       let step st (n, v) = st >>= fun st -> set_local_var st n v in
       let initiated = List.fold_left step state params in
       initiated >>= fun initiated -> eval initiated body >>= fun (v, st) -> return (v, st))
@@ -376,7 +377,7 @@ module Eval (M : MONADERROR) = struct
        | "class" -> return_sst (String "Array")
        | "to_s" ->
          return_sst
-           (String ("[" ^ String.concat ", " (List.map string_of_value arr) ^ "]"))
+           (String (String.concat ", " ([ "[" ] @ List.map string_of_value arr @ [ "]" ])))
        | "length" | "size" -> return_sst (Integer (List.length arr))
        | _ -> method_not_exist "Array")
     | Function (name, param_list, _) ->
@@ -421,14 +422,21 @@ module Eval (M : MONADERROR) = struct
   ;;
 end
 
-let eval_code (code : ast) : string =
+let eval_code (code : ast) : (string, string) result =
   let module E = Eval (Result) in
   match E.eval E.empty_state code with
-  | Ok v -> string_of_value (fst v)
-  | Error s -> "Error: " ^ s
+  | Ok (v, _) -> Ok (string_of_value v)
+  | Error s -> Error ("Error: " ^ s)
 ;;
 
-let run_expr s = s |> Parser.parse |> eval_code
+let run_expr s =
+  match
+    let open Result in
+    s |> Parser.parse >>= eval_code
+  with
+  | Ok s | Error s -> s
+;;
+
 let test_eval prog exp = String.equal (run_expr prog) exp
 
 let%test "integer" = test_eval "123" "123"

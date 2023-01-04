@@ -2,4 +2,4 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-val eval_code : Ast.ast -> string
+val run_expr : string -> string

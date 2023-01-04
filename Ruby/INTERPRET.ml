@@ -12,8 +12,7 @@ let read_whole_file filename =
 ;;
 
 let run_topaz (filename : string) : unit =
-  let ast = read_whole_file filename |> Parser.parse in
-  print_endline (Interpret.eval_code ast)
+  read_whole_file filename |> Interpret.run_expr |> print_endline
 ;;
 
 let help =
