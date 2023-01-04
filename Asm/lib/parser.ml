@@ -3,9 +3,9 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Angstrom
-open Ast
-open OperandsHandler
+open Ast.Ast (MonadError.Result)
 open Ast.CmdHandler (MonadError.Result)
+open OperandsHandler.OperandsHandler (MonadError.Result)
 
 let is_space = function
   | ' ' | '\t' -> true
@@ -66,7 +66,10 @@ let gen_const_p int_is_t_const int_to_t_const =
   int_p
   >>= fun x ->
   if int_is_t_const x
-  then return (Const (int_to_t_const x))
+  then (
+    match int_to_t_const x with
+    | Error e -> fail e
+    | Ok c -> return (Const c))
   else fail "Integer is too big"
 ;;
 
@@ -87,9 +90,12 @@ let dreg_name_p = gen_reg_name_p dword_reg_name_list <?> "dreg_name_p"
 let xreg_name_p = gen_reg_name_p xmm_reg_name_list <?> "xreg_name_p"
 
 (****************************************************************************************)
-(* Generate parser for register names that returns Reg (...) *)
 let gen_reg_p reg_name_p reg_name_to_t_reg =
-  reg_name_p >>| fun reg_name -> Reg (reg_name_to_t_reg reg_name)
+  reg_name_p
+  >>= fun reg_name ->
+  match reg_name_to_t_reg reg_name with
+  | Error e -> fail e
+  | Ok r -> return (Reg r)
 ;;
 
 (* Parse register name and convert them to Reg (...) *)
@@ -268,17 +274,24 @@ let program_p =
 ;;
 
 (****************************************************************************************)
+open MonadError.Result
+
 (* Taken from vs9h *)
 let test_ok, test_fail =
   let ok ppf parser input expected =
-    match parse_string ~consume:All parser input with
-    | Ok res when expected = res -> true
-    | Ok res ->
-      ppf Format.std_formatter res;
-      false
+    match expected with
     | Error e ->
-      Printf.printf "Failed to parse %S%s" input e;
+      Printf.printf "%s" e;
       false
+    | Ok expected ->
+      (match parse_string ~consume:All parser input with
+       | Ok res when expected = res -> true
+       | Ok res ->
+         ppf Format.std_formatter res;
+         false
+       | Error e ->
+         Printf.printf "Failed to parse %S%s" input e;
+         false)
   in
   let fail ppf parser input =
     match parse_string ~consume:All parser input with
@@ -295,19 +308,27 @@ let fail_string = test_fail (fun _ -> print_string)
 let ok_int = test_ok (fun _ -> print_int)
 let fail_int = test_fail (fun _ -> print_int)
 
-let%test _ = ok_string (trim_p (string "test")) "    test " "test"
-let%test _ = ok_string breg_name_p "ah" "ah"
+let%test _ = ok_string (trim_p (string "test")) "    test " (return "test")
+let%test _ = ok_string breg_name_p "ah" (return "ah")
 let%test _ = fail_string breg_name_p "ax"
 
 let ok_instruction = test_ok pp_instruction
 let fail_instruction = test_fail pp_instruction
 
 let%test _ =
-  ok_instruction bcommand_p "inc ah" (BCommand (Inc (Reg (reg_name_to_byte_reg "ah"))))
+  ok_instruction
+    bcommand_p
+    "inc ah"
+    (let* ah = reg_name_to_byte_reg "ah" in
+     return @@ BCommand (Inc (Reg ah)))
 ;;
 
 let%test _ =
-  ok_instruction wcommand_p "mul bx" (WCommand (Mul (Reg (reg_name_to_word_reg "bx"))))
+  ok_instruction
+    wcommand_p
+    "mul bx"
+    (let* bx = reg_name_to_word_reg "bx" in
+     return @@ WCommand (Mul (Reg bx)))
 ;;
 
 let%test _ = fail_instruction dcommand_p "inc dl"
@@ -316,20 +337,23 @@ let%test _ =
   ok_instruction
     dcommand_p
     "mov ecx, edx"
-    (DCommand (Mov (RegReg (reg_name_to_dword_reg "ecx", reg_name_to_dword_reg "edx"))))
+    (let* ecx = reg_name_to_dword_reg "ecx" in
+     let* edx = reg_name_to_dword_reg "edx" in
+     return @@ DCommand (Mov (RegReg (ecx, edx))))
 ;;
 
 let%test _ =
   ok_instruction
     wcommand_p
     "add bx, 1578"
-    (WCommand (Add (RegConst (reg_name_to_word_reg "bx", int_to_word_const 1578))))
+    (let* bx = reg_name_to_word_reg "bx" in
+     let* c = int_to_word_const 1578 in
+     return @@ WCommand (Add (RegConst (bx, c))))
 ;;
 
 let%test _ = fail_instruction bcommand_p "inc 314513245"
-(* let%test _ = fail_instruction bcommand_p "sub al, -1234" *)
 let%test _ = fail_instruction instr_p "add al, edx"
-let%test _ = ok_instruction instr_p "abc?def$:" (LCommand "abc?def$")
+let%test _ = ok_instruction instr_p "abc?def$:" (return @@ LCommand "abc?def$")
 let%test _ = fail_instruction instr_p "@abc:"
 
 let ok_ast = test_ok pp_ast program_p
@@ -338,30 +362,45 @@ let fail_ast = test_fail pp_ast program_p
 let%test _ =
   ok_ast
     "mov ax, bx\n     add eax, ecx"
-    [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     return @@ [ WCommand (Mov (RegReg (ax, bx))); DCommand (Add (RegReg (eax, ecx))) ])
 ;;
 
 let%test _ =
   ok_ast
     "mov ax, bx\n     add eax, ecx\n inc ax  "
-    [ WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ; WCommand (Inc (Reg (reg_name_to_word_reg "ax")))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     return
+     @@ [ WCommand (Mov (RegReg (ax, bx)))
+        ; DCommand (Add (RegReg (eax, ecx)))
+        ; WCommand (Inc (Reg ax))
+        ])
 ;;
 
 let%test _ =
   ok_ast
     "l1:\n mov ax, bx\n add eax, ecx\n inc bl\n l@abel2:   \n sub dh, 5\n\n\n\n   \n"
-    [ LCommand "l1"
-    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
-    ; LCommand "l@abel2"
-    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* bl = reg_name_to_byte_reg "bl" in
+     let* dh = reg_name_to_byte_reg "dh" in
+     let* c5 = int_to_byte_const 5 in
+     return
+     @@ [ LCommand "l1"
+        ; WCommand (Mov (RegReg (ax, bx)))
+        ; DCommand (Add (RegReg (eax, ecx)))
+        ; BCommand (Inc (Reg bl))
+        ; LCommand "l@abel2"
+        ; BCommand (Sub (RegConst (dh, c5)))
+        ])
 ;;
 
 let%test _ = fail_ast "mov ax, bx   inc ax"
@@ -379,15 +418,23 @@ let%test _ =
          jmp l1
 
     |}
-    [ LCommand "l1"
-    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; SCommand (Je (Label "LAbEl$"))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
-    ; LCommand "l@abel2"
-    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
-    ; SCommand (Jmp (Label "l1"))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* bl = reg_name_to_byte_reg "bl" in
+     let* dh = reg_name_to_byte_reg "dh" in
+     let* c5 = int_to_byte_const 5 in
+     return
+     @@ [ LCommand "l1"
+        ; WCommand (Mov (RegReg (ax, bx)))
+        ; SCommand (Je (Label "LAbEl$"))
+        ; DCommand (Add (RegReg (eax, ecx)))
+        ; BCommand (Inc (Reg bl))
+        ; LCommand "l@abel2"
+        ; BCommand (Sub (RegConst (dh, c5)))
+        ; SCommand (Jmp (Label "l1"))
+        ])
 ;;
 
 let%test _ = fail_ast "call eax, edx"
@@ -407,15 +454,23 @@ let%test _ =
        jmp l1
     ; Comment at the end
     |}
-    [ LCommand "l1"
-    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; SCommand (Je (Label "LAbEl$"))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
-    ; LCommand "l@abel2"
-    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
-    ; SCommand (Jmp (Label "l1"))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* bl = reg_name_to_byte_reg "bl" in
+     let* dh = reg_name_to_byte_reg "dh" in
+     let* c5 = int_to_byte_const 5 in
+     return
+     @@ [ LCommand "l1"
+        ; WCommand (Mov (RegReg (ax, bx)))
+        ; SCommand (Je (Label "LAbEl$"))
+        ; DCommand (Add (RegReg (eax, ecx)))
+        ; BCommand (Inc (Reg bl))
+        ; LCommand "l@abel2"
+        ; BCommand (Sub (RegConst (dh, c5)))
+        ; SCommand (Jmp (Label "l1"))
+        ])
 ;;
 
 let%test _ =
@@ -429,22 +484,32 @@ let%test _ =
         inc bl
       l@abel2:
         sub dh, 5
-        pop dx ; Actually we don't want to allow using
-               ; push/pop with registers other than 32-bit
+        pop dx ; Multi-line
+               ; comment
         jmp l1
     |}
-    [ LCommand "l1"
-    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
-    ; SCommand (Je (Label "LAbEl$"))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ; DCommand (Push (Const (int_to_dword_const 5)))
-    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
-    ; LCommand "l@abel2"
-    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
-    ; WCommand (Pop (Reg (reg_name_to_word_reg "dx")))
-    ; SCommand (Jmp (Label "l1"))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* bl = reg_name_to_byte_reg "bl" in
+     let* dh = reg_name_to_byte_reg "dh" in
+     let* bc5 = int_to_byte_const 5 in
+     let* dc5 = int_to_dword_const 5 in
+     let* dx = reg_name_to_word_reg "dx" in
+     return
+     @@ [ LCommand "l1"
+        ; WCommand (Mov (RegReg (ax, bx)))
+        ; DCommand (Push (Reg eax))
+        ; SCommand (Je (Label "LAbEl$"))
+        ; DCommand (Add (RegReg (eax, ecx)))
+        ; DCommand (Push (Const dc5))
+        ; BCommand (Inc (Reg bl))
+        ; LCommand "l@abel2"
+        ; BCommand (Sub (RegConst (dh, bc5)))
+        ; WCommand (Pop (Reg dx))
+        ; SCommand (Jmp (Label "l1"))
+        ])
 ;;
 
 let%test _ = fail_ast "sub al, 1000"
@@ -453,8 +518,9 @@ let%test _ = fail_ast "mov ax, 1000000"
 let%test _ =
   ok_ast
     "add edx, 1000000"
-    [ DCommand (Add (RegConst (reg_name_to_dword_reg "edx", int_to_dword_const 1000000)))
-    ]
+    (let* edx = reg_name_to_dword_reg "edx" in
+     let* c = int_to_dword_const 1000000 in
+     return @@ [ DCommand (Add (RegConst (edx, c))) ])
 ;;
 
 let%test _ =
@@ -468,24 +534,35 @@ let%test _ =
         inc bl
       l@abel2:
         sub dh, 5
-        pop dx ; Actually we don't want to allow using
-               ; push/pop with registers other than 32-bit
+        pop dx ; Multi-line
+               ; comment
         cmp dx, 1
         jne l1
     |}
-    [ LCommand "l1"
-    ; WCommand (Mov (RegReg (reg_name_to_word_reg "ax", reg_name_to_word_reg "bx")))
-    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
-    ; SCommand (Je (Label "LAbEl$"))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "eax", reg_name_to_dword_reg "ecx")))
-    ; DCommand (Push (Const (int_to_dword_const 5)))
-    ; BCommand (Inc (Reg (reg_name_to_byte_reg "bl")))
-    ; LCommand "l@abel2"
-    ; BCommand (Sub (RegConst (reg_name_to_byte_reg "dh", int_to_byte_const 5)))
-    ; WCommand (Pop (Reg (reg_name_to_word_reg "dx")))
-    ; WCommand (Cmp (RegConst (reg_name_to_word_reg "dx", int_to_word_const 1)))
-    ; SCommand (Jne (Label "l1"))
-    ]
+    (let* ax = reg_name_to_word_reg "ax" in
+     let* bx = reg_name_to_word_reg "bx" in
+     let* eax = reg_name_to_dword_reg "eax" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* bl = reg_name_to_byte_reg "bl" in
+     let* dh = reg_name_to_byte_reg "dh" in
+     let* bc5 = int_to_byte_const 5 in
+     let* dc5 = int_to_dword_const 5 in
+     let* dx = reg_name_to_word_reg "dx" in
+     let* wc1 = int_to_word_const 1 in
+     return
+     @@ [ LCommand "l1"
+        ; WCommand (Mov (RegReg (ax, bx)))
+        ; DCommand (Push (Reg eax))
+        ; SCommand (Je (Label "LAbEl$"))
+        ; DCommand (Add (RegReg (eax, ecx)))
+        ; DCommand (Push (Const dc5))
+        ; BCommand (Inc (Reg bl))
+        ; LCommand "l@abel2"
+        ; BCommand (Sub (RegConst (dh, bc5)))
+        ; WCommand (Pop (Reg dx))
+        ; WCommand (Cmp (RegConst (dx, wc1)))
+        ; SCommand (Jne (Label "l1"))
+        ])
 ;;
 
 let%test _ =
@@ -494,7 +571,7 @@ let%test _ =
       ret
       call l1
     |}
-    [ LCommand "l1"; BCommand Ret; SCommand (Call (Label "l1")) ]
+    (return @@ [ LCommand "l1"; BCommand Ret; SCommand (Call (Label "l1")) ])
 ;;
 
 let%test _ =
@@ -525,32 +602,40 @@ let%test _ =
         ret
       end:
     |}
-    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 9)))
-    ; SCommand (Call (Label "fib"))
-    ; SCommand (Jmp (Label "end"))
-    ; LCommand "fib"
-    ; DCommand (Cmp (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 0)))
-    ; SCommand (Jne (Label "l1"))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 0)))
-    ; BCommand Ret
-    ; LCommand "l1"
-    ; DCommand (Cmp (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
-    ; SCommand (Jne (Label "l2"))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 1)))
-    ; BCommand Ret
-    ; LCommand "l2"
-    ; DCommand (Push (Reg (reg_name_to_dword_reg "eax")))
-    ; DCommand (Sub (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 2)))
-    ; SCommand (Call (Label "fib"))
-    ; DCommand (Pop (Reg (reg_name_to_dword_reg "eax")))
-    ; DCommand (Push (Reg (reg_name_to_dword_reg "ebx")))
-    ; DCommand (Sub (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
-    ; SCommand (Call (Label "fib"))
-    ; DCommand (Pop (Reg (reg_name_to_dword_reg "ecx")))
-    ; DCommand (Add (RegReg (reg_name_to_dword_reg "ebx", reg_name_to_dword_reg "ecx")))
-    ; BCommand Ret
-    ; LCommand "end"
-    ]
+    (let* eax = reg_name_to_dword_reg "eax" in
+     let* ebx = reg_name_to_dword_reg "ebx" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* c0 = int_to_dword_const 0 in
+     let* c1 = int_to_dword_const 1 in
+     let* c2 = int_to_dword_const 2 in
+     let* c9 = int_to_dword_const 9 in
+     return
+     @@ [ DCommand (Mov (RegConst (eax, c9)))
+        ; SCommand (Call (Label "fib"))
+        ; SCommand (Jmp (Label "end"))
+        ; LCommand "fib"
+        ; DCommand (Cmp (RegConst (eax, c0)))
+        ; SCommand (Jne (Label "l1"))
+        ; DCommand (Mov (RegConst (ebx, c0)))
+        ; BCommand Ret
+        ; LCommand "l1"
+        ; DCommand (Cmp (RegConst (eax, c1)))
+        ; SCommand (Jne (Label "l2"))
+        ; DCommand (Mov (RegConst (ebx, c1)))
+        ; BCommand Ret
+        ; LCommand "l2"
+        ; DCommand (Push (Reg eax))
+        ; DCommand (Sub (RegConst (eax, c2)))
+        ; SCommand (Call (Label "fib"))
+        ; DCommand (Pop (Reg eax))
+        ; DCommand (Push (Reg ebx))
+        ; DCommand (Sub (RegConst (eax, c1)))
+        ; SCommand (Call (Label "fib"))
+        ; DCommand (Pop (Reg ecx))
+        ; DCommand (Add (RegReg (ebx, ecx)))
+        ; BCommand Ret
+        ; LCommand "end"
+        ])
 ;;
 
 let%test _ =
@@ -564,15 +649,27 @@ let%test _ =
        movdqa xmm7
        addpd xmm0, xmm7
     |}
-    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 2)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 3)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "edx", int_to_dword_const 4)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm0")))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 5)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm7")))
-    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm7")))
-    ]
+    (let* eax = reg_name_to_dword_reg "eax" in
+     let* ebx = reg_name_to_dword_reg "ebx" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* edx = reg_name_to_dword_reg "edx" in
+     let* xmm0 = reg_name_to_xmm_reg "xmm0" in
+     let* xmm7 = reg_name_to_xmm_reg "xmm7" in
+     let* c1 = int_to_dword_const 1 in
+     let* c2 = int_to_dword_const 2 in
+     let* c3 = int_to_dword_const 3 in
+     let* c4 = int_to_dword_const 4 in
+     let* c5 = int_to_dword_const 5 in
+     return
+     @@ [ DCommand (Mov (RegConst (eax, c1)))
+        ; DCommand (Mov (RegConst (ebx, c2)))
+        ; DCommand (Mov (RegConst (ecx, c3)))
+        ; DCommand (Mov (RegConst (edx, c4)))
+        ; XCommand (Movdqa (Reg xmm0))
+        ; DCommand (Mov (RegConst (eax, c5)))
+        ; XCommand (Movdqa (Reg xmm7))
+        ; XCommand (Addpd (RegReg (xmm0, xmm7)))
+        ])
 ;;
 
 let%test _ = fail_ast {|mov xmm0, xmm1|}
@@ -612,34 +709,56 @@ let%test _ =
        addpd xmm0, xmm1
        addpd xmm0, xmm2
     |}
-    [ DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 1)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 1)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 1)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm0")))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 2)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 2)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 2)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm1")))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 3)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 3)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 3)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm2")))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 4)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 5)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 6)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm3")))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 7)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 8)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 9)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm4")))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "eax", int_to_dword_const 10)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ebx", int_to_dword_const 11)))
-    ; DCommand (Mov (RegConst (reg_name_to_dword_reg "ecx", int_to_dword_const 12)))
-    ; XCommand (Movdqa (Reg (reg_name_to_xmm_reg "xmm5")))
-    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm3")))
-    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm1", reg_name_to_xmm_reg "xmm4")))
-    ; XCommand (Mulpd (RegReg (reg_name_to_xmm_reg "xmm2", reg_name_to_xmm_reg "xmm5")))
-    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm1")))
-    ; XCommand (Addpd (RegReg (reg_name_to_xmm_reg "xmm0", reg_name_to_xmm_reg "xmm2")))
-    ]
+    (let* eax = reg_name_to_dword_reg "eax" in
+     let* ebx = reg_name_to_dword_reg "ebx" in
+     let* ecx = reg_name_to_dword_reg "ecx" in
+     let* xmm0 = reg_name_to_xmm_reg "xmm0" in
+     let* xmm1 = reg_name_to_xmm_reg "xmm1" in
+     let* xmm2 = reg_name_to_xmm_reg "xmm2" in
+     let* xmm3 = reg_name_to_xmm_reg "xmm3" in
+     let* xmm4 = reg_name_to_xmm_reg "xmm4" in
+     let* xmm5 = reg_name_to_xmm_reg "xmm5" in
+     let* c1 = int_to_dword_const 1 in
+     let* c2 = int_to_dword_const 2 in
+     let* c3 = int_to_dword_const 3 in
+     let* c4 = int_to_dword_const 4 in
+     let* c5 = int_to_dword_const 5 in
+     let* c6 = int_to_dword_const 6 in
+     let* c7 = int_to_dword_const 7 in
+     let* c8 = int_to_dword_const 8 in
+     let* c9 = int_to_dword_const 9 in
+     let* c10 = int_to_dword_const 10 in
+     let* c11 = int_to_dword_const 11 in
+     let* c12 = int_to_dword_const 12 in
+     return
+     @@ [ DCommand (Mov (RegConst (eax, c1)))
+        ; DCommand (Mov (RegConst (ebx, c1)))
+        ; DCommand (Mov (RegConst (ecx, c1)))
+        ; XCommand (Movdqa (Reg xmm0))
+        ; DCommand (Mov (RegConst (eax, c2)))
+        ; DCommand (Mov (RegConst (ebx, c2)))
+        ; DCommand (Mov (RegConst (ecx, c2)))
+        ; XCommand (Movdqa (Reg xmm1))
+        ; DCommand (Mov (RegConst (eax, c3)))
+        ; DCommand (Mov (RegConst (ebx, c3)))
+        ; DCommand (Mov (RegConst (ecx, c3)))
+        ; XCommand (Movdqa (Reg xmm2))
+        ; DCommand (Mov (RegConst (eax, c4)))
+        ; DCommand (Mov (RegConst (ebx, c5)))
+        ; DCommand (Mov (RegConst (ecx, c6)))
+        ; XCommand (Movdqa (Reg xmm3))
+        ; DCommand (Mov (RegConst (eax, c7)))
+        ; DCommand (Mov (RegConst (ebx, c8)))
+        ; DCommand (Mov (RegConst (ecx, c9)))
+        ; XCommand (Movdqa (Reg xmm4))
+        ; DCommand (Mov (RegConst (eax, c10)))
+        ; DCommand (Mov (RegConst (ebx, c11)))
+        ; DCommand (Mov (RegConst (ecx, c12)))
+        ; XCommand (Movdqa (Reg xmm5))
+        ; XCommand (Mulpd (RegReg (xmm0, xmm3)))
+        ; XCommand (Mulpd (RegReg (xmm1, xmm4)))
+        ; XCommand (Mulpd (RegReg (xmm2, xmm5)))
+        ; XCommand (Addpd (RegReg (xmm0, xmm1)))
+        ; XCommand (Addpd (RegReg (xmm0, xmm2)))
+        ])
 ;;

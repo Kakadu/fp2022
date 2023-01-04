@@ -5,58 +5,63 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Utils
+open MonadError
 
-type byte
-type word
-type dword
-type xmm
+module OperandsHandler (M : MonadError) : sig
+  open M
 
-(* Needed for pretty printing *)
-val pp_byte : Format.formatter -> byte -> unit
-val pp_word : Format.formatter -> word -> unit
-val pp_dword : Format.formatter -> dword -> unit
-val pp_xmm : Format.formatter -> xmm -> unit
+  type byte
+  type word
+  type dword
+  type xmm
 
-(* Operand types *)
-type 'a reg [@@deriving show { with_path = false }]
-type 'a const [@@deriving show { with_path = false }]
+  (* Needed for pretty printing *)
+  val pp_byte : Format.formatter -> byte -> unit
+  val pp_word : Format.formatter -> word -> unit
+  val pp_dword : Format.formatter -> dword -> unit
+  val pp_xmm : Format.formatter -> xmm -> unit
 
-(* Check integer size *)
-val int_is_byte_const : int -> bool
-val int_is_word_const : int -> bool
-val int_is_dword_const : int -> bool
+  (* Operand types *)
+  type 'a reg [@@deriving show { with_path = false }]
+  type 'a const [@@deriving show { with_path = false }]
 
-(* Converters *)
-val int_to_byte_const : int -> byte const
-val int_to_word_const : int -> word const
-val int_to_dword_const : int -> dword const
-val int_to_byte_reg : int -> byte reg
-val int_to_word_reg : int -> word reg
-val int_to_dword_reg : int -> dword reg
-val byte_reg_name_list : string list
-val word_reg_name_list : string list
-val dword_reg_name_list : string list
-val xmm_reg_name_list : string list
-val reg_name_to_byte_reg : string -> byte reg
-val reg_name_to_word_reg : string -> word reg
-val reg_name_to_dword_reg : string -> dword reg
-val reg_name_to_xmm_reg : string -> xmm reg
+  (* Check integer size *)
+  val int_is_byte_const : int -> bool
+  val int_is_word_const : int -> bool
+  val int_is_dword_const : int -> bool
 
-(* Get internal register id by its name *)
-val reg_name_to_id : string -> int
+  (* Converters *)
+  val int_to_byte_const : int -> byte const t
+  val int_to_word_const : int -> word const t
+  val int_to_dword_const : int -> dword const t
+  val int_to_byte_reg : int -> byte reg t
+  val int_to_word_reg : int -> word reg t
+  val int_to_dword_reg : int -> dword reg t
+  val byte_reg_name_list : string list
+  val word_reg_name_list : string list
+  val dword_reg_name_list : string list
+  val xmm_reg_name_list : string list
+  val reg_name_to_byte_reg : string -> byte reg t
+  val reg_name_to_word_reg : string -> word reg t
+  val reg_name_to_dword_reg : string -> dword reg t
+  val reg_name_to_xmm_reg : string -> xmm reg t
 
-(* Get integer value of a constant *)
-val const_val : 'a const -> int
+  (* Get internal register id by its name *)
+  val reg_name_to_id : string -> int t
 
-(* These two functions require us to have ids of all dword registers as keys
+  (* Get integer value of a constant *)
+  val const_val : 'a const -> int
+
+  (* These two functions require us to have ids of all dword registers as keys
      in the reg_map *)
-val reg_val_get : 'a reg -> int IntMap.t -> int
+  val reg_val_get : 'a reg -> int IntMap.t -> int t
 
-(* If the value to set is too big, only the last bytes are considered.
+  (* If the value to set is too big, only the last bytes are considered.
      E.g. if we try to set "ah" to 0xABC, it will be set to 0xBC *)
-val reg_val_set : 'a reg -> int -> int IntMap.t -> int IntMap.t
+  val reg_val_set : 'a reg -> int -> int IntMap.t -> int IntMap.t t
 
-(* Special case of get and set for xmm registers since their values are int lists,
+  (* Special case of get and set for xmm registers since their values are int lists,
    so they require a separate reg_map *)
-val xmm_reg_val_get : xmm reg -> int list IntMap.t -> int list
-val xmm_reg_val_set : xmm reg -> int list -> int list IntMap.t -> int list IntMap.t
+  val xmm_reg_val_get : xmm reg -> int list IntMap.t -> int list t
+  val xmm_reg_val_set : xmm reg -> int list -> int list IntMap.t -> int list IntMap.t t
+end

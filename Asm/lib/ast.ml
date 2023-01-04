@@ -3,59 +3,63 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Base
-open OperandsHandler
 open MonadError
 
-type 'a operands_double =
-  | RegReg of 'a reg * 'a reg
-  | RegConst of 'a reg * 'a const
-[@@deriving show { with_path = false }]
+module Ast (M : MonadError) = struct
+  open OperandsHandler.OperandsHandler (M)
 
-type 'a operand_single =
-  | Reg of 'a reg
-  | Const of 'a const
-  | Label of string
-[@@deriving show { with_path = false }]
+  type 'a operands_double =
+    | RegReg of 'a reg * 'a reg
+    | RegConst of 'a reg * 'a const
+  [@@deriving show { with_path = false }]
 
-type 'a command =
-  | Mov of 'a operands_double
-  | Add of 'a operands_double
-  | Sub of 'a operands_double
-  | Cmp of 'a operands_double
-  | Inc of 'a operand_single
-  | Mul of 'a operand_single
-  | Push of 'a operand_single
-  | Pop of 'a operand_single
-  | Jmp of string operand_single
-  | Je of string operand_single
-  | Jne of string operand_single
-  | Call of string operand_single
-  | Ret
-  | Movdqa of xmm operand_single
-  | Addpd of xmm operands_double
-  | Mulpd of xmm operands_double
-[@@deriving show { with_path = false }]
+  type 'a operand_single =
+    | Reg of 'a reg
+    | Const of 'a const
+    | Label of string
+  [@@deriving show { with_path = false }]
 
-type instruction =
-  (* Label declaration *)
-  | LCommand of string
-  (* Command with byte-size operands *)
-  | BCommand of byte command
-  (* Command with word-size operands *)
-  | WCommand of word command
-  (* Command with dword-size operands *)
-  | DCommand of dword command
-  (* Command with xmm registers *)
-  | XCommand of xmm command
-  (* Command with a label/string operand.
+  type 'a command =
+    | Mov of 'a operands_double
+    | Add of 'a operands_double
+    | Sub of 'a operands_double
+    | Cmp of 'a operands_double
+    | Inc of 'a operand_single
+    | Mul of 'a operand_single
+    | Push of 'a operand_single
+    | Pop of 'a operand_single
+    | Jmp of string operand_single
+    | Je of string operand_single
+    | Jne of string operand_single
+    | Call of string operand_single
+    | Ret
+    | Movdqa of xmm operand_single
+    | Addpd of xmm operands_double
+    | Mulpd of xmm operands_double
+  [@@deriving show { with_path = false }]
+
+  type instruction =
+    (* Label declaration *)
+    | LCommand of string
+    (* Command with byte-size operands *)
+    | BCommand of byte command
+    (* Command with word-size operands *)
+    | WCommand of word command
+    (* Command with dword-size operands *)
+    | DCommand of dword command
+    (* Command with xmm registers *)
+    | XCommand of xmm command
+    (* Command with a label/string operand.
      Our type system prevents us from having
      SCommand (Inc (...)) or SCommand (Je (Reg (...))) *)
-  | SCommand of string command
-[@@deriving show { with_path = false }]
+    | SCommand of string command
+  [@@deriving show { with_path = false }]
 
-type ast = instruction list [@@deriving show { with_path = false }]
+  type ast = instruction list [@@deriving show { with_path = false }]
+end
 
 module CmdHandler (M : MonadError) = struct
+  open Ast (M)
   open M
 
   let lcommand v = LCommand v

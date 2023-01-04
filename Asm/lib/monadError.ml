@@ -8,6 +8,7 @@ module type MonadError = sig
   val return : 'a -> 'a t
   val error : string -> 'a t
   val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+  val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
 end
 
 module Result : MonadError with type 'a t = ('a, string) result = struct
@@ -16,4 +17,5 @@ module Result : MonadError with type 'a t = ('a, string) result = struct
   let return = Result.ok
   let error = Result.error
   let ( >>= ) = Result.bind
+  let ( let* ) = Result.bind
 end

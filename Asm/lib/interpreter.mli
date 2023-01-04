@@ -2,11 +2,12 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open Ast
 open Utils
 open MonadError
 
 module Interpreter (M : MonadError) : sig
+  open Ast.Ast(M)
+
   (* Current state of execution *)
   type state_t =
     { reg_map : int IntMap.t
