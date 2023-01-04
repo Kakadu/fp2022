@@ -120,11 +120,6 @@ let seq_of_expr =
           >>= fun box -> token "[" *> expr <* token "]" >>| fun ind -> box, ind
         in
         let index_get = index_p >>| fun (box, ind) -> Indexing (box, ind) in
-        let index_set =
-          index_p
-          >>= fun (box, ind) ->
-          token "=" *> expr >>| fun new_value -> IndexAssign (box, ind, new_value)
-        in
         (* --- Args --- *)
         let args = token "(" *> sep_by (token ",") expr <* token ")" in
         (* --- Functions --- *)
@@ -211,8 +206,7 @@ let seq_of_expr =
         let factor =
           choice
             ~failure_msg:"Unrecognized factor"
-            [ index_set
-            ; index_get
+            [ index_get
             ; invocation
             ; method_access
             ; parens expr

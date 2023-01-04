@@ -11,7 +11,7 @@ let rec string_of_value = function
   | String v -> v
   | Nil -> "nil"
   | Array l ->
-    String.concat [ "["; List.map ~f:string_of_value !l |> String.concat ~sep:", "; "]" ]
+    String.concat [ "["; List.map ~f:string_of_value l |> String.concat ~sep:", "; "]" ]
   | Function (name, params, _) ->
     String.concat [ name; "("; String.concat ~sep:", " params; ")" ]
   | Class class_state ->

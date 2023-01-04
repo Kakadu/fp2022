@@ -22,7 +22,6 @@ type ast =
   | Binop of string * ast * ast (** Binop [op left right] *)
   | Seq of ast list (** Seq [expressions] *)
   | Indexing of ast * ast (** Indexing [box index] *)
-  | IndexAssign of ast * ast * ast (** IndexAssign [box index new_value]*)
   | FuncDeclaration of func_scope * string * string list * ast
       (** FunctionDeclaration [func_scope name param_names body]*)
   | Invocation of ast * ast list (** Invocation [target param_values] *)
@@ -39,7 +38,7 @@ type value =
   | Bool of bool (** Bool [value]*)
   | Integer of int (** Integer [value]*)
   | String of string (** String [value]*)
-  | Array of value list ref (** Array [value_list]*)
+  | Array of value list (** Array [value_list]*)
   | Function of string * string list * ast (** Function [name param_list body]*)
   | Class of class_state (** Class [initial_state] *)
   | ClassInstance of class_state ref (** ClassInstance [shared_instance_state] *)

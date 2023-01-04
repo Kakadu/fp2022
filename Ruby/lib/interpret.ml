@@ -108,7 +108,7 @@ module Eval (M : MONADERROR) = struct
     match x, y with
     | Integer x, Integer y -> return (Integer (x + y))
     | String x, String y -> return (String (String.cat x y))
-    | Array x, Array y -> return (Array (ref (!x @ !y)))
+    | Array x, Array y -> return (Array (x @ y))
     | _ -> binop_typefail "+" x y
   ;;
 
@@ -123,8 +123,7 @@ module Eval (M : MONADERROR) = struct
     | Integer x, Integer y -> return (Integer (x * y))
     | String x, Integer y ->
       return (String (List.init y (fun _ -> x) |> String.concat ""))
-    | Array x, Integer y ->
-      return (Array (ref (List.init y (fun _ -> !x) |> List.concat)))
+    | Array x, Integer y -> return (Array (List.init y (fun _ -> x) |> List.concat))
     | _ -> binop_typefail "*" x y
   ;;
 
@@ -202,20 +201,12 @@ module Eval (M : MONADERROR) = struct
 
   let index_get (v : value) (ind : value) =
     match v, ind with
-    | Array v, Integer i -> return (List.nth !v i)
+    | Array v, Integer i -> return (List.nth v i)
     | String v, Integer i -> return (Ast.String (String.get v i |> String.make 1))
     | _ -> binop_typefail "index" v ind
   ;;
 
   let replace l pos a = List.mapi (fun i x -> if i = pos then a else x) l
-
-  let index_set (v : value) (ind : value) (new_v : value) : value t =
-    match v, ind, new_v with
-    | Array v, Integer i, x ->
-      v := replace !v i x;
-      return (Array v)
-    | _ -> error "Wrong arguments in index set"
-  ;;
 
   let rec eval (st : state) (code : ast) : (value * state) t =
     let eval_multiple (codes : ast list) (st : state) : (value list * state) t =
@@ -265,7 +256,7 @@ module Eval (M : MONADERROR) = struct
       iteration st >>= fun new_st -> return (Nil, new_st)
     | ArrayDecl lst ->
       eval_multiple lst st
-      >>= fun (arr_v, new_st) -> return (Array (ref (List.rev arr_v)), new_st)
+      >>= fun (arr_v, new_st) -> return (Array (List.rev arr_v), new_st)
     | Indexing (box, ind) ->
       eval st box
       >>= fun (b_v, n_st) ->
@@ -292,13 +283,6 @@ module Eval (M : MONADERROR) = struct
          eval_function name param_names body (from_global n_st) params
          >>= fun v -> return (v, n_st)
        | _ -> error "Only function can be invoked")
-    | IndexAssign (box, index, new_value) ->
-      eval st box
-      >>= fun (box_v, n_st) ->
-      eval n_st index
-      >>= fun (index_v, n_st) ->
-      eval n_st new_value
-      >>= fun (new_v, n_st) -> index_set box_v index_v new_v >>= fun v -> return (v, n_st)
     | ClassDeclaration (name, members) ->
       let class_state = ref empty_class_state in
       (* dumb state will mutate class state through ref *)
@@ -355,8 +339,7 @@ module Eval (M : MONADERROR) = struct
               |> String.to_seq
               |> List.of_seq
               |> List.map (String.make 1)
-              |> List.map (fun s -> String s)
-              |> ref))
+              |> List.map (fun s -> String s)))
        | _ -> method_not_exist "Integer")
     | String s ->
       (match m_name with
@@ -375,8 +358,8 @@ module Eval (M : MONADERROR) = struct
       (match m_name with
        | "class" -> return (String "Array")
        | "to_s" ->
-         return (String ("[" ^ String.concat ", " (List.map string_of_value !arr) ^ "]"))
-       | "length" | "size" -> return (Integer (List.length !arr))
+         return (String ("[" ^ String.concat ", " (List.map string_of_value arr) ^ "]"))
+       | "length" | "size" -> return (Integer (List.length arr))
        | _ -> method_not_exist "Array")
     | Function (name, param_list, _) ->
       (match m_name with
@@ -494,16 +477,6 @@ let%test "indexing array" = test_eval "[1, 2, 3, 4][1]" "2"
 let%test "indexing variable" = test_eval "x = [1, 3, 4]; x[1]" "3"
 let%test "indexing string" = test_eval "\"Hello\"[2]" "l"
 let%test "indexing expression" = test_eval "([1, 2] + [3, 4])[2]" "3"
-let%test "index set" = test_eval "x = [1, 2, 3]; x[2] = 0; x" "[1, 2, 0]"
-
-let%test "index set between variables" =
-  test_eval "x = [1, 2, 3]; y = x; y[0] = 4; x" "[4, 2, 3]"
-;;
-
-let%test "index set in 2d array" =
-  test_eval "x = [[1], 2, 3]; (x[0])[0] = 4; x" "[[4], 2, 3]"
-;;
-
 let%test "one arg function" = test_eval "def f(x)\nx+1\nend; f(10)" "11"
 let%test "multiple args function" = test_eval "def f(x, y)\nx - y\nend; f(10, 3)" "7"
 
