@@ -6,70 +6,95 @@ open Angstrom
 open Ast
 
 let is_ws = function ' ' | '\n' | '\t' | '\r' -> true | _ -> false
+
+(** Whitespaces *)
 let whitespaces = skip_while is_ws
+
+(** Trim parser *)
 let trim x = whitespaces *> x <* whitespaces
+
+(** Parentheses *)
 let parens p = trim (char '(' *> p <* char ')')
+
+(** Decimal digits *)
 let is_num = function '0' .. '9' -> true | _ -> false
+
+(** Letters *)
 let is_ch = function 'A' .. 'Z' | 'a' .. 'z' -> true | _ -> false
 
+(** Hexadecimal digits *)
 let is_hex_digit = function
   | '0' .. '9' | 'a' .. 'f' | 'A' .. 'Z' -> true
   | _ -> false
 
+(** All possible regs *)
 let is_8bitreg = function
   | "AH" | "AL" | "BH" | "BL" | "CH" | "CL" | "DH" | "DL" -> true
   | _ -> false
 
+(** All possible regs *)
 let is_16bitreg = function "AX" | "BX" | "CX" | "DX" -> true | _ -> false
 
+(** All possible regs *)
 let is_32bitreg = function
   | "EAX" | "EBX" | "ECX" | "EDX" | "ESI" | "EDI" | "ESP" | "EBP" -> true
   | _ -> false
 
+(** All possible regs *)
 let is_64bitreg = function
   | "RAX" | "RBX" | "RCX" | "RDX" | "RSP" | "RBP" | "RSI" | "RDI" -> true
   | _ -> false
 
+(** All possible regs *)
 let is_128bitreg = function
   | "XMM0" | "XMM1" | "XMM2" | "XMM3" | "XMM4" | "XMM5" | "XMM6" | "XMM7" ->
       true
   | _ -> false
 
+(** All possible regs *)
 let is_reg s =
   List.fold_left ( || ) false
     [
       is_8bitreg s; is_16bitreg s; is_32bitreg s; is_64bitreg s; is_128bitreg s;
     ]
 
-let is_arg0 = function "RET" | "SYSCALL" -> true | _ -> false
+(** All possible mnemonics *)
+let is_arg0 = function "RET" -> true | _ -> false
 
+(** All possible mnemonics *)
 let is_arg1 = function
   | "PUSH" | "POP" | "INC" | "DEC" | "NOT" | "NEG" | "JMP" | "JE" | "JNE" | "JZ"
   | "JG" | "JGE" | "JL" | "JLE" ->
       true
   | _ -> false
 
+(** All possible mnemonics *)
 let is_arg2 = function
   | "MOV" | "ADD" | "SUB" | "IMUL" | "AND" | "XOR" | "OR" | "SHL" | "SHR"
   | "CMP" ->
       true
   | _ -> false
 
+(** Data types for global consts*)
 let is_data_dec = function
   | "DB" | "DW" | "DD" | "DQ" | "DT" -> true
   | _ -> false
 
+(** All possible mnemonics *)
 let is_mnemonic s = is_arg0 s || is_arg1 s || is_arg2 s
 
-(** parses integer like 42727 *)
+(** Multiple decimal digits *)
 let nums = take_while1 is_num
 
+(** Multiple hexadecimal digits*)
 let hex_nums = take_while1 is_hex_digit
 
+(** Checks that string is not name of reg or mnemonic *)
 let isnt_reg_or_mn s =
   let w = String.uppercase_ascii s in
   (not (is_reg w)) & not (is_mnemonic w)
 
+(** Number parser in different views with sign *)
 let num =
   let sign = option "" (string "+" <|> string "-") in
   let hex_pref = option "" (string "0x") in
@@ -78,10 +103,10 @@ let num =
   (match p with "" -> nums | _ -> hex_nums) >>= fun n ->
   return @@ String.concat "" [ s; p; n ]
 
-(** parses word of letters *)
+(** Multiple letters *)
 let word = take_while1 is_ch
 
-(** parses a register of one of bit size *)
+(** Parses reg128 or less and pack it *)
 let reg_e : dyn_reg_e t =
   let r = take_while1 (fun x -> is_ch x || is_num x) in
   trim @@ r >>= fun x ->
@@ -93,6 +118,7 @@ let reg_e : dyn_reg_e t =
   | w when is_128bitreg w -> return @@ Dyn_e (Reg128 w)
   | _ -> fail "Isnt reg128 or less"
 
+(** Parses reg64 or less and pack it *)
 let reg : dyn_reg t =
   trim @@ word >>= fun x ->
   match String.uppercase_ascii x with
@@ -102,7 +128,7 @@ let reg : dyn_reg t =
   | w when is_64bitreg w -> return @@ Dyn (Reg64 w)
   | _ -> fail "Isnt reg64 or less"
 
-(** parses arithmetic expression with vars *)
+(** Parses arithmetic expression with global consts and consts *)
 let expr =
   let add = char '+' *> return (fun x y -> Add (x, y)) in
   let sub = char '-' *> return (fun x y -> Sub (x, y)) in
@@ -124,18 +150,18 @@ let expr =
       let term = trim @@ chainl1 factor (mul <|> div) in
       trim @@ chainl1 term (add <|> sub))
 
-(** parses label*)
+(** Parses label*)
 let label =
   word >>= fun x ->
   if isnt_reg_or_mn x then return @@ ASMLabel x
   else fail "Label cant have name of regs and mnemonics"
 
-(** parses register with expression separeted by , *)
+(** Parses reg with expression separeted by , *)
 let rte =
   reg >>= fun (Dyn x) ->
   trim @@ (char ',' *> expr) >>= fun y -> return @@ RegToExpr (x, y)
 
-(** parses two registers of the same bit size separeted br , *)
+(** Parses two regs of the same bit size separeted br , *)
 let rtr =
   let rr (Dyn_e x) (Dyn_e y) =
     let matching x y = RegToReg (x, y) in
@@ -150,6 +176,7 @@ let rtr =
   reg_e >>= fun x ->
   trim @@ (char ',' *> reg_e) >>= fun y -> rr x y
 
+(** Parses reg128 with global const *)
 let rtv =
   let f : dyn_reg_e -> asmreg128 reg_e t =
    fun (Dyn_e x) ->
@@ -159,9 +186,10 @@ let rtv =
   f x >>= fun x ->
   (trim @@ char ',') *> word >>= fun v -> return @@ RegToVar (x, ASMVar v)
 
+(** Parses all combinations of two args *)
 let da = rtr <|> rte <|> rtv
 
-(** parses mnemonic with arguments *)
+(** Parses mnemonic with arguments *)
 let command =
   trim word >>= fun x ->
   let w = String.uppercase_ascii x in
@@ -197,14 +225,14 @@ let command =
   | "CMP" -> da >>= fun x -> return @@ CMP x
   | _ -> fail "Isnt mnemonic"
 
-(** parses one line of code: mnemonic and her argumets or label then return Ast.code_section *)
+(** Parses one line of code: mnemonic and her argumets or label then return Ast.code_section *)
 let code_line_parser =
   let label = label <* char ':' >>= fun x -> return @@ Id x in
   (* let coms = char ';' *> skip_while (fun x -> compare x '\n' != 0) in *)
   let cmd = command >>= fun x -> return @@ Command x in
   trim @@ cmd <|> label
 
-(** parses one line of data section: type of const and const then return Ast.var t *)
+(** Parses one line of data section: type of const and const then return Ast.var t *)
 let data_line_parser =
   let dt =
     trim word >>= fun x ->
@@ -231,7 +259,7 @@ let data_line_parser =
   <|> (sep_by sep num >>= fun n -> return @@ Num n)
   >>= fun l -> return @@ Variable (v, dt, l)
 
-(** parses one of two possible sections and then parse section then return Ast.ast *)
+(** Parses one of two possible sections and then parse section then return Ast.ast *)
 let sec_parser =
   trim @@ (string "section" *> whitespaces *> char '.' *> word) >>= function
   | "code" | "text" ->
@@ -239,15 +267,15 @@ let sec_parser =
   | "data" -> many data_line_parser >>= fun values -> return (Data values)
   | _ -> fail "Invalid section"
 
-(** main paresr *)
+(** Main paresr *)
 let parser = many sec_parser >>= fun x -> return @@ Ast x
 
 let parse = parse_string ~consume:All parser
 
-(** results of parse *)
+(** Results of parse *)
 type 'a parse_rez = Parsed of 'a | Failed of string
 
-(** main main parser *)
+(** Main main parser *)
 let eval str = match parse str with Ok v -> Parsed v | Error msg -> Failed msg
 
 (*******************************************tests*******************************************)

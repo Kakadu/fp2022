@@ -40,17 +40,17 @@ module Interpret (M : MONADERROR) = struct
       Format.fprintf ppf "@]]@]"
   end
 
-  (** global constans *)
+  (** Envr *)
   type var =
     | Flag of bool  (** EFLAGS *)
-    | Reg64 of int64  (** not so large registers *)
-    | Reg128 of int64 * int64  (** large registers *)
-    | Const of int64 list  (** global consts *)
+    | Reg64 of int64  (** Not so large registers *)
+    | Reg128 of int64 * int64  (** sse registers *)
+    | Const of int64 list  (** Global consts *)
   [@@deriving show { with_path = false }]
 
   type envr = var MapVar.t [@@deriving show { with_path = false }]
 
-  (** start values of registers *)
+  (** Start values of registers *)
   let r_list =
     [
       ("ZF", Flag false);
@@ -74,22 +74,20 @@ module Interpret (M : MONADERROR) = struct
       ("XMM7", Reg128 (0L, 0L));
     ]
 
-  let is_jmp = function
-    | "JMP" | "JE" | "JNE" | "JZ" | "JG" | "JGE" | "JL" | "JLE" -> true
-    | _ -> false
-
-  (** insert elements from list to map *)
+  (** Insert elements from list to map *)
   let prep = function [] -> MapVar.empty | l -> MapVar.of_seq (List.to_seq l)
 
+  (** Get full name of reg that is part of reg64 *)
   let full_name : type a. a reg -> string t = function
     | Reg8 x -> return (Printf.sprintf "R%cX" x.[0])
     | Reg16 x -> return (Printf.sprintf "R%s" x)
     | Reg32 x -> return (Printf.sprintf "R%c%c" x.[1] x.[2])
     | Reg64 x -> return x
-  (* | Reg128 x -> return x *)
 
+  (** Right part of reg16 *)
   let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false
 
+  (** Finds and returns value of reg64 or less *)
   let find_r64 : type a. var MapVar.t -> a reg -> Int64.t M.t =
    fun env reg ->
     full_name reg >>= fun name ->
@@ -105,6 +103,7 @@ module Interpret (M : MONADERROR) = struct
         | Reg64 _ -> return x (* | _ -> error "Isnt reg64 or less" *))
     | _ -> error "Isnt reg64 or less"
 
+  (** Find and returns value of sse reg as int64 list of len 16*)
   let find_r128 : var MapVar.t -> asmreg128 reg_e -> Int64.t list M.t =
    fun env reg ->
     let f num =
@@ -124,23 +123,28 @@ module Interpret (M : MONADERROR) = struct
     | Reg128 (x, y) -> return @@ f x @ f y
     | _ -> error "Isnt reg128"
 
+  (** Finds and returns value of global const as int64 *)
   let find_v env name =
     return (MapVar.find name env) >>= function
     | Const x ->
         return @@ List.fold_left (fun x y -> add (shift_left x 8) y) 0L x
     | _ -> error "Isnt const"
 
+  (** Finds and returns flag *)
   let find_f env f =
     return (MapVar.find f env) >>= function
     | Flag x -> return x
     | _ -> error "Isnt flag"
 
+  (** Changes flag *)
   let change_flag env name f = return @@ MapVar.add name (Flag f) env
 
+  (** Changes all flags *)
   let change_eflag env x y z =
     change_flag env "ZF" x >>= fun env ->
     change_flag env "SF" y >>= fun env -> change_flag env "OF" z
 
+  (** Changes reg64 or less*)
   let change_reg64 :
       type a. var MapVar.t -> Int64.t -> a reg -> var MapVar.t M.t =
     let mask x y l r =
@@ -167,6 +171,7 @@ module Interpret (M : MONADERROR) = struct
       | Reg32 x -> f env (Reg32 x) v 32 0
       | Reg64 x -> f env (Reg64 x) v 64 0
 
+  (** Changes reg128 *)
   let change_reg128 :
       var MapVar.t -> Int64.t list -> asmreg128 reg_e -> var MapVar.t M.t =
     let split list p =
@@ -187,6 +192,7 @@ module Interpret (M : MONADERROR) = struct
           return @@ MapVar.add name (Reg128 (x, y)) env
       | _ -> error "Isnt reg128"
 
+  (** Calculates arithmetic expression *)
   let rec ev : var MapVar.t -> expr -> Int64.t M.t =
    fun env -> function
     | Add (l, r) ->
@@ -205,6 +211,7 @@ module Interpret (M : MONADERROR) = struct
     | Const (ASMConst x) -> return @@ of_string x
     | Var (ASMVar x) -> find_v env x
 
+  (** Executes head of cmds list and returns envr as triple of MapVar, stack and tail of cmds *)
   let rec inter env code s cmds =
     let tl = List.tl cmds in
     let rec assoc l = function
@@ -350,12 +357,14 @@ module Interpret (M : MONADERROR) = struct
             change_flag env "ZF" zf >>= fun env -> return (env, s, tl))
     | _ -> return (env, s, [])
 
+  (** Executes cmds and passes results to following cmds*)
   let rec code_sec_inter env s code = function
     | cmd :: tl ->
         inter env code s (cmd :: tl) >>= fun (env, s, c) ->
         code_sec_inter env s code c
     | [] -> return (env, s, [])
 
+  (** Interprets global consts as int64 list *)
   let rec data_sec_inter env s vars =
     let mask v l r =
       let ones l r =
@@ -389,6 +398,7 @@ module Interpret (M : MONADERROR) = struct
         data_sec_inter env s tl
     | [] -> return (env, s, [])
 
+  (** Main interpreter *)
   let rec interpret env s = function
     | h :: tl -> (
         match h with

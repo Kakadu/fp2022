@@ -8,12 +8,14 @@ type asmreg32
 type asmreg64
 type asmreg128
 
+(** Normal regs *)
 type _ reg =
   | Reg8 : string -> asmreg8 reg
   | Reg16 : string -> asmreg16 reg
   | Reg32 : string -> asmreg32 reg
   | Reg64 : string -> asmreg64 reg
 
+(** Regs with sse regs *)
 type _ reg_e =
   | Reg8 : string -> asmreg8 reg_e
   | Reg16 : string -> asmreg16 reg_e
@@ -21,12 +23,21 @@ type _ reg_e =
   | Reg64 : string -> asmreg64 reg_e
   | Reg128 : string -> asmreg128 reg_e
 
+(** Types for some functions that returns _ reg ot _ reg_e *)
 type dyn_reg_e = Dyn_e : 'a reg_e -> dyn_reg_e [@@unboxed]
+
 type dyn_reg = Dyn : 'a reg -> dyn_reg [@@unboxed]
+
+(** Consts in arithmetic expression *)
 type const = ASMConst : string -> const
+
+(** Global consts *)
 type asmvar = ASMVar : string -> asmvar
+
+(** Labels used as an argument and in the declaration of labels *)
 type label = ASMLabel : string -> label
 
+(** Arithmetic expression *)
 type expr =
   | Add : expr * expr -> expr
   | Sub : expr * expr -> expr
@@ -35,11 +46,13 @@ type expr =
   | Const : const -> expr
   | Var : asmvar -> expr
 
+(** Type that contains all combinations of arguments *)
 type double_arg =
   | RegToReg : 'a reg_e * 'a reg_e -> double_arg
   | RegToExpr : _ reg * expr -> double_arg
   | RegToVar : asmreg128 reg_e * asmvar -> double_arg
 
+(** All possible mnemonics and their arguments *)
 type mnemonic =
   | RET
   | PUSH : _ reg -> mnemonic
@@ -67,20 +80,28 @@ type mnemonic =
   | SHR : _ reg_e * expr -> mnemonic
   | CMP of double_arg
 
+(** One line of code in code section *)
 type code_section = Command of mnemonic | Id of label
 
+(** Data type for global consts *)
 type data_type = DB | DW | DD | DQ | DT
 [@@deriving show { with_path = false }]
 
+(** Possible declaration of global consts*)
 type value = Num of string list | Str of string
 [@@deriving show { with_path = false }]
 
+(** Global const *)
 type var = Variable of string * data_type * value
 [@@deriving show { with_path = false }]
 
+(** Code or data directory *)
 type dir = Code of code_section list | Data of var list
+
+(** Main ast *)
 type ast = Ast of dir list
 
+(****************************show functions****************************************)
 let show_reg : type a. a reg -> string = function
   | Reg8 x -> Printf.sprintf {|(Reg8 "%s")|} x
   | Reg16 x -> Printf.sprintf {|(Reg16 "%s")|} x
