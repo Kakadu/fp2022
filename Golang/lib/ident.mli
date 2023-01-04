@@ -10,8 +10,6 @@ type ident =
   }
 
 val error_ident : ident
-val builtin : string -> ident
-val as_builtin : ident -> string option
 val ident : scope:int -> string -> ident
 val name : ident -> string
 val eq_ident : ident -> ident -> bool

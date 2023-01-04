@@ -11,8 +11,6 @@ type ident =
 [@@deriving show, ord]
 
 let error_ident = { scope = -404; name = "<ERROR>" }
-let builtin name = { scope = -1; name }
-let as_builtin id = if id.scope = -1 then Some id.name else None
 let ident ~scope name = { name; scope }
 let name id = id.name
 let eq_ident x y = compare_ident x y = 0

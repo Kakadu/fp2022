@@ -45,9 +45,7 @@ let normalize ast =
   let eval ast = Result.map_error (fun e -> [ e ]) (Eval.eval ast) in
   let result =
     let ast = add_true_false ast in
-    let* ast = Lookup.lookup [ "print"; "len"; "append" ] ast in
-    let* ast = Builtins.pass ast in
-    (* print_string (show_ast ast); *)
+    let* ast = Lookup.lookup ast in
     let* _ = Typecheck.check ast in
     let* _ = Termination_check.check_file ast in
     let* _ = eval ast in

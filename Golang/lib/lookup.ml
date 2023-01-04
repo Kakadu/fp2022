@@ -65,9 +65,8 @@ end)
 
 open P
 
-let initial_state builtins =
-  let builtins = List.map builtins ~f:Ident.builtin in
-  let scope = Scope.empty_global_scope builtins in
+let initial_state =
+  let scope = Scope.empty_global_scope [] in
   { next_id = 1; scope; errs = [] }
 ;;
 
@@ -95,6 +94,13 @@ let resolve (name : string) : ident t =
   | None ->
     let* _ = add_err ("Identifier " ^ name ^ " is not declared!") in
     return error_ident
+;;
+
+let is_defined name =
+  let* s = access in
+  match Scope.resolve s.scope name with
+  | Some _ -> return true
+  | None -> return false
 ;;
 
 let enter_scope : Scope.t t =
@@ -125,6 +131,9 @@ let enter_fn_scope =
 ;;
 
 (* Expressions *)
+
+let err_expr = Ident Ident.error_ident
+
 let rec lookup_expr = function
   | Const c -> return (Const c)
   | Ident name ->
@@ -137,10 +146,7 @@ let rec lookup_expr = function
     let* arr = lookup_expr arr in
     let* i = lookup_expr i in
     return (ArrIndex (arr, i))
-  | Call (f, args) ->
-    let* f = lookup_expr f in
-    let* args = lookup_exprs args in
-    return (Call (f, args))
+  | Call (f, args) -> lookup_func_call f args
   | FuncLit (sign, b) ->
     let* sign, b = lookup_func sign b in
     return (FuncLit (sign, b))
@@ -162,6 +168,32 @@ let rec lookup_expr = function
     let* vs = lookup_exprs vs in
     return (Append (arr, vs))
   | Make x -> return (Make x)
+
+and lookup_builtin name args =
+  match name with
+  | "print" -> return (Print args)
+  | "append" ->
+    (match args with
+     | arr :: first :: rest -> return (Append (arr, first :: rest))
+     | _ ->
+       add_err "append() takes at least 2 arguments" *> return (Append (err_expr, [])))
+  | "len" ->
+    (match args with
+     | [ x ] -> return (Len x)
+     | _ -> add_err "len() built-in takes exactly 1 argument" *> return (Len err_expr))
+  | name -> add_err ("Identifier " ^ name ^ " is not declared!") *> return err_expr
+
+and lookup_func_call f args =
+  let* args = lookup_exprs args in
+  let as_user_func =
+    let* f = lookup_expr f in
+    return (Call (f, args))
+  in
+  match f with
+  | Ident name ->
+    let* is_def = is_defined name in
+    if is_def then as_user_func else lookup_builtin name args
+  | _ -> as_user_func
 
 and lookup_func sign b =
   (* Closures are not allowed here *)
@@ -252,8 +284,8 @@ let lookup_file file =
   return d
 ;;
 
-let lookup builtins file =
-  let s, file = run_pass (lookup_file file) ~init:(initial_state builtins) in
+let lookup file =
+  let s, file = run_pass (lookup_file file) ~init:initial_state in
   match s.errs with
   | [] -> Ok file
   | errs -> Error errs
