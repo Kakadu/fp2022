@@ -41,19 +41,19 @@ module Interpret : functor (M : MONADERROR) -> sig
   type var =
     | Flag of bool
     | Reg64 of int64
-    | Reg128 of string
-    | Const of string
+    | Reg128 of int64 * int64
+    | Const of int64 list
+
+  val prep : (MapVar.key * 'a) list -> 'a MapVar.t
+  val r_list : (string * var) list
 
   type envr = var MapVar.t
 
   val show_envr : envr -> string
-  val show_var : var -> string
-  val r_list : (string * var) list
-  val prep : (MapVar.key * 'a) list -> 'a MapVar.t
 
   val interpret :
     var MapVar.t ->
-    (string * var) list ->
+    Int64.t list ->
     dir list ->
-    (var MapVar.t * (string * var) list) M.t
+    (var MapVar.t * Int64.t list * 'a list) M.t
 end
