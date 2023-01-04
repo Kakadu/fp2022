@@ -66,7 +66,7 @@ module Eval (M : MONADERROR) = struct
 
   let get_class_var (st : state) (name : string) : value t =
     let rec get_from_map_stack = function
-      | [] -> error (String.concat " " ["Variable"; name; "does not exist"])
+      | [] -> error (String.concat " " [ "Variable"; name; "does not exist" ])
       | m :: tail ->
         (match Base.Map.find m name with
          | Some v -> return v

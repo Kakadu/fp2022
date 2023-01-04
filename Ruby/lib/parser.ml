@@ -206,8 +206,8 @@ let seq_of_expr =
         let factor =
           choice
             ~failure_msg:"Unrecognized factor"
-            [ yield;
-            index_get
+            [ yield
+            ; index_get
             ; method_access
             ; invocation
             ; parens expr
