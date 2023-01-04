@@ -90,7 +90,7 @@ module Interpret (M : MONADERROR) = struct
 
   let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false
 
-  let find_r : type a. var MapVar.t -> a reg -> Int64.t M.t =
+  let find_r64 : type a. var MapVar.t -> a reg -> Int64.t M.t =
    fun env reg ->
     full_name reg >>= fun name ->
     return (MapVar.find name env) >>= function
@@ -147,7 +147,7 @@ module Interpret (M : MONADERROR) = struct
     in
     let f env reg v l r =
       full_name reg >>= fun name ->
-      find_r env reg >>= fun ov ->
+      find_r64 env reg >>= fun ov ->
       return @@ insert ov v l r >>= fun v ->
       return @@ MapVar.add name (Reg64 v) env
     in
@@ -184,10 +184,10 @@ module Interpret (M : MONADERROR) = struct
       | _ :: tl -> assoc l tl
     in
     let f x af =
-      find_r env x >>= fun v ->
+      find_r64 env x >>= fun v ->
       let nv = af v in
       change_reg64 env nv x >>= fun env ->
-      find_r env x >>= fun nnv ->
+      find_r64 env x >>= fun nnv ->
       change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
       return (env, s, tl)
     in
@@ -203,7 +203,7 @@ module Interpret (M : MONADERROR) = struct
     in
     let u_da = function
       | RegToExpr (x, y) -> ev env y >>= fun y -> return (Dyn x, y)
-      | RegToReg (x, y) -> find_r env y >>= fun y -> return (Dyn x, y)
+      | RegToReg (x, y) -> find_r64 env y >>= fun y -> return (Dyn x, y)
     in
     let ff x af = u_da x >>= fun (Dyn x, y) -> f x (af y) in
     match cmds with
@@ -212,7 +212,7 @@ module Interpret (M : MONADERROR) = struct
         match x with
         | RET -> return (env, s, [])
         | SYSCALL -> return (env, s, tl)
-        | PUSH x -> find_r env x >>= fun v -> return (env, v :: s, tl)
+        | PUSH x -> find_r64 env x >>= fun v -> return (env, v :: s, tl)
         | POP x ->
             change_reg64 env (List.hd s) x >>= fun env ->
             return (env, List.tl s, tl)
@@ -241,7 +241,7 @@ module Interpret (M : MONADERROR) = struct
             f x (fun x -> add x (shift_right x (to_int y)))
         | CMP x ->
             u_da x >>= fun (Dyn x, y) ->
-            find_r env x >>= fun x ->
+            find_r64 env x >>= fun x ->
             change_flag env "ZF" (x = y) >>= fun env -> return (env, s, tl))
     | _ -> return (env, s, [])
 
