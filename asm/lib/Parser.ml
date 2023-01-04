@@ -79,7 +79,8 @@ let word = take_while1 is_ch
 
 (** parses a register of one of bit size *)
 let reg =
-  trim @@ word >>= fun x ->
+  let r = take_while1 (fun x -> is_ch x || is_num x) in
+  trim @@ r >>= fun x ->
   match String.uppercase_ascii x with
   | w when is_8bitreg w -> return @@ Dyn (Reg8 w)
   | w when is_16bitreg w -> return @@ Dyn (Reg16 w)
@@ -397,7 +398,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a   dd aaa");
-  [%expect{| (Variable ("a", DD, (Str "aaa"))) |}]
+  [%expect {| (Variable ("a", DD, (Str "aaa"))) |}]
 
 let%expect_test _ =
   print_string (pr_not_opt data_line_parser "a   dd aaa, aaaa");
