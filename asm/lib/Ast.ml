@@ -13,7 +13,13 @@ type _ reg =
   | Reg16 : string -> asmreg16 reg
   | Reg32 : string -> asmreg32 reg
   | Reg64 : string -> asmreg64 reg
-  | Reg128 : string -> asmreg128 reg
+
+type _ reg_e =
+  | Reg8 : string -> asmreg8 reg_e
+  | Reg16 : string -> asmreg16 reg_e
+  | Reg32 : string -> asmreg32 reg_e
+  | Reg64 : string -> asmreg64 reg_e
+  | Reg128 : string -> asmreg128 reg_e
 
 type dyn_reg = Dyn : 'a reg -> dyn_reg [@@unboxed]
 type const = ASMConst : string -> const
@@ -29,8 +35,9 @@ type expr =
   | Var : asmvar -> expr
 
 type double_arg =
-  | RegToReg : 'a reg * 'a reg -> double_arg
+  | RegToReg : 'a reg_e * 'a reg_e -> double_arg
   | RegToExpr : _ reg * expr -> double_arg
+  | RegToConst : asmreg128 reg_e * const -> double_arg
 
 type mnemonic =
   | RET
@@ -56,8 +63,8 @@ type mnemonic =
   | AND of double_arg
   | XOR of double_arg
   | OR of double_arg
-  | SHL : _ reg * expr -> mnemonic
-  | SHR : _ reg * expr -> mnemonic
+  | SHL : _ reg_e * expr -> mnemonic
+  | SHR : _ reg_e * expr -> mnemonic
   | CMP of double_arg
 
 type code_section = Command of mnemonic | Id of label
@@ -75,6 +82,12 @@ type dir = Code of code_section list | Data of var list
 type ast = Ast of dir list
 
 let show_reg : type a. a reg -> string = function
+  | Reg8 x -> Printf.sprintf {|(Reg8 "%s")|} x
+  | Reg16 x -> Printf.sprintf {|(Reg16 "%s")|} x
+  | Reg32 x -> Printf.sprintf {|(Reg32 "%s")|} x
+  | Reg64 x -> Printf.sprintf {|(Reg64 "%s")|} x
+
+let show_reg_e : type a. a reg_e -> string = function
   | Reg8 x -> Printf.sprintf {|(Reg8 "%s")|} x
   | Reg16 x -> Printf.sprintf {|(Reg16 "%s")|} x
   | Reg32 x -> Printf.sprintf {|(Reg32 "%s")|} x
@@ -102,9 +115,11 @@ let rec show_expr : expr -> string = function
 
 let show_double_arg = function
   | RegToReg (x, y) ->
-      Printf.sprintf {|(RegToReg (%s, %s))|} (show_reg x) (show_reg y)
+      Printf.sprintf {|(RegToReg (%s, %s))|} (show_reg_e x) (show_reg_e y)
   | RegToExpr (x, y) ->
       Printf.sprintf {|(RegToExpr (%s, %s))|} (show_reg x) (show_expr y)
+  | RegToConst (x, y) ->
+      Printf.sprintf {|(RegToConst (%s, %s))|} (show_reg_e x) (show_const y)
 
 let show_mnemonic : mnemonic -> string = function
   | RET -> "(RET)"
@@ -131,9 +146,9 @@ let show_mnemonic : mnemonic -> string = function
   | XOR x -> Printf.sprintf {|(XOR %s)|} (show_double_arg x)
   | OR x -> Printf.sprintf {|(OR %s)|} (show_double_arg x)
   | SHL (x, y) ->
-      Printf.sprintf {|(SHL (RegToExpr (%s, %s)))|} (show_reg x) (show_expr y)
+      Printf.sprintf {|(SHL (RegToExpr (%s, %s)))|} (show_reg_e x) (show_expr y)
   | SHR (x, y) ->
-      Printf.sprintf {|(SHR (RegToExpr (%s, %s)))|} (show_reg x) (show_expr y)
+      Printf.sprintf {|(SHR (RegToExpr (%s, %s)))|} (show_reg_e x) (show_expr y)
   | CMP x -> Printf.sprintf {|(CMP %s)|} (show_double_arg x)
 
 let show_code_section : code_section -> string = function
