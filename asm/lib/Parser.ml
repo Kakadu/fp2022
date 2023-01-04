@@ -66,6 +66,10 @@ let nums = take_while1 is_num
 
 let hex_nums = take_while1 is_hex_digit
 
+let isnt_reg_or_mn s =
+  let w = String.uppercase_ascii s in
+  (not (is_reg w)) & not (is_mnemonic w)
+
 let num =
   let sign = option "" (string "+" <|> string "-") in
   let hex_pref = option "" (string "0x") in
@@ -78,16 +82,25 @@ let num =
 let word = take_while1 is_ch
 
 (** parses a register of one of bit size *)
-let reg =
+let reg_e : dyn_reg_e t =
   let r = take_while1 (fun x -> is_ch x || is_num x) in
   trim @@ r >>= fun x ->
+  match String.uppercase_ascii x with
+  | w when is_8bitreg w -> return @@ Dyn_e (Reg8 w)
+  | w when is_16bitreg w -> return @@ Dyn_e (Reg16 w)
+  | w when is_32bitreg w -> return @@ Dyn_e (Reg32 w)
+  | w when is_64bitreg w -> return @@ Dyn_e (Reg64 w)
+  | w when is_128bitreg w -> return @@ Dyn_e (Reg128 w)
+  | _ -> fail "Isnt reg128 or less"
+
+let reg : dyn_reg t =
+  trim @@ word >>= fun x ->
   match String.uppercase_ascii x with
   | w when is_8bitreg w -> return @@ Dyn (Reg8 w)
   | w when is_16bitreg w -> return @@ Dyn (Reg16 w)
   | w when is_32bitreg w -> return @@ Dyn (Reg32 w)
   | w when is_64bitreg w -> return @@ Dyn (Reg64 w)
-  | w when is_128bitreg w -> return @@ Dyn (Reg128 w)
-  | _ -> fail "Isnt reg"
+  | _ -> fail "Isnt reg64 or less"
 
 (** parses arithmetic expression with vars *)
 let expr =
@@ -98,8 +111,7 @@ let expr =
   let num = num >>= fun x -> return @@ Const (ASMConst x) in
   let var =
     word >>= fun x ->
-    let w = String.uppercase_ascii x in
-    if (not (is_reg w)) & not (is_mnemonic w) then return @@ Var (ASMVar x)
+    if isnt_reg_or_mn x then return @@ Var (ASMVar x)
     else fail "Vars cant have name of regs and mnemonics"
   in
   let arg = num <|> var in
@@ -115,8 +127,7 @@ let expr =
 (** parses label*)
 let label =
   word >>= fun x ->
-  let w = String.uppercase_ascii x in
-  if (not (is_reg w)) & not (is_mnemonic w) then return @@ ASMLabel x
+  if isnt_reg_or_mn x then return @@ ASMLabel x
   else fail "Label cant have name of regs and mnemonics"
 
 (** parses register with expression separeted by , *)
@@ -126,7 +137,7 @@ let rte =
 
 (** parses two registers of the same bit size separeted br , *)
 let rtr =
-  let rr (Dyn x) (Dyn y) =
+  let rr (Dyn_e x) (Dyn_e y) =
     let matching x y = RegToReg (x, y) in
     match (x, y) with
     | Reg8 _, Reg8 _ -> return @@ matching x y
@@ -136,10 +147,19 @@ let rtr =
     | Reg128 _, Reg128 _ -> return @@ matching x y
     | _ -> fail "Isnt same type regs"
   in
-  reg >>= fun x ->
-  trim @@ (char ',' *> reg) >>= fun y -> rr x y
+  reg_e >>= fun x ->
+  trim @@ (char ',' *> reg_e) >>= fun y -> rr x y
 
-let da = rtr <|> rte
+let rtv =
+  let f : dyn_reg_e -> asmreg128 reg_e t =
+   fun (Dyn_e x) ->
+    match x with Reg128 _ -> return x | _ -> fail "Isnt reg128"
+  in
+  reg_e >>= fun x ->
+  f x >>= fun x ->
+  (trim @@ char ',') *> word >>= fun v -> return @@ RegToVar (x, ASMVar v)
+
+let da = rtr <|> rte <|> rtv
 
 (** parses mnemonic with arguments *)
 let command =
@@ -170,10 +190,10 @@ let command =
   | "XOR" -> da >>= fun x -> return @@ XOR x
   | "OR" -> da >>= fun x -> return @@ OR x
   | "SHL" ->
-      reg >>= fun (Dyn x) ->
+      reg_e >>= fun (Dyn_e x) ->
       (trim @@ char ',') *> expr >>= fun y -> return @@ SHL (x, y)
   | "SHR" ->
-      reg >>= fun (Dyn x) ->
+      reg_e >>= fun (Dyn_e x) ->
       (trim @@ char ',') *> expr >>= fun y -> return @@ SHR (x, y)
   | "CMP" -> da >>= fun x -> return @@ CMP x
   | _ -> fail "Isnt mnemonic"
@@ -339,6 +359,18 @@ let%expect_test _ =
   [%expect {|(Command (INC (Reg64 "RAX")))|}]
 
 let%expect_test _ =
+  print_string (pr_not_opt code_line_parser "inc xmm0");
+  [%expect {| : Label cant have name of regs and mnemonics |}]
+
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "je a");
+  [%expect {| (Command (JE (ASMLabel "a"))) |}]
+
+let%expect_test _ =
+  print_string (pr_not_opt code_line_parser "je rax");
+  [%expect {| : Label cant have name of regs and mnemonics |}]
+
+let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1");
   [%expect
     {| (Command (MOV (RegToExpr ((Reg64 "RAX"), (Const (ASMConst "1")))))) |}]
@@ -373,6 +405,18 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "mov rax, ebx");
+  [%expect {| : Label cant have name of regs and mnemonics |}]
+
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov xmm0, xmm1");
+  [%expect {| (Command (MOV (RegToReg ((Reg128 "XMM0"), (Reg128 "XMM1"))))) |}]
+
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "mov xmm0, a");
+  [%expect {| (Command (MOV (RegToVar ((Reg128 "XMM0"), (ASMVar "a"))))) |}]
+
+let%expect_test _ =
+  print_string (pr_not_opt code_line_parser "mov xmm0, 1 + 1");
   [%expect {| : Label cant have name of regs and mnemonics |}]
 
 let%expect_test _ =

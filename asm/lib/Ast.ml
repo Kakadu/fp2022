@@ -21,6 +21,7 @@ type _ reg_e =
   | Reg64 : string -> asmreg64 reg_e
   | Reg128 : string -> asmreg128 reg_e
 
+type dyn_reg_e = Dyn_e : 'a reg_e -> dyn_reg_e [@@unboxed]
 type dyn_reg = Dyn : 'a reg -> dyn_reg [@@unboxed]
 type const = ASMConst : string -> const
 type asmvar = ASMVar : string -> asmvar
@@ -37,7 +38,7 @@ type expr =
 type double_arg =
   | RegToReg : 'a reg_e * 'a reg_e -> double_arg
   | RegToExpr : _ reg * expr -> double_arg
-  | RegToConst : asmreg128 reg_e * const -> double_arg
+  | RegToVar : asmreg128 reg_e * asmvar -> double_arg
 
 type mnemonic =
   | RET
@@ -94,7 +95,11 @@ let show_reg_e : type a. a reg_e -> string = function
   | Reg64 x -> Printf.sprintf {|(Reg64 "%s")|} x
   | Reg128 x -> Printf.sprintf {|(Reg128 "%s")|} x
 
-let show_dyn_reg (Dyn x) = Printf.sprintf {|(Dyn "%s")|} (show_reg x)
+let show_dyn_reg_e : dyn_reg_e -> string =
+ fun (Dyn_e x) -> Printf.sprintf {|(Dyn_e "%s")|} (show_reg_e x)
+
+let show_dyn_reg : dyn_reg -> string =
+ fun (Dyn x) -> Printf.sprintf {|(Dyn "%s")|} (show_reg x)
 
 let show_label : label -> string = function
   | ASMLabel x -> Printf.sprintf {|(ASMLabel "%s")|} x
@@ -118,8 +123,8 @@ let show_double_arg = function
       Printf.sprintf {|(RegToReg (%s, %s))|} (show_reg_e x) (show_reg_e y)
   | RegToExpr (x, y) ->
       Printf.sprintf {|(RegToExpr (%s, %s))|} (show_reg x) (show_expr y)
-  | RegToConst (x, y) ->
-      Printf.sprintf {|(RegToConst (%s, %s))|} (show_reg_e x) (show_const y)
+  | RegToVar (x, y) ->
+      Printf.sprintf {|(RegToVar (%s, %s))|} (show_reg_e x) (show_asmvar y)
 
 let show_mnemonic : mnemonic -> string = function
   | RET -> "(RET)"
