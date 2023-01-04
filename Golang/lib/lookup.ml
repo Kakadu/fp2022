@@ -45,6 +45,12 @@ module Scope = struct
       let id = ident ~scope:scope.id name in
       Ok (id, { scope with tab = Map.set scope.tab ~key:name ~data:id })
   ;;
+
+  let rec get_global scope =
+    match scope.parent with
+    | Some p -> get_global p
+    | None -> scope
+  ;;
 end
 
 type lookup_state =
@@ -100,9 +106,22 @@ let enter_scope : Scope.t t =
   return old_scope
 ;;
 
+let get_scope =
+  let* state = access in
+  return state.scope
+;;
+
 let set_scope scope : unit t =
   let* state = access in
   put { state with scope }
+;;
+
+let enter_fn_scope =
+  let* s = get_scope in
+  let g = Scope.get_global s in
+  let* _ = set_scope g in
+  let* _ = enter_scope in
+  return s
 ;;
 
 (* Expressions *)
@@ -145,10 +164,11 @@ let rec lookup_expr = function
   | Make x -> return (Make x)
 
 and lookup_func sign b =
-  let* enclosing_scope = enter_scope in
+  (* Closures are not allowed here *)
+  let* s = enter_fn_scope in
   let* sign = lookup_declare_signature sign in
   let* b = lookup_block b in
-  let* _ = set_scope enclosing_scope in
+  let* _ = set_scope s in
   return (sign, b)
 
 and lookup_declare_signature { args; ret } =

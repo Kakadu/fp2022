@@ -18,11 +18,11 @@ type value =
   | VChan of value Channel.t
   | VVoid
 
-and vfunc = env * ident signature * ident block
+and vfunc = ident signature * ident block
 
 and env =
   { parent : env option
-  ; tbl : value ref tbl
+  ; tbl : value tbl
   }
 
 type eval_state =
@@ -54,8 +54,8 @@ let push_fn =
   put { s with env }
 ;;
 
-let enter_func_call closure_env =
-  let* cur_env = set_env closure_env in
+let enter_func_call =
+  let* cur_env = get_env in
   let* _ = push_fn in
   return cur_env
 ;;
@@ -69,35 +69,34 @@ let new_var id value =
   let* s = access in
   match s.env with
   | { parent; tbl } ->
-    let tbl = Ident.set tbl ~key:id ~data:(ref value) in
+    let tbl = Ident.set tbl ~key:id ~data:value in
     put { s with env = { parent; tbl } }
 ;;
 
 let set_var id value =
-  let rec set_ref env =
-    let { parent; tbl } = env in
+  let rec set { parent; tbl } =
     let var = Ident.find tbl id in
     match parent, var with
-    | _, Some var -> var := value
-    | Some env, None -> set_ref env
+    | _, Some _ -> { parent; tbl = Ident.set tbl ~key:id ~data:value }
+    | Some parent, None -> { parent = Some (set parent); tbl }
     | None, None -> raise InternalExn
   in
   let* s = access in
-  set_ref s.env;
-  put s
+  let env = set s.env in
+  put { s with env }
 ;;
 
 let get_var id =
-  let rec get_ref_val env =
+  let rec get_val env =
     let { parent; tbl } = env in
     let var = Ident.find tbl id in
     match parent, var with
-    | _, Some var -> !var
-    | Some env, None -> get_ref_val env
+    | _, Some var -> var
+    | Some env, None -> get_val env
     | None, None -> raise InternalExn
   in
   let* s = access in
-  return (get_ref_val s.env)
+  return (get_val s.env)
 ;;
 
 let set_returned value =
@@ -177,7 +176,7 @@ let rec value_to_string = function
   | VArr arr ->
     let els = List.map arr ~f:value_to_string in
     "[" ^ String.concat ~sep:", " els ^ "]"
-  | VFunc (_, sign, _) ->
+  | VFunc (sign, _) ->
     "func" ^ show_typ (FunTyp (ident_sign_to_string_sign sign)) ^ "{ ... }"
   | VVoid -> "void"
   | VChan _ -> "chan"
@@ -231,8 +230,8 @@ and eval_call f args =
     | List.Or_unequal_lengths.Unequal_lengths -> raise InternalExn
   in
   match f with
-  | VFunc (closure_env, { args = fargs; _ }, b) ->
-    let* env = enter_func_call closure_env in
+  | VFunc ({ args = fargs; _ }, b) ->
+    let* env = enter_func_call in
     let* _ = set_args fargs args in
     let* _ = eval_block b in
     let* _ = exit_func_call env in
@@ -242,9 +241,7 @@ and eval_call f args =
      | None -> return (Ok VVoid))
   | _ -> raise InternalExn
 
-and eval_func_lit sign block =
-  let* env = get_env in
-  return (Ok (VFunc (env, sign, block)))
+and eval_func_lit sign block = return (Ok (VFunc (sign, block)))
 
 and eval_unop op e =
   let** e = eval_expr e in
@@ -281,7 +278,8 @@ and eval_print args =
   let** args = eval_exprs args in
   let args = List.map args ~f:value_to_string in
   let str = String.concat ~sep:" " args in
-  Caml.print_string str;
+  Caml.Printf.fprintf Caml.stdout "%s" str;
+  Caml.Printf.fprintf Caml.stdout "%!";
   return (Ok VVoid)
 
 and eval_len e =
