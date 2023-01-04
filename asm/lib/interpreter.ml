@@ -106,6 +106,20 @@ module Interpret (M : MONADERROR) = struct
         | _ -> error "Isnt reg64 or less")
     | _ -> error "Isnt reg64 or less"
 
+  let find_r128 : var MapVar.t -> asmreg128 reg -> Int64.t list M.t =
+   fun env (Reg128 reg) ->
+    let f num =
+      let rec helper n ac =
+        match ac with
+        | 8 -> []
+        | x -> helper (shift_right n 8) (x + 1) @ [ logand n 0xFFL ]
+      in
+      helper num 0
+    in
+    return (MapVar.find reg env) >>= function
+    | Reg128 (x, y) -> return @@ f x @ f y
+    | _ -> error "Isnt reg128"
+
   let find_v env name =
     let explode s = List.init (String.length s) (String.get s) in
     return (MapVar.find name env) >>= function
@@ -158,6 +172,26 @@ module Interpret (M : MONADERROR) = struct
     | Reg64 x -> f env (Reg64 x) v 64 0
     | _ -> error "Isnt reg64 or less"
 
+  let change_reg128 :
+      var MapVar.t -> Int64.t list -> asmreg128 reg -> var MapVar.t M.t =
+    let split list p =
+      let rec helper acc n xs =
+        match (n, xs) with
+        | 0, xs -> (acc, xs)
+        | _, [] -> (acc, [])
+        | n, x :: xs -> helper (x :: acc) (n - 1) xs
+      in
+      helper [] p list
+    in
+    let f l = List.fold_left (fun x y -> add (shift_left x 8) y) 0L l in
+    fun env l -> function
+      | Reg128 name ->
+          let l = List.map (logand 0xFFL) l in
+          let l1, l2 = split l 7 in
+          let x, y = (f l1, f l2) in
+          return @@ MapVar.add name (Reg128 (x, y)) env
+      | _ -> error "Isnt reg128"
+
   let rec ev : var MapVar.t -> expr -> Int64.t M.t =
    fun env -> function
     | Add (l, r) ->
@@ -184,12 +218,15 @@ module Interpret (M : MONADERROR) = struct
       | _ :: tl -> assoc l tl
     in
     let f x af =
-      find_r64 env x >>= fun v ->
-      let nv = af v in
-      change_reg64 env nv x >>= fun env ->
-      find_r64 env x >>= fun nnv ->
-      change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
-      return (env, s, tl)
+      match x with
+      | Ast.Reg128 x -> error ""
+      | _ ->
+          find_r64 env x >>= fun v ->
+          let nv = af v in
+          change_reg64 env nv x >>= fun env ->
+          find_r64 env x >>= fun nnv ->
+          change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
+          return (env, s, tl)
     in
     let c_flags env =
       find_f env "ZF" >>= fun z ->
