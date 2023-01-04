@@ -107,8 +107,7 @@ module Interpret (M : MONADERROR) = struct
   let find_r128 : var MapVar.t -> asmreg128 reg_e -> Int64.t list M.t =
    fun env reg ->
     let f num =
-      let rec helper n ac =
-        match ac with
+      let rec helper n = function
         | 8 -> []
         | x -> helper (shift_right n 8) (x + 1) @ [ logand n 0xFFL ]
       in
@@ -288,8 +287,7 @@ module Interpret (M : MONADERROR) = struct
       change_reg64 env nv x >>= fun env -> return (env, s, tl)
     in
     let to_l num =
-      let rec helper n ac =
-        match ac with
+      let rec helper n = function
         | 8 -> []
         | x -> helper (shift_right n 8) (x + 1) @ [ logand n 0xFFL ]
       in
