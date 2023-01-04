@@ -260,7 +260,7 @@ module Interpret (M : MONADERROR) = struct
           find_r64 env x >>= fun ov ->
           ev env y >>= fun y ->
           let nv = af ov y in
-          change_reg64 env y x >>= fun env ->
+          change_reg64 env nv x >>= fun env ->
           find_r64 env x >>= fun nnv ->
           change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
           return (env, s, tl)
@@ -311,7 +311,7 @@ module Interpret (M : MONADERROR) = struct
         | JLE x -> jmp x (fun (x, y) -> x & not y)
         | MOV x -> ff x (fun _ y -> y)
         | ADD x -> ff x add
-        | SUB x -> ff x (fun x y -> sub y x)
+        | SUB x -> ff x sub
         | IMUL x -> ff x mul
         | AND x -> ff x logand
         | OR x -> ff x logor
