@@ -19,7 +19,9 @@ let rec string_of_value = function
   | ClassInstance ref_class_state ->
     String.concat
       ~sep:" "
-      ([ "<"; "ClassInstance" ] @ print_state !ref_class_state @ [ ">" ])
+      ([ "<"; "ClassInstance" ] @ print_state ref_class_state @ [ ">" ])
+  | Lambda (_, params, _) ->
+    String.concat [ "Lambda"; "("; String.concat ~sep:", " params; ")" ]
 
 and print_state (st : class_state) : string list =
   st

@@ -206,9 +206,10 @@ let seq_of_expr =
         let factor =
           choice
             ~failure_msg:"Unrecognized factor"
-            [ index_get
-            ; invocation
+            [ yield;
+            index_get
             ; method_access
+            ; invocation
             ; parens expr
             ; literal
             ; var_cal
@@ -258,7 +259,6 @@ let seq_of_expr =
           ; parens expr
           ; while_loop
           ; array_v
-          ; yield
           ])
     in
     maybe new_lines *> sep_by expr_separator expr <* maybe new_lines >>| fun s -> Seq s)

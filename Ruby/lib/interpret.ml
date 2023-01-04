@@ -46,27 +46,29 @@ module Eval (M : MONADERROR) = struct
 
   let empty_state : state =
     { local_vars = Base.Map.empty (module Base.String)
-    ; class_scopes = [ ref (Base.Map.empty (module Base.String)) ]
+    ; class_scopes = [ Base.Map.empty (module Base.String) ]
     }
   ;;
 
-  let from_global (st : state) : state =
+  let clear_local (st : state) : state =
     { empty_state with class_scopes = st.class_scopes }
   ;;
+
+  let pop_class_scope (st : state) : class_state = List.hd st.class_scopes
 
   let set_local_var (st : state) (name : string) (new_v : value) : state t =
     return { st with local_vars = Base.Map.set st.local_vars ~key:name ~data:new_v }
   ;;
 
-  let add_class_scope (st : state) (init_state : class_state ref) : state =
-    { st with class_scopes = [ init_state ] @ st.class_scopes }
+  let add_class_scope (st : state) (init_state : class_state) : state =
+    { st with class_scopes = init_state :: st.class_scopes }
   ;;
 
   let get_class_var (st : state) (name : string) : value t =
     let rec get_from_map_stack = function
-      | [] -> error "Variable does not exist"
+      | [] -> error (String.concat " " ["Variable"; name; "does not exist"])
       | m :: tail ->
-        (match Base.Map.find !m name with
+        (match Base.Map.find m name with
          | Some v -> return v
          | None -> get_from_map_stack tail)
     in
@@ -80,15 +82,15 @@ module Eval (M : MONADERROR) = struct
   ;;
 
   let get_from_class_state (cls_state : class_state) (name : string) : value t =
-    get_variable (add_class_scope empty_state (ref cls_state)) name
+    get_variable (add_class_scope empty_state cls_state) name
   ;;
 
-  let set_class_var (st : state) (name : string) (new_v : value) =
-    match Base.List.hd st.class_scopes with
-    | Some cur_class ->
-      cur_class := Base.Map.set !cur_class ~key:name ~data:new_v;
-      return st
-    | None -> error "Class scopes are empty"
+  let set_class_var (st : state) (name : string) (new_v : value) : state t =
+    match st.class_scopes with
+    | cur_class :: tail ->
+      return
+        { st with class_scopes = Base.Map.set cur_class ~key:name ~data:new_v :: tail }
+    | [] -> error "Class scopes are empty"
   ;;
 
   let binop_typefail (op : string) (l : value) (r : value) =
@@ -217,18 +219,18 @@ module Eval (M : MONADERROR) = struct
       in
       List.fold_left eval_step (return ([], st)) codes
     in
-    match code with
-    | Literal (lit_t, v) -> return (value_of_literal lit_t v, st)
-    | Var n -> get_variable st n >>= fun v -> return (v, st)
-    | VarAssign (i, v) ->
-      eval st v
-      >>= fun (var_value, st) ->
+    let assign_var (st : state) (i : string) (var_value : value) =
       let new_state =
         match get_var_type i with
         | Local -> set_local_var st i var_value
         | Class -> set_class_var st i var_value
       in
       new_state >>= fun new_state -> return (var_value, new_state)
+    in
+    match code with
+    | Literal (lit_t, v) -> return (value_of_literal lit_t v, st)
+    | Var n -> get_variable st n >>= fun v -> return (v, st)
+    | VarAssign (i, v) -> eval st v >>= fun (var_value, st) -> assign_var st i var_value
     | Binop (op, l, r) ->
       match_binop op
       >>= fun op_f ->
@@ -262,34 +264,46 @@ module Eval (M : MONADERROR) = struct
       >>= fun (b_v, n_st) ->
       eval n_st ind >>= fun (i_v, n_st) -> index_get b_v i_v >>= fun v -> return (v, n_st)
     | FuncDeclaration (level, name, params, body) ->
-      let func = Function (name, params, body) in
       (match level with
-       | TopLevel -> set_local_var st name func >>= fun n_st -> return (Nil, n_st)
-       | Method -> set_class_var st name func >>= fun n_st -> return (Nil, n_st)
-       | Lambda -> return (func, st))
+       | TopLevel ->
+         set_local_var st name (Function (name, params, body))
+         >>= fun n_st -> return (Nil, n_st)
+       | Method ->
+         set_class_var st name (Function (name, params, body))
+         >>= fun n_st -> return (Nil, n_st)
+       | Lambda -> return (Lambda (st, params, body), st))
     | MethodAccess (obj, meth, params) ->
       eval_multiple params st
       >>= fun (params, n_st) ->
       eval n_st obj
-      >>= fun (obj, n_st) ->
-      process_method_access obj meth (List.rev params) n_st >>= fun v -> return (v, n_st)
+      >>= fun (obj_v, n_st) ->
+      process_method_access obj_v meth (List.rev params) n_st
+      >>= fun (v, new_class_state) ->
+      (match obj, obj_v with
+       | Var varname, ClassInstance _ ->
+         assign_var n_st varname (ClassInstance new_class_state)
+         >>= fun (_, n_st) -> return (v, n_st)
+       | _ -> return (v, st))
     | Invocation (box_inv, params) ->
       eval st box_inv
       >>= fun (left, n_st) ->
       eval_multiple params n_st
-      >>= fun (params, n_st) ->
+      >>= fun (param_v, n_st) ->
       (match left with
        | Function (name, param_names, body) ->
-         eval_function name param_names body (from_global n_st) params
-         >>= fun v -> return (v, n_st)
-       | _ -> error "Only function can be invoked")
+         eval_function name param_names body (clear_local n_st) param_v
+         (* Discard function state entirely *)
+         >>= fun (v, _) -> return (v, n_st)
+       | Lambda (closure, param_names, body) ->
+         eval_function "" param_names body closure param_v
+         (* Discard lambda state entirely *)
+         >>= fun (v, _) -> return (v, n_st)
+       | _ -> error "Only functions and lambda can be invoked")
     | ClassDeclaration (name, members) ->
-      let class_state = ref empty_class_state in
-      (* dumb state will mutate class state through ref *)
-      let dumb_state = add_class_scope (from_global st) class_state in
+      let dumb_state = add_class_scope (clear_local st) empty_class_state in
       eval_multiple members dumb_state
-      >>= fun (_, _) ->
-      let new_class : value = Class !class_state in
+      >>= fun (_, new_st) ->
+      let new_class : value = Class (pop_class_scope new_st) in
       set_local_var st name new_class >>= fun new_st -> return (Nil, new_st)
 
   and eval_function
@@ -298,7 +312,7 @@ module Eval (M : MONADERROR) = struct
     (body : ast)
     (st : state)
     (p_values : value list)
-    : value t
+    : (value * state) t
     =
     if not (List.length p_names = List.length p_values)
     then error "Wrong number of arguments."
@@ -307,32 +321,35 @@ module Eval (M : MONADERROR) = struct
       let params = List.combine p_names (List.rev p_values) in
       let step st (n, v) = st >>= fun st -> set_local_var st n v in
       let initiated = List.fold_left step state params in
-      initiated >>= fun initiated -> eval initiated body >>= fun (v, _) -> return v)
+      initiated >>= fun initiated -> eval initiated body >>= fun (v, st) -> return (v, st))
 
   and process_method_access
     (obj : value)
     (m_name : string)
     (params : value list)
     (st : state)
-    : value t
+    : (value * class_state) t
     =
     let method_not_exist (class_name : string) =
       error (String.concat "" [ "Method "; m_name; " does not exist for "; class_name ])
     in
-    let st = from_global st in
+    (* Methods always work with empty local state *)
+    let st = clear_local st in
+    (* Return value with the same class state*)
+    let return_sst v = return (v, pop_class_scope st) in
     match obj with
     | Bool b ->
       (match m_name with
        | "class" ->
-         if b then return (String "TrueClass") else return (String "FalseClass")
-       | "inspect" | "to_s" -> return (String (string_of_bool b))
+         if b then return_sst (String "TrueClass") else return_sst (String "FalseClass")
+       | "inspect" | "to_s" -> return_sst (String (string_of_bool b))
        | _ -> method_not_exist (if b then "TrueClass" else "FalseClass"))
     | Integer i ->
       (match m_name with
-       | "class" -> return (String "Integer")
-       | "abs" -> return (Integer (abs i))
+       | "class" -> return_sst (String "Integer")
+       | "abs" -> return_sst (Integer (abs i))
        | "digits" ->
-         return
+         return_sst
            (Array
               (i
               |> string_of_int
@@ -343,28 +360,29 @@ module Eval (M : MONADERROR) = struct
        | _ -> method_not_exist "Integer")
     | String s ->
       (match m_name with
-       | "class" -> return (String "String")
-       | "length" -> return (Integer (String.length s))
+       | "class" -> return_sst (String "String")
+       | "length" -> return_sst (Integer (String.length s))
        | "starts_with" ->
          (match params with
-          | String pref :: _ -> return (Bool (String.starts_with ~prefix:pref s))
+          | String pref :: _ -> return_sst (Bool (String.starts_with ~prefix:pref s))
           | _ -> error "Wrong number of arguments or wrong types")
        | "ends_with" ->
          (match params with
-          | String suff :: _ -> return (Bool (String.ends_with ~suffix:suff s))
+          | String suff :: _ -> return_sst (Bool (String.ends_with ~suffix:suff s))
           | _ -> error "Wrong number of arguments or wrong types")
        | _ -> method_not_exist "String")
     | Array arr ->
       (match m_name with
-       | "class" -> return (String "Array")
+       | "class" -> return_sst (String "Array")
        | "to_s" ->
-         return (String ("[" ^ String.concat ", " (List.map string_of_value arr) ^ "]"))
-       | "length" | "size" -> return (Integer (List.length arr))
+         return_sst
+           (String ("[" ^ String.concat ", " (List.map string_of_value arr) ^ "]"))
+       | "length" | "size" -> return_sst (Integer (List.length arr))
        | _ -> method_not_exist "Array")
     | Function (name, param_list, _) ->
       (match m_name with
        | "to_s" ->
-         return
+         return_sst
            (String
               (String.concat
                  ""
@@ -372,7 +390,7 @@ module Eval (M : MONADERROR) = struct
        | _ -> method_not_exist "Function")
     | Nil ->
       (match m_name with
-       | "class" -> return (String "NilClass")
+       | "class" -> return_sst (String "NilClass")
        | _ -> method_not_exist "NilClass")
     | Class init_state ->
       (match m_name with
@@ -380,19 +398,26 @@ module Eval (M : MONADERROR) = struct
          get_from_class_state init_state "initialize"
          >>= (function
          | Function (name, param_names, body) ->
-           let class_state = ref init_state in
-           let st = add_class_scope st class_state in
+           (* Adding class scope *)
+           let st = add_class_scope st init_state in
            eval_function name param_names body st params
-           >>= fun _ -> return (ClassInstance class_state)
+           (* Popping class scope*)
+           (* Changes from class variables will only go to new_class_state*)
+           >>= fun (_, new_st) -> return_sst (ClassInstance (pop_class_scope new_st))
          | _ -> error "initialize must be a function")
        | _ -> method_not_exist "Class")
     | ClassInstance cls_state ->
+      (* Adding class scope*)
       let enriched_scope = add_class_scope st cls_state in
-      get_from_class_state !cls_state m_name
+      get_from_class_state cls_state m_name
       >>= (function
       | Function (name, param_names, body) ->
+        (* Popping class scope *)
+        (* Changes from class variables will only go to new_class_state*)
         eval_function name param_names body enriched_scope params
+        >>= fun (v, new_st) -> return (v, pop_class_scope new_st)
       | _ -> method_not_exist "ClassInstance")
+    | Lambda (_, _, _) -> method_not_exist "Lambda"
   ;;
 end
 

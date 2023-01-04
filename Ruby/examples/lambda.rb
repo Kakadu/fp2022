@@ -1,11 +1,11 @@
-def repeat (n)
+def map_array (arr)
+    x = []
     i = 0
-    while n > i
-        yield (i)
+    while i < arr.length ()
+        x = x + [yield (arr[i])]
         i = i + 1
     end
+    x
 end
 
-@x = [1, 2, 3]
-repeat (5) { |i| @x = @x + [i] }
-@x
+map_array ([1, 2, 3]) {|x| x * x}

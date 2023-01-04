@@ -40,13 +40,14 @@ type value =
   | String of string (** String [value]*)
   | Array of value list (** Array [value_list]*)
   | Function of string * string list * ast (** Function [name param_list body]*)
+  | Lambda of state * string list * ast (** Lambda [closure param_list * body]*)
   | Class of class_state (** Class [initial_state] *)
-  | ClassInstance of class_state ref (** ClassInstance [shared_instance_state] *)
+  | ClassInstance of class_state (** ClassInstance [shared_instance_state] *)
   | Nil (** Nil *)
 
 and class_state = (string, value, String.comparator_witness) Map.t
 
 and state =
   { local_vars : (string, value, String.comparator_witness) Map.t
-  ; class_scopes : class_state ref list
+  ; class_scopes : class_state list
   }
