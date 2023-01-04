@@ -55,9 +55,10 @@ module Eval (M : MONADERROR) = struct
   ;;
 
   let set_local_var (st : state) (name : string) (new_v : value) : state t =
-    return { local_vars = Base.Map.set st.local_vars ~key:name ~data:new_v
-    ; class_scopes = st.class_scopes
-    }
+    return
+      { local_vars = Base.Map.set st.local_vars ~key:name ~data:new_v
+      ; class_scopes = st.class_scopes
+      }
   ;;
 
   let add_class_scope (st : state) (init_state : class_state ref) : state =
@@ -239,8 +240,7 @@ module Eval (M : MONADERROR) = struct
         | Local -> set_local_var st i var_value
         | Class -> set_class_var st i var_value
       in
-      new_state >>= fun new_state ->
-      return (var_value, new_state)
+      new_state >>= fun new_state -> return (var_value, new_state)
     | Binop (op, l, r) ->
       match_binop op
       >>= fun op_f ->
@@ -255,8 +255,7 @@ module Eval (M : MONADERROR) = struct
       (match lst with
        | [] -> return (Nil, st)
        | lst ->
-         eval_multiple lst st
-         >>= fun (v_lst, new_st) -> return (v_lst |> List.hd, new_st))
+         eval_multiple lst st >>= fun (v_lst, new_st) -> return (v_lst |> List.hd, new_st))
     | WhileLoop (cond, body) ->
       let rec iteration s =
         eval s cond
@@ -318,7 +317,7 @@ module Eval (M : MONADERROR) = struct
       eval_multiple members dumb_state
       >>= fun (_, _) ->
       let new_class : value = Class !class_state in
-       set_local_var st name new_class >>= fun new_st -> return (Nil, new_st)
+      set_local_var st name new_class >>= fun new_st -> return (Nil, new_st)
 
   and eval_function
     (f_name : string)
@@ -333,7 +332,7 @@ module Eval (M : MONADERROR) = struct
     else (
       let state = set_local_var st f_name (Function (f_name, p_names, body)) in
       let params = List.combine p_names (List.rev p_values) in
-      let step st (n, v) = st>>= fun st -> set_local_var st n v in
+      let step st (n, v) = st >>= fun st -> set_local_var st n v in
       let initiated = List.fold_left step state params in
       initiated >>= fun initiated -> eval initiated body >>= fun (v, _) -> return v)
 
@@ -375,13 +374,13 @@ module Eval (M : MONADERROR) = struct
        | "class" -> return (String "String")
        | "length" -> return (Integer (String.length s))
        | "starts_with" ->
-        (match params with
-        | String pref :: [] -> return (Bool(String.starts_with ~prefix:pref s))
-        | _ -> error "Wrong number of arguments or wrong types")
+         (match params with
+          | String pref :: [] -> return (Bool (String.starts_with ~prefix:pref s))
+          | _ -> error "Wrong number of arguments or wrong types")
        | "ends_with" ->
-              (match params with
-               | String suff :: [] -> return (Bool(String.ends_with ~suffix:suff s))
-               | _ -> error "Wrong number of arguments or wrong types")
+         (match params with
+          | String suff :: [] -> return (Bool (String.ends_with ~suffix:suff s))
+          | _ -> error "Wrong number of arguments or wrong types")
        | _ -> method_not_exist "String")
     | Array arr ->
       (match m_name with
@@ -413,22 +412,24 @@ module Eval (M : MONADERROR) = struct
          eval_function name param_names body st params
          >>= fun _ -> return (ClassInstance class_state)
        | _ -> error "initialize must be a function")
-    | ClassInstance cls_state -> (
+    | ClassInstance cls_state ->
       let enriched_scope = add_class_scope st cls_state in
-      get_from_class_state !cls_state m_name >>= fun v -> 
-        match v with 
-        | Function (name, param_names, body) -> eval_function name param_names body enriched_scope params
-        | _ -> method_not_exist "ClassInstance"
-    )
+      get_from_class_state !cls_state m_name
+      >>= fun v ->
+      (match v with
+       | Function (name, param_names, body) ->
+         eval_function name param_names body enriched_scope params
+       | _ -> method_not_exist "ClassInstance")
   ;;
 end
 
-let eval_code (code: ast): string =
+let eval_code (code : ast) : string =
   let module E = Eval (Result) in
   match E.eval E.empty_state code with
   | Ok v -> string_of_value (fst v)
   | Error s -> "Error: " ^ s
-  
+;;
+
 let run_expr s = s |> Parser.parse |> eval_code
 let test_eval prog exp = String.equal (run_expr prog) exp
 
@@ -532,11 +533,24 @@ let%test "method access from array" = test_eval "([1, 2, 3, 4]).length ()" "4"
 let%test "class variables in same scope" = test_eval "@x = 10; @x" "10"
 
 let%test "class variables in func scope" =
-  test_eval "@x = 10; def f\n @x \n end; f ()" "10"
+  test_eval "@x = 10 \n def f \n   @x \n end \n f ()" "10"
 ;;
 
 let%test "stateless class" =
-  test_eval "class Hello \n def hello \n 10 \n end \n end \n h = Hello.new() \n h.hello()" "10"
+  test_eval
+    "class Hello \n def hello \n 10 \n end \n end \n h = Hello.new() \n h.hello()"
+    "10"
+;;
 
-let%test "statefull class" = 
-  test_eval "class Hello \n @x = 10 \n def get_x \n @x \n end \n end \n h = Hello.new() \n h.get_x()" "10"
+let%test "statefull class" =
+  test_eval
+    "class Hello \n\
+    \   @x = 10 \n\
+    \   def get_x \n\
+    \     @x \n\
+    \   end \n\
+    \ end \n\
+    \ h = Hello.new() \n\
+    \ h.get_x()"
+    "10"
+;;
