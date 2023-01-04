@@ -3,4 +3,4 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 (** Main entry of interpreter *)
-val interpret : Ast.ast -> string list -> (string, string) result
+(* val interpret : Ast.ast -> string list -> (string, string) result *)
