@@ -45,7 +45,7 @@ module Interpret (M : MONADERROR) = struct
     | Flag of bool  (** EFLAGS *)
     | Reg64 of int64  (** not so large registers *)
     | Reg128 of int64 * int64  (** large registers *)
-    | Const of string  (** global consts *)
+    | Const of int64 list  (** global consts *)
   [@@deriving show { with_path = false }]
 
   type envr = var MapVar.t [@@deriving show { with_path = false }]
@@ -86,7 +86,7 @@ module Interpret (M : MONADERROR) = struct
     | Reg16 x -> return (Printf.sprintf "R%s" x)
     | Reg32 x -> return (Printf.sprintf "R%c%c" x.[1] x.[2])
     | Reg64 x -> return x
-    | Reg128 x -> return x
+  (* | Reg128 x -> return x *)
 
   let rreg = function "AH" | "BH" | "CH" | "DH" -> true | _ -> false
 
@@ -102,11 +102,10 @@ module Interpret (M : MONADERROR) = struct
             if rreg name then rem x 0x1FFL else shift_right (rem x 0x1FFFFL) 8
         | Reg16 _ -> return @@ rem x 0x1FFFFL
         | Reg32 _ -> return @@ rem x 0x1FFFFFFFFL
-        | Reg64 _ -> return x
-        | _ -> error "Isnt reg64 or less")
+        | Reg64 _ -> return x (* | _ -> error "Isnt reg64 or less" *))
     | _ -> error "Isnt reg64 or less"
 
-  let find_r128 : var MapVar.t -> asmreg128 reg -> Int64.t list M.t =
+  let find_r128 : var MapVar.t -> asmreg128 reg_e -> Int64.t list M.t =
    fun env reg ->
     let f num =
       let rec helper n ac =
@@ -116,22 +115,19 @@ module Interpret (M : MONADERROR) = struct
       in
       helper num 0
     in
-    full_name reg >>= fun name ->
+    let name : asmreg128 reg_e -> string t = function
+      | Reg128 x -> return x
+      | _ -> error "Isnt reg128"
+    in
+    name reg >>= fun name ->
     return (MapVar.find name env) >>= function
     | Reg128 (x, y) -> return @@ f x @ f y
     | _ -> error "Isnt reg128"
 
   let find_v env name =
-    let explode s = List.init (String.length s) (String.get s) in
     return (MapVar.find name env) >>= function
-    | Const x -> (
-        match of_string_opt x with
-        | Some x -> return x
-        | None ->
-            return
-            @@ List.fold_left
-                 (fun x y -> add (shift_left x 8) (of_int @@ Char.code y))
-                 0L (explode x))
+    | Const x ->
+        return @@ List.fold_left (fun x y -> add (shift_left x 8) y) 0L x
     | _ -> error "Isnt const"
 
   let find_f env f =
@@ -144,13 +140,6 @@ module Interpret (M : MONADERROR) = struct
   let change_eflag env x y z =
     change_flag env "ZF" x >>= fun env ->
     change_flag env "SF" y >>= fun env -> change_flag env "OF" z
-
-  let mask v l r =
-    let ones l r =
-      of_string
-      @@ Printf.sprintf "0b0%s%s" (String.make (l - r) '1') (String.make r '0')
-    in
-    logand v (ones l r)
 
   let change_reg64 :
       type a. var MapVar.t -> Int64.t -> a reg -> var MapVar.t M.t =
@@ -177,10 +166,9 @@ module Interpret (M : MONADERROR) = struct
       | Reg16 x -> f env (Reg16 x) v 16 0
       | Reg32 x -> f env (Reg32 x) v 32 0
       | Reg64 x -> f env (Reg64 x) v 64 0
-      | _ -> error "Isnt reg64 or less"
 
   let change_reg128 :
-      var MapVar.t -> Int64.t list -> asmreg128 reg -> var MapVar.t M.t =
+      var MapVar.t -> Int64.t list -> asmreg128 reg_e -> var MapVar.t M.t =
     let split list p =
       let rec helper acc n xs =
         match (n, xs) with
@@ -217,30 +205,20 @@ module Interpret (M : MONADERROR) = struct
     | Const (ASMConst x) -> return @@ of_string x
     | Var (ASMVar x) -> find_v env x
 
-  let inter env code s cmds =
+  let rec inter env code s cmds =
     let tl = List.tl cmds in
     let rec assoc l = function
       | [] -> error "No such label"
       | Id label :: tl when label = l -> return tl
       | _ :: tl -> assoc l tl
     in
-    let f :
-        type a.
-        a reg ->
-        (Int64.t -> Int64.t) ->
-        (var MapVar.t * Int64.t list * code_section list) M.t =
-     fun x af ->
-      match x with
-      | Ast.Reg128 _ ->
-          find_r128 env x >>= fun l ->
-          change_reg128 env (List.map af l) x >>= fun env -> return (env, s, tl)
-      | _ ->
-          find_r64 env x >>= fun v ->
-          let nv = af v in
-          change_reg64 env nv x >>= fun env ->
-          find_r64 env x >>= fun nnv ->
-          change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
-          return (env, s, tl)
+    let f x af =
+      find_r64 env x >>= fun v ->
+      let nv = af v 1L in
+      change_reg64 env nv x >>= fun env ->
+      find_r64 env x >>= fun nnv ->
+      change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
+      return (env, s, tl)
     in
     let c_flags env =
       find_f env "ZF" >>= fun z ->
@@ -252,11 +230,64 @@ module Interpret (M : MONADERROR) = struct
       if conde (f, ff) then assoc l code >>= fun tl -> return (env, s, tl)
       else return (env, s, tl)
     in
-    let u_da = function
-      | RegToExpr (x, y) -> ev env y >>= fun y -> return (Dyn x, y)
-      | RegToReg (x, y) -> find_r64 env y >>= fun y -> return (Dyn x, y)
+    let to_r64 : type a. a reg_e -> dyn_reg t = function
+      | Reg64 x -> return @@ Dyn (Reg64 x)
+      | Reg32 x -> return @@ Dyn (Reg32 x)
+      | Reg16 x -> return @@ Dyn (Reg16 x)
+      | Reg8 x -> return @@ Dyn (Reg8 x)
+      | Reg128 _ -> error "Isnt reg64 or less"
     in
-    let ff x af = u_da x >>= fun (Dyn x, y) -> f x (af y) in
+    let ff x af =
+      match x with
+      | RegToReg (x, y) -> (
+          match x with
+          | Reg128 _ ->
+              find_r128 env x >>= fun l1 ->
+              find_r128 env y >>= fun l2 ->
+              let nv = List.map2 af l1 l2 in
+              change_reg128 env nv x >>= fun env -> return (env, s, tl)
+          | _ ->
+              to_r64 x >>= fun (Dyn x) ->
+              to_r64 y >>= fun (Dyn y) ->
+              find_r64 env x >>= fun ov ->
+              find_r64 env y >>= fun y ->
+              let nv = af ov y in
+              change_reg64 env nv x >>= fun env ->
+              find_r64 env x >>= fun nnv ->
+              change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
+              return (env, s, tl))
+      | RegToExpr (x, y) ->
+          find_r64 env x >>= fun ov ->
+          ev env y >>= fun y ->
+          let nv = af ov y in
+          change_reg64 env y x >>= fun env ->
+          find_r64 env x >>= fun nnv ->
+          change_eflag env (nv = 0L) (nv < 0L) (nv <> nnv) >>= fun env ->
+          return (env, s, tl)
+      | RegToVar (x, ASMVar y) ->
+          find_r128 env x >>= fun l1 ->
+          (match MapVar.find y env with
+          | Const x -> return x
+          | _ -> error "Isnt const")
+          >>= fun l2 ->
+          let l2 = List.init (16 - List.length l2) (fun _ -> 0L) @ l2 in
+          let nv = List.map2 af l1 l2 in
+          change_reg128 env nv x >>= fun env -> return (env, s, tl)
+    in
+    let sh64 x y af =
+      to_r64 x >>= fun (Dyn x) ->
+      find_r64 env x >>= fun ov ->
+      let nv = af ov y in
+      change_reg64 env nv x >>= fun env -> return (env, s, tl)
+    in
+    let to_l num =
+      let rec helper n ac =
+        match ac with
+        | 8 -> []
+        | x -> helper (shift_right n 8) (x + 1) @ [ logand n 0xFFL ]
+      in
+      helper num 0
+    in
     match cmds with
     | Id _ :: _ -> return (env, s, tl)
     | Command x :: _ -> (
@@ -267,10 +298,10 @@ module Interpret (M : MONADERROR) = struct
         | POP x ->
             change_reg64 env (List.hd s) x >>= fun env ->
             return (env, List.tl s, tl)
-        | INC x -> f x (add 1L)
-        | DEC x -> f x (sub 1L)
-        | NOT x -> f x lognot
-        | NEG x -> f x neg
+        | INC x -> f x add
+        | DEC x -> f x sub
+        | NOT x -> f x (fun x _ -> lognot x)
+        | NEG x -> f x (fun x _ -> neg x)
         | JMP x -> jmp x (fun _ -> true)
         | JE x | JZ x -> jmp x (fun (x, _) -> x)
         | JNE x -> jmp x (fun (x, _) -> not x)
@@ -278,7 +309,7 @@ module Interpret (M : MONADERROR) = struct
         | JGE x -> jmp x (fun (_, y) -> y)
         | JL x -> jmp x (fun (_, y) -> not y)
         | JLE x -> jmp x (fun (x, y) -> x & not y)
-        | MOV x -> ff x (fun x _ -> x)
+        | MOV x -> ff x (fun _ y -> y)
         | ADD x -> ff x add
         | SUB x -> ff x (fun x y -> sub y x)
         | IMUL x -> ff x mul
@@ -287,24 +318,37 @@ module Interpret (M : MONADERROR) = struct
         | XOR x -> ff x logxor
         | SHL (x, y) -> (
             ev env y >>= fun y ->
+            let y = to_int y in
             match x with
-            | Reg128 _ ->
-                find_r128 env x >>= fun l ->
-                let nr = List.tl l @ [ 0L ] in
-                change_reg128 env nr x >>= fun env -> return (env, s, tl)
-            | _ -> f x (fun x -> add x (shift_left x (to_int y))))
+            | Reg128 name -> (
+                return @@ MapVar.find name env >>= function
+                | Reg128 (l1, l2) ->
+                    let ny = shift_left l2 y in
+                    let r = div l2 (shift_left 2L y) in
+                    let nx = add (shift_left l1 y) r in
+                    let nv = to_l nx @ to_l ny in
+                    change_reg128 env nv x >>= fun env -> return (env, s, tl)
+                | _ -> error "Isnt reg128")
+            | _ -> sh64 x y shift_left)
         | SHR (x, y) -> (
             ev env y >>= fun y ->
+            let y = to_int y in
             match x with
-            | Reg128 _ ->
-                find_r128 env x >>= fun l ->
-                let nr = 0L :: (List.rev @@ List.tl (List.rev l)) in
-                change_reg128 env nr x >>= fun env -> return (env, s, tl)
-            | _ -> f x (fun x -> add x (shift_right x (to_int y))))
+            | Reg128 name -> (
+                return @@ MapVar.find name env >>= function
+                | Reg128 (l1, l2) ->
+                    let nx = shift_right l1 y in
+                    let r = rem l1 (shift_left 2L y) in
+                    let ny = add (shift_right l2 y) (shift_left r (64 - y)) in
+                    let nv = to_l nx @ to_l ny in
+                    change_reg128 env nv x >>= fun env -> return (env, s, tl)
+                | _ -> error "Isnt reg128")
+            | _ -> sh64 x y shift_right)
         | CMP x ->
-            u_da x >>= fun (Dyn x, y) ->
-            find_r64 env x >>= fun x ->
-            change_flag env "ZF" (x = y) >>= fun env -> return (env, s, tl))
+            let cenv = env in
+            inter cenv code s (Command (SUB x) :: tl) >>= fun (cenv, _, _) ->
+            find_f cenv "ZF" >>= fun zf ->
+            change_flag env "ZF" zf >>= fun env -> return (env, s, tl))
     | _ -> return (env, s, [])
 
   let rec code_sec_inter env s code = function
@@ -314,12 +358,22 @@ module Interpret (M : MONADERROR) = struct
     | [] -> return (env, s, [])
 
   let rec data_sec_inter env s vars =
+    let mask v l r =
+      let ones l r =
+        of_string
+        @@ Printf.sprintf "0b0%s%s"
+             (String.make (l - r) '1')
+             (String.make r '0')
+      in
+      logand v (ones l r)
+    in
     let cut b = function
       | Num x ->
           let n = List.map (fun x -> mask (of_string x) b 0) x in
-          let nn = List.fold_left (fun x y -> add (shift_left x b) y) 0L n in
-          to_string nn
-      | Str s -> s
+          n
+      | Str s ->
+          let explode s = List.init (String.length s) (String.get s) in
+          List.map (fun x -> of_int @@ Char.code x) (explode s)
     in
     match vars with
     | Variable (name, t, v) :: tl ->
