@@ -24,5 +24,3 @@ let value_of_literal (lit_t : ruby_literal) (s : string) =
   | StringL -> String s
   | NilL -> Nil
 ;;
-
-let typefail msg = failwith ("TypeError: " ^ msg)
