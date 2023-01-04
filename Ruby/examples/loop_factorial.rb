@@ -7,4 +7,4 @@ def loop_factorial (i)
     x
 end
 
-puts (loop_factorial(5))
+loop_factorial(5)

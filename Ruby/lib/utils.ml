@@ -3,6 +3,7 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open Ast
+open Base
 
 let rec string_of_value = function
   | Bool v -> string_of_bool v
@@ -10,10 +11,11 @@ let rec string_of_value = function
   | String v -> v
   | Nil -> "nil"
   | Array l ->
-    String.concat "" [ "["; List.map string_of_value !l |> String.concat ", "; "]" ]
-  | Function (name, params, _) ->
-    String.concat "" [ name; "("; String.concat ", " params; ")" ]
-;;
+    String.concat [ "["; List.map ~f:string_of_value !l |> String.concat ~sep:", "; "]" ]
+  | Function (name, params, _) -> String.concat [ name; "("; String.concat ~sep:", " params; ")" ]
+  | Class (class_state) -> String.concat ~sep:" " (["<";"Class"] @(print_state class_state) @ [">"])
+  | ClassInstance (ref_class_state) -> String.concat ~sep:" " (["<";"ClassInstance"] @(print_state !ref_class_state) @ [">"])
+and print_state (st: class_state): string list = st |> Map.to_alist |> List.map ~f:(fun (k, v) -> k ^ "=" ^ string_of_value v)
 
 let value_of_literal (lit_t : ruby_literal) (s : string) =
   match lit_t with

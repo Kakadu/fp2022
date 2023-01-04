@@ -10,4 +10,4 @@ def fib(i)
     end
 end
 
-puts (fib (5))
+fib (5)
