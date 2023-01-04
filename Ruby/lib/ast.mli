@@ -30,8 +30,8 @@ type ast =
   | ClassDeclaration of string * ast list (** ClassDeclaration [name members]*)
 
 and func_scope =
-  | TopLevel
-  | Method
+  | TopLevel (** TopLevelFunction*)
+  | Method (** ClassMethod *)
 
 (** Data types used in runtime *)
 type value =

@@ -51,18 +51,15 @@ module Eval (M : MONADERROR) = struct
   ;;
 
   let from_global (st : state) : state =
-    { local_vars = empty_state.local_vars; class_scopes = st.class_scopes }
+    { empty_state with class_scopes = st.class_scopes }
   ;;
 
   let set_local_var (st : state) (name : string) (new_v : value) : state t =
-    return
-      { local_vars = Base.Map.set st.local_vars ~key:name ~data:new_v
-      ; class_scopes = st.class_scopes
-      }
+    return { st with local_vars = Base.Map.set st.local_vars ~key:name ~data:new_v }
   ;;
 
   let add_class_scope (st : state) (init_state : class_state ref) : state =
-    { local_vars = st.local_vars; class_scopes = [ init_state ] @ st.class_scopes }
+    { st with class_scopes = [ init_state ] @ st.class_scopes }
   ;;
 
   let get_class_var (st : state) (name : string) : value t =
@@ -90,7 +87,7 @@ module Eval (M : MONADERROR) = struct
     match Base.List.hd st.class_scopes with
     | Some cur_class ->
       cur_class := Base.Map.set !cur_class ~key:name ~data:new_v;
-      return { local_vars = st.local_vars; class_scopes = st.class_scopes }
+      return st
     | None -> error "Class scopes are empty"
   ;;
 
