@@ -333,7 +333,7 @@ module Eval (M : MONADERROR) = struct
     : value t
     =
     let method_not_exist (class_name : string) =
-      error ("Method " ^ m_name ^ " does not exist for " ^ class_name)
+      error (String.concat "" [ "Method "; m_name; " does not exist for "; class_name ])
     in
     let st = from_global st in
     match obj with
@@ -395,23 +395,21 @@ module Eval (M : MONADERROR) = struct
       (match m_name with
        | "new" ->
          get_from_class_state init_state "initialize"
-         >>= fun init_func ->
-         (match init_func with
-          | Function (name, param_names, body) ->
-            let class_state = ref init_state in
-            let st = add_class_scope st class_state in
-            eval_function name param_names body st params
-            >>= fun _ -> return (ClassInstance class_state)
-          | _ -> error "initialize must be a function")
+         >>= (function
+         | Function (name, param_names, body) ->
+           let class_state = ref init_state in
+           let st = add_class_scope st class_state in
+           eval_function name param_names body st params
+           >>= fun _ -> return (ClassInstance class_state)
+         | _ -> error "initialize must be a function")
        | _ -> method_not_exist "Class")
     | ClassInstance cls_state ->
       let enriched_scope = add_class_scope st cls_state in
       get_from_class_state !cls_state m_name
-      >>= fun v ->
-      (match v with
-       | Function (name, param_names, body) ->
-         eval_function name param_names body enriched_scope params
-       | _ -> method_not_exist "ClassInstance")
+      >>= (function
+      | Function (name, param_names, body) ->
+        eval_function name param_names body enriched_scope params
+      | _ -> method_not_exist "ClassInstance")
   ;;
 end
 

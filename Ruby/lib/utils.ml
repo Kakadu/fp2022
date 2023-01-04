@@ -22,7 +22,9 @@ let rec string_of_value = function
       ([ "<"; "ClassInstance" ] @ print_state !ref_class_state @ [ ">" ])
 
 and print_state (st : class_state) : string list =
-  st |> Map.to_alist |> List.map ~f:(fun (k, v) -> k ^ "=" ^ string_of_value v)
+  st
+  |> Map.to_alist
+  |> List.map ~f:(fun (k, v) -> String.concat [ k; "="; string_of_value v ])
 ;;
 
 let value_of_literal (lit_t : ruby_literal) (s : string) =

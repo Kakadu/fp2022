@@ -14,8 +14,6 @@ Features done (append only):
 - Conditional
 - While loop
 - Functions and scopes
-
-Features in progress (and TODOs):
-
 - Method access
 - Custom classes
+- Lambda blocks
