@@ -6,8 +6,8 @@ open Ast
 open Base
 
 let rec string_of_value = function
-  | Bool v -> string_of_bool v
-  | Integer v -> string_of_int v
+  | Bool v -> Bool.to_string v
+  | Integer v -> Int.to_string v
   | String v -> v
   | Nil -> "nil"
   | Array l ->
@@ -19,8 +19,8 @@ and print_state (st: class_state): string list = st |> Map.to_alist |> List.map 
 
 let value_of_literal (lit_t : ruby_literal) (s : string) =
   match lit_t with
-  | BoolL -> Bool (bool_of_string s)
-  | IntegerL -> Integer (int_of_string s)
+  | BoolL -> Bool (Bool.of_string s)
+  | IntegerL -> Integer (Int.of_string s)
   | StringL -> String s
   | NilL -> Nil
 ;;
