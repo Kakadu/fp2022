@@ -41,6 +41,7 @@ type value =
   | String of string (** String [value]*)
   | Array of value list (** Array [value_list]*)
   | Function of string * string list * ast (** Function [name param_list body]*)
+  (* Lambda need it's own constructor because it inherits state from outer scope when it is declared*)
   | Lambda of state * string list * ast (** Lambda [closure param_list * body]*)
   | Class of class_state (** Class [initial_state] *)
   | ClassInstance of class_state (** ClassInstance [shared_instance_state] *)
