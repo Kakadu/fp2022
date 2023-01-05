@@ -2,16 +2,13 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open Ast
 open Utils
 
 type var_type =
   | Local
   | Class
 
-let get_var_type (name : string) : var_type =
-  if String.starts_with ~prefix:"@" name then Class else Local
-;;
+let get_var_type name = if String.starts_with ~prefix:"@" name then Class else Local
 
 module type MONAD = sig
   type 'a t
@@ -40,7 +37,7 @@ module Eval (M : MONADERROR) = struct
 
   let empty_class_state : class_state = Base.Map.empty (module Base.String)
 
-  let set_in_class_state (st : class_state) (name : string) (new_v : value) : class_state =
+  let set_in_class_state st name new_v : class_state =
     Base.Map.set st ~key:name ~data:new_v
   ;;
 
@@ -50,21 +47,18 @@ module Eval (M : MONADERROR) = struct
     }
   ;;
 
-  let clear_local (st : state) : state =
-    { empty_state with class_scopes = st.class_scopes }
-  ;;
+  let clear_local st = { empty_state with class_scopes = st.class_scopes }
+  let pop_class_scope st = List.hd st.class_scopes
 
-  let pop_class_scope (st : state) : class_state = List.hd st.class_scopes
-
-  let set_local_var (st : state) (name : string) (new_v : value) : state t =
+  let set_local_var st name new_v =
     return { st with local_vars = Base.Map.set st.local_vars ~key:name ~data:new_v }
   ;;
 
-  let add_class_scope (st : state) (init_state : class_state) : state =
+  let add_class_scope st init_state =
     { st with class_scopes = init_state :: st.class_scopes }
   ;;
 
-  let get_class_var (st : state) (name : string) : value t =
+  let get_class_var st name =
     let rec get_from_map_stack = function
       | [] -> error (String.concat " " [ "Variable"; name; "does not exist" ])
       | m :: tail ->
@@ -75,17 +69,17 @@ module Eval (M : MONADERROR) = struct
     get_from_map_stack st.class_scopes
   ;;
 
-  let get_variable (st : state) (name : string) : value t =
+  let get_variable st name =
     match Base.Map.find st.local_vars name with
     | Some v -> return v
     | None -> get_class_var st name
   ;;
 
-  let get_from_class_state (cls_state : class_state) (name : string) : value t =
+  let get_from_class_state cls_state name =
     get_variable (add_class_scope empty_state cls_state) name
   ;;
 
-  let set_class_var (st : state) (name : string) (new_v : value) : state t =
+  let set_class_var st name new_v =
     match st.class_scopes with
     | cur_class :: tail ->
       return
@@ -93,7 +87,7 @@ module Eval (M : MONADERROR) = struct
     | [] -> error "Class scopes are empty"
   ;;
 
-  let binop_typefail (op : string) (l : value) (r : value) =
+  let binop_typefail op l r =
     error
       (String.concat
          ""
@@ -195,13 +189,13 @@ module Eval (M : MONADERROR) = struct
     | op -> return (fun _ _ -> error ("Unknown binop " ^ op))
   ;;
 
-  let conditional (c : value) (t : ast) (e : ast) =
+  let conditional c t e =
     match c with
     | Bool c -> if c then return t else return e
     | _ -> error "Conditional expects bool as condition"
   ;;
 
-  let index_get (v : value) (ind : value) =
+  let index_get v ind =
     match v, ind with
     | Array v, Integer i -> return (List.nth v i)
     | String v, Integer i -> return (Ast.String (String.get v i |> String.make 1))
@@ -210,9 +204,9 @@ module Eval (M : MONADERROR) = struct
 
   let replace l pos a = List.mapi (fun i x -> if i = pos then a else x) l
 
-  let rec eval (st : state) (code : ast) : (value * state) t =
-    let eval_multiple (codes : ast list) (st : state) : (value list * state) t =
-      let eval_step (mon : (value list * state) t) (code : ast) =
+  let rec eval st code =
+    let eval_multiple codes st =
+      let eval_step mon code =
         mon
         >>= fun (acc, st) ->
         eval st code >>= fun (new_v, new_st) -> return (new_v :: acc, new_st)
@@ -220,7 +214,7 @@ module Eval (M : MONADERROR) = struct
       List.fold_left eval_step (return ([], st)) codes
       >>= fun (vl, st) -> return (List.rev vl, st)
     in
-    let assign_var (st : state) (i : string) (var_value : value) =
+    let assign_var st i var_value =
       let new_state =
         match get_var_type i with
         | Local -> set_local_var st i var_value
@@ -307,14 +301,7 @@ module Eval (M : MONADERROR) = struct
       let new_class : value = Class (pop_class_scope new_st) in
       set_local_var st name new_class >>= fun new_st -> return (Nil, new_st)
 
-  and eval_function
-    (f_name : string)
-    (p_names : string list)
-    (body : ast)
-    (st : state)
-    (p_values : value list)
-    : (value * state) t
-    =
+  and eval_function f_name p_names body st p_values =
     if not (List.length p_names = List.length p_values)
     then error "Wrong number of arguments."
     else (
@@ -324,14 +311,8 @@ module Eval (M : MONADERROR) = struct
       let initiated = List.fold_left step state params in
       initiated >>= fun initiated -> eval initiated body >>= fun (v, st) -> return (v, st))
 
-  and process_method_access
-    (obj : value)
-    (m_name : string)
-    (params : value list)
-    (st : state)
-    : (value * class_state) t
-    =
-    let method_not_exist (class_name : string) =
+  and process_method_access obj m_name params st =
+    let method_not_exist class_name =
       error (String.concat "" [ "Method "; m_name; " does not exist for "; class_name ])
     in
     (* Methods always work with empty local state *)
@@ -422,7 +403,7 @@ module Eval (M : MONADERROR) = struct
   ;;
 end
 
-let eval_code (code : ast) : (string, string) result =
+let eval_code code =
   let module E = Eval (Result) in
   match E.eval E.empty_state code with
   | Ok (v, _) -> Ok (string_of_value v)

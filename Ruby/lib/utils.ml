@@ -23,13 +23,13 @@ let rec string_of_value = function
   | Lambda (_, params, _) ->
     String.concat [ "Lambda"; "("; String.concat ~sep:", " params; ")" ]
 
-and print_state (st : class_state) : string list =
+and print_state st =
   st
   |> Map.to_alist
   |> List.map ~f:(fun (k, v) -> String.concat [ k; "="; string_of_value v ])
 ;;
 
-let value_of_literal (lit_t : ruby_literal) (s : string) =
+let value_of_literal lit_t s =
   match lit_t with
   | BoolL -> Bool (Bool.of_string s)
   | IntegerL -> Integer (Int.of_string s)

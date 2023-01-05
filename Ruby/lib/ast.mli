@@ -11,6 +11,12 @@ type ruby_literal =
   | StringL (** String literal *)
   | NilL (** Nil literal *)
 
+(** Function scope *)
+type func_scope =
+  | TopLevel (** TopLevelFunction*)
+  | Method (** ClassMethod *)
+  | Lambda (** Anonymous function *)
+
 (** Ast types used in parsing*)
 type ast =
   | Literal of ruby_literal * string (** Literal [literal_type literal_as_string] *)
@@ -27,11 +33,6 @@ type ast =
   | Invocation of ast * ast list (** Invocation [target param_values] *)
   | MethodAccess of ast * string * ast list (** MethodAccess [object method params]*)
   | ClassDeclaration of string * ast list (** ClassDeclaration [name members]*)
-
-and func_scope =
-  | TopLevel (** TopLevelFunction*)
-  | Method (** ClassMethod *)
-  | Lambda (** AnonymousFunction *)
 
 (** Data types used in runtime *)
 type value =
