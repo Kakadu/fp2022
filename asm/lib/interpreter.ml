@@ -42,7 +42,7 @@ module Interpret (M : MONADERROR) = struct
 
   (** Envr *)
   type var =
-    | Flag of bool  (** EFLAGS *)
+    | Flag of bool  (** EFAGS *)
     | Reg64 of int64  (** Not so large registers *)
     | Reg128 of int64 * int64  (** sse registers *)
     | Const of int64 list  (** Global consts *)
@@ -129,19 +129,26 @@ module Interpret (M : MONADERROR) = struct
         return @@ List.fold_left (fun x y -> add (shift_left x 8) y) 0L x
     | _ -> error "Isnt const"
 
+  (** Type for flags *)
+  type eflag = OF | ZF | SF
+
+  (** Returns string for finding flag *)
+  let name_of_flag = function ZF -> "ZF" | OF -> "OF" | SF -> "SF"
+
   (** Finds and returns flag *)
   let find_f env f =
-    return (MapVar.find f env) >>= function
+    return @@ MapVar.find (name_of_flag f) env >>= function
     | Flag x -> return x
     | _ -> error "Isnt flag"
 
   (** Changes flag *)
-  let change_flag env name f = return @@ MapVar.add name (Flag f) env
+  let change_flag env flag f =
+    return @@ MapVar.add (name_of_flag flag) (Flag f) env
 
   (** Changes all flags *)
   let change_eflag env x y z =
-    change_flag env "ZF" x >>= fun env ->
-    change_flag env "SF" y >>= fun env -> change_flag env "OF" z
+    change_flag env ZF x >>= fun env ->
+    change_flag env SF y >>= fun env -> change_flag env OF z
 
   (** Changes reg64 or less*)
   let change_reg64 :
@@ -227,9 +234,9 @@ module Interpret (M : MONADERROR) = struct
       return (env, s, tl)
     in
     let c_flags env =
-      find_f env "ZF" >>= fun z ->
-      find_f env "SF" >>= fun s ->
-      find_f env "OF" >>= fun f -> return (z, s = f)
+      find_f env ZF >>= fun z ->
+      find_f env SF >>= fun s ->
+      find_f env OF >>= fun f -> return (z, s = f)
     in
     let jmp l conde =
       c_flags env >>= fun (f, ff) ->
@@ -351,8 +358,8 @@ module Interpret (M : MONADERROR) = struct
         | CMP x ->
             let cenv = env in
             inter cenv code s (Command (SUB x) :: tl) >>= fun (cenv, _, _) ->
-            find_f cenv "ZF" >>= fun zf ->
-            change_flag env "ZF" zf >>= fun env -> return (env, s, tl))
+            find_f cenv ZF >>= fun zf ->
+            change_flag env ZF zf >>= fun env -> return (env, s, tl))
     | _ -> return (env, s, [])
 
   (** Executes cmds and passes results to following cmds*)
