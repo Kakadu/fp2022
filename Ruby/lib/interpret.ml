@@ -35,6 +35,7 @@ module Eval (M : MONADERROR) = struct
   open M
   open Ast
 
+  let ( let* ) = ( >>= )
   let empty_class_state : class_state = Base.Map.empty (module Base.String)
 
   let set_in_class_state st name new_v : class_state =
@@ -139,8 +140,15 @@ module Eval (M : MONADERROR) = struct
     | _ -> binop_typefail "=" x y
   ;;
 
-  let eq x y = raw_eq x y >>= fun v -> return (Bool v)
-  let neq x y = raw_eq x y >>= fun v -> return (Bool (not v))
+  let eq x y =
+    let* v = raw_eq x y in
+    return (Bool v)
+  ;;
+
+  let neq x y =
+    let* v = raw_eq x y in
+    return (Bool (not v))
+  ;;
 
   let and_op x y =
     match x, y with
@@ -161,16 +169,26 @@ module Eval (M : MONADERROR) = struct
     | _ -> binop_typefail ">" x y
   ;;
 
-  let gr x y = raw_gr x y >>= fun v -> return (Bool v)
-
-  let gr_eq x y =
-    raw_gr x y >>= fun v1 -> raw_eq x y >>= fun v2 -> return (Bool (v1 || v2))
+  let gr x y =
+    let* v = raw_gr x y in
+    return (Bool v)
   ;;
 
-  let ls_eq x y = raw_gr x y >>= fun v -> return (Bool (not v))
+  let gr_eq x y =
+    let* v1 = raw_gr x y in
+    let* v2 = raw_eq x y in
+    return (Bool (v1 || v2))
+  ;;
+
+  let ls_eq x y =
+    let* v = raw_gr x y in
+    return (Bool (not v))
+  ;;
 
   let ls x y =
-    raw_gr x y >>= fun v1 -> raw_eq x y >>= fun v2 -> return (Bool (not (v1 || v2)))
+    let* v1 = raw_gr x y in
+    let* v2 = raw_eq x y in
+    return (Bool (not (v1 || v2)))
   ;;
 
   let match_binop = function
@@ -207,12 +225,12 @@ module Eval (M : MONADERROR) = struct
   let rec eval st code =
     let eval_multiple codes st =
       let eval_step mon code =
-        mon
-        >>= fun (acc, st) ->
-        eval st code >>= fun (new_v, new_st) -> return (new_v :: acc, new_st)
+        let* acc, st = mon in
+        let* new_v, new_st = eval st code in
+        return (new_v :: acc, new_st)
       in
-      List.fold_left eval_step (return ([], st)) codes
-      >>= fun (vl, st) -> return (List.rev vl, st)
+      let* vl, st = List.fold_left eval_step (return ([], st)) codes in
+      return (List.rev vl, st)
     in
     let assign_var st i var_value =
       let new_state =
@@ -220,85 +238,90 @@ module Eval (M : MONADERROR) = struct
         | Local -> set_local_var st i var_value
         | Class -> set_class_var st i var_value
       in
-      new_state >>= fun new_state -> return (var_value, new_state)
+      let* new_st = new_state in
+      return (var_value, new_st)
     in
     match code with
     | Literal (lit_t, v) -> return (value_of_literal lit_t v, st)
-    | Var n -> get_variable st n >>= fun v -> return (v, st)
-    | VarAssign (i, v) -> eval st v >>= fun (var_value, st) -> assign_var st i var_value
+    | Var n ->
+      let* v = get_variable st n in
+      return (v, st)
+    | VarAssign (i, v) ->
+      let* var_value, st = eval st v in
+      assign_var st i var_value
     | Binop (op, l, r) ->
-      match_binop op
-      >>= fun op_f ->
-      eval st l
-      >>= fun (l_v, st) ->
-      eval st r >>= fun (r_v, st) -> op_f l_v r_v >>= fun op_res -> return (op_res, st)
+      let* op_f = match_binop op in
+      let* l_v, st = eval st l in
+      let* r_v, st = eval st r in
+      let* op_res = op_f l_v r_v in
+      return (op_res, st)
     | Conditional (cond, thenB, elseB) ->
-      eval st cond
-      >>= fun (cond_v, st) ->
-      conditional cond_v thenB elseB >>= fun branch -> eval st branch
+      let* cond_v, st = eval st cond in
+      let* branch = conditional cond_v thenB elseB in
+      eval st branch
     | Seq lst ->
       (match lst with
        | [] -> return (Nil, st)
        | lst ->
-         eval_multiple lst st
-         >>= fun (v_lst, new_st) -> return (v_lst |> List.rev |> List.hd, new_st))
+         let* v_lst, new_st = eval_multiple lst st in
+         let seq_v = v_lst |> List.rev |> List.hd in
+         return (seq_v, new_st))
     | WhileLoop (cond, body) ->
       let rec iteration s =
-        eval s cond
-        >>= fun (c_v, n_st) ->
+        let* c_v, n_st = eval s cond in
         match c_v with
-        | Bool v when v -> eval n_st body >>= fun (_, n_st) -> iteration n_st
+        | Bool v when v ->
+          let* _, n_st = eval n_st body in
+          iteration n_st
         | Bool v when not v -> return n_st
         | _ -> error "While loop expected bool as condition"
       in
-      iteration st >>= fun new_st -> return (Nil, new_st)
+      let* new_st = iteration st in
+      return (Nil, new_st)
     | ArrayDecl lst ->
-      eval_multiple lst st >>= fun (arr_v, new_st) -> return (Array arr_v, new_st)
+      let* arr_v, new_st = eval_multiple lst st in
+      return (Array arr_v, new_st)
     | Indexing (box, ind) ->
-      eval st box
-      >>= fun (b_v, n_st) ->
-      eval n_st ind >>= fun (i_v, n_st) -> index_get b_v i_v >>= fun v -> return (v, n_st)
+      let* b_v, n_st = eval st box in
+      let* i_v, n_st = eval n_st ind in
+      let* v = index_get b_v i_v in
+      return (v, n_st)
     | FuncDeclaration (level, name, params, body) ->
       (match level with
        | TopLevel ->
-         set_local_var st name (Function (name, params, body))
-         >>= fun n_st -> return (Nil, n_st)
+         let* n_st = set_local_var st name (Function (name, params, body)) in
+         return (Nil, n_st)
        | Method ->
-         set_class_var st name (Function (name, params, body))
-         >>= fun n_st -> return (Nil, n_st)
+         let* n_st = set_class_var st name (Function (name, params, body)) in
+         return (Nil, n_st)
+         (* Lambda will inherit current local state*)
        | Lambda -> return (Lambda (st, params, body), st))
     | MethodAccess (obj, meth, params) ->
-      eval_multiple params st
-      >>= fun (params, n_st) ->
-      eval n_st obj
-      >>= fun (obj_v, n_st) ->
-      process_method_access obj_v meth params n_st
-      >>= fun (v, new_class_state) ->
+      let* params, n_st = eval_multiple params st in
+      let* obj_v, n_st = eval n_st obj in
+      let* v, new_class_state = process_method_access obj_v meth params n_st in
       (match obj, obj_v with
        | Var varname, ClassInstance _ ->
-         assign_var n_st varname (ClassInstance new_class_state)
-         >>= fun (_, n_st) -> return (v, n_st)
+         let* _, n_st = assign_var n_st varname (ClassInstance new_class_state) in
+         return (v, n_st)
        | _ -> return (v, st))
     | Invocation (box_inv, params) ->
-      eval st box_inv
-      >>= fun (left, n_st) ->
-      eval_multiple params n_st
-      >>= fun (param_v, n_st) ->
+      let* left, n_st = eval st box_inv in
+      let* param_v, n_st = eval_multiple params n_st in
       (match left with
        | Function (name, param_names, body) ->
-         eval_function name param_names body (clear_local n_st) param_v
          (* Discard function state entirely *)
-         >>= fun (v, _) -> return (v, n_st)
+         let* v, _ = eval_function name param_names body (clear_local n_st) param_v in
+         return (v, n_st)
        | Lambda (closure, param_names, body) ->
-         eval_function "" param_names body closure param_v
          (* Discard lambda state entirely *)
-         >>= fun (v, _) -> return (v, n_st)
+         let* v, _ = eval_function "" param_names body closure param_v in
+         return (v, n_st)
        | _ -> error "Only functions and lambda can be invoked")
     | ClassDeclaration (name, members) ->
       let dumb_state = add_class_scope (clear_local st) empty_class_state in
-      eval_multiple members dumb_state
-      >>= fun (_, new_st) ->
-      let new_class : value = Class (pop_class_scope new_st) in
+      let* _, new_st = eval_multiple members dumb_state in
+      let new_class = Class (pop_class_scope new_st) in
       set_local_var st name new_class >>= fun new_st -> return (Nil, new_st)
 
   and eval_function f_name p_names body st p_values =
@@ -307,9 +330,14 @@ module Eval (M : MONADERROR) = struct
     else (
       let state = set_local_var st f_name (Function (f_name, p_names, body)) in
       let params = List.combine p_names p_values in
-      let step st (n, v) = st >>= fun st -> set_local_var st n v in
+      let step st (n, v) =
+        let* st = st in
+        set_local_var st n v
+      in
       let initiated = List.fold_left step state params in
-      initiated >>= fun initiated -> eval initiated body >>= fun (v, st) -> return (v, st))
+      let* initiated = initiated in
+      let* v, st = eval initiated body in
+      return (v, st))
 
   and process_method_access obj m_name params st =
     let method_not_exist class_name =
@@ -346,11 +374,13 @@ module Eval (M : MONADERROR) = struct
        | "length" -> return_sst (Integer (String.length s))
        | "starts_with" ->
          (match params with
-          | String pref :: _ -> return_sst (Bool (String.starts_with ~prefix:pref s))
+          (* Accounting for yield sugar*)
+          | [ String pref; _ ] -> return_sst (Bool (String.starts_with ~prefix:pref s))
           | _ -> error "Wrong number of arguments or wrong types")
        | "ends_with" ->
          (match params with
-          | String suff :: _ -> return_sst (Bool (String.ends_with ~suffix:suff s))
+          (* Accounting for yield sugar*)
+          | [ String suff; _ ] -> return_sst (Bool (String.ends_with ~suffix:suff s))
           | _ -> error "Wrong number of arguments or wrong types")
        | _ -> method_not_exist "String")
     | Array arr ->
@@ -382,10 +412,10 @@ module Eval (M : MONADERROR) = struct
          | Function (name, param_names, body) ->
            (* Adding class scope *)
            let st = add_class_scope st init_state in
-           eval_function name param_names body st params
            (* Popping class scope*)
            (* Changes from class variables will only go to new_class_state*)
-           >>= fun (_, new_st) -> return_sst (ClassInstance (pop_class_scope new_st))
+           let* _, new_st = eval_function name param_names body st params in
+           return_sst (ClassInstance (pop_class_scope new_st))
          | _ -> error "initialize must be a function")
        | _ -> method_not_exist "Class")
     | ClassInstance cls_state ->
