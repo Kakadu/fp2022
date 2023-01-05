@@ -386,7 +386,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser ".label:");
-  [%expect{| (Id (ASMLabel "label")) |}]
+  [%expect {| (Id (ASMLabel "label")) |}]
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "inc xmm0");
