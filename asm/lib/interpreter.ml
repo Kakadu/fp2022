@@ -130,10 +130,10 @@ module Interpret (M : MONADERROR) = struct
     | _ -> error "Isnt const"
 
   (** Type for flags *)
-  type eflag = OF | ZF | SF
+  type eflag = OF | ZF | SF [@@deriving show { with_path = false }]
 
   (** Returns string for finding flag *)
-  let name_of_flag = function ZF -> "ZF" | OF -> "OF" | SF -> "SF"
+  let name_of_flag = show_eflag
 
   (** Finds and returns flag *)
   let find_f env f =
