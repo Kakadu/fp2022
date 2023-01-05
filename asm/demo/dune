@@ -5,10 +5,10 @@
  (libraries asm stdio))
 
 (executable
- (name demoInter)
- (modules demoInter)
- (public_name demoInter)
+ (name demoAsm)
+ (modules demoAsm)
+ (public_name demoAsm)
  (libraries asm stdio))
 
 (cram
- (deps ./demoParse.exe ./demoInter.exe))
+ (deps ./demoParse.exe ./demoAsm.exe))
