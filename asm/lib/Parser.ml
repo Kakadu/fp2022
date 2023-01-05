@@ -152,7 +152,7 @@ let expr =
 
 (** Parses label*)
 let label =
-  word >>= fun x ->
+  char '.' *> word >>= fun x ->
   if isnt_reg_or_mn x then return @@ ASMLabel x
   else fail "Label cant have name of regs and mnemonics"
 
@@ -228,7 +228,6 @@ let command =
 (** Parses one line of code: mnemonic and her argumets or label then return Ast.code_section *)
 let code_line_parser =
   let label = label <* char ':' >>= fun x -> return @@ Id x in
-  (* let coms = char ';' *> skip_while (fun x -> compare x '\n' != 0) in *)
   let cmd = command >>= fun x -> return @@ Command x in
   trim @@ cmd <|> label
 
@@ -386,16 +385,20 @@ let%expect_test _ =
   [%expect {|(Command (INC (Reg64 "RAX")))|}]
 
 let%expect_test _ =
-  print_string (pr_not_opt code_line_parser "inc xmm0");
-  [%expect {| : Label cant have name of regs and mnemonics |}]
+  print_string @@ show_code_section (pr_opt code_line_parser ".label:");
+  [%expect{| (Id (ASMLabel "label")) |}]
 
 let%expect_test _ =
-  print_string @@ show_code_section (pr_opt code_line_parser "je a");
+  print_string (pr_not_opt code_line_parser "inc xmm0");
+  [%expect {| : char '.' |}]
+
+let%expect_test _ =
+  print_string @@ show_code_section (pr_opt code_line_parser "je .a");
   [%expect {| (Command (JE (ASMLabel "a"))) |}]
 
 let%expect_test _ =
-  print_string (pr_not_opt code_line_parser "je rax");
-  [%expect {| : Label cant have name of regs and mnemonics |}]
+  print_string (pr_not_opt code_line_parser "je .rax");
+  [%expect {| : char '.' |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov rax, 1");
@@ -428,11 +431,11 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "mov rax, eax");
-  [%expect {| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : char '.' |}]
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "mov rax, ebx");
-  [%expect {| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : char '.' |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "mov xmm0, xmm1");
@@ -444,7 +447,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "mov xmm0, 1 + 1");
-  [%expect {| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : char '.' |}]
 
 let%expect_test _ =
   print_string @@ show_code_section (pr_opt code_line_parser "shl rax, 1");
@@ -453,7 +456,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   print_string (pr_not_opt code_line_parser "shl rax, rax");
-  [%expect {| : Label cant have name of regs and mnemonics |}]
+  [%expect {| : char '.' |}]
 
 let%expect_test _ =
   print_string @@ show_var (pr_opt data_line_parser "a dd 1");
