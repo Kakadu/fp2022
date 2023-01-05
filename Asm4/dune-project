@@ -15,7 +15,7 @@
 (homepage "https://github.com/andreyizrailev/fp2022")
 
 (package
- (name "Asm")
+ (name "Asm4")
  (synopsis "An interpreter for NASM")
  (description "An interpreter for NASM")
  (version 0.1)

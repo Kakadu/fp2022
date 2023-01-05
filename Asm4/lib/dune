@@ -1,6 +1,6 @@
 (library
- (name asm_lib)
- (public_name Asm.Lib)
+ (name asm4_lib)
+ (public_name Asm4.Lib)
  (modules Ast Parser Interpreter Utils OperandsHandler MonadError)
  (libraries base angstrom)
  (preprocess
