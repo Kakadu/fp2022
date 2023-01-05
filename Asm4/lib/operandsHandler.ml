@@ -136,6 +136,15 @@ module OperandsHandler (M : MonadError) = struct
     else (reg_id / 2) + byte_reg_list_len + word_reg_list_len
   ;;
 
+  let reg_get_related_regs reg =
+    let primary_id = reg_get_primary_id reg in
+    let ex = primary_id in
+    let x = primary_id - word_reg_list_len in
+    let h = (primary_id - byte_reg_list_len - word_reg_list_len) * 2 in
+    let l = h + 1 in
+    [ ex; x; h; l ]
+  ;;
+
   let reg_val_get reg reg_map =
     let reg_id = reg_to_id reg in
     let primary_id = reg_get_primary_id reg_id in
@@ -228,6 +237,21 @@ module RegMapTest = struct
     do_test
       (reg_name_to_byte_reg "al" >>= fun r -> return (reg_get_primary_id r))
       (reg_name_to_dword_reg "eax")
+  ;;
+
+  let%test _ =
+    let expr =
+      let* ecx = reg_name_to_dword_reg "ecx" in
+      let* cx = reg_name_to_word_reg "cx" in
+      let* ch = reg_name_to_byte_reg "ch" in
+      let* cl = reg_name_to_byte_reg "cl" in
+      return @@ (reg_get_related_regs ch, [ ecx; cx; ch; cl ])
+    in
+    match expr with
+    | Error e ->
+      Printf.eprintf "%s" e;
+      false
+    | Ok (l1, l2) -> List.equal ( = ) l1 l2
   ;;
 
   let reg_map =

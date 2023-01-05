@@ -52,6 +52,10 @@ module OperandsHandler (M : MonadError) : sig
   (* Get integer value of a constant *)
   val const_val : 'a const -> int
 
+  (* Get list of related registers, e.g. for ah we get
+     [eax, ax, ah, al] *)
+  val reg_get_related_regs : 'a reg -> int list
+
   (* These two functions require us to have ids of all dword registers as keys
      in the reg_map *)
   val reg_val_get : 'a reg -> int IntMap.t -> int t
