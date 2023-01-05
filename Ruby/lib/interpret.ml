@@ -363,10 +363,8 @@ module Eval (M : MONADERROR) = struct
            (Array
               (i
               |> string_of_int
-              |> String.to_seq
-              |> List.of_seq
-              |> List.map (String.make 1)
-              |> List.map (fun s -> String s)))
+              |> Base.String.to_list
+              |> List.map (fun s -> String (String.make 1 s))))
        | _ -> method_not_exist "Integer")
     | String s ->
       (match m_name with
