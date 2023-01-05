@@ -278,11 +278,6 @@ type 'a parse_rez = Parsed of 'a | Failed of string
 let eval str = match parse str with Ok v -> Parsed v | Error msg -> Failed msg
 
 (*******************************************tests*******************************************)
-let test_p p str expr =
-  match parse_string ~consume:All p str with
-  | Ok v -> v = expr
-  | Error _ -> false
-
 let pr_opt p str = Result.get_ok @@ parse_string ~consume:All p str
 let pr_not_opt p str = Result.get_error @@ parse_string ~consume:All p str
 
