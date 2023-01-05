@@ -1,27 +1,27 @@
 $ ./demoParse.exe <<- EOF
 >section .code
->fibonachch:
+>.fibonachch:
 >push rbp
 >mov rbx, 0x2A
 >mov rax, 0x0
 >mov rcx, 1
 >cmp rbx, 1
->je fibonachchEnd
+>je .fibonachchEnd
 >cmp rbx, 2
->je fibonachchTwo
+>je .fibonachchTwo
 >sub rbx, 1
->fibonachchStart:
+>.fibonachchStart:
 >sub rbx, 1
 >xor rax, rcx
 >xor rcx, rax
 >xor rax, rcx
 >add rax, rcx
 >cmp rbx, 0
->je fibonachchEnd
->jmp fibonachchStart
->fibonachchTwo:
+>je .fibonachchEnd
+>jmp .fibonachchStart
+>.fibonachchTwo:
 >mov rax, 1
->fibonachchEnd:
+>.fibonachchEnd:
 >pop rbp
 >ret
 >EOF
