@@ -7,4 +7,4 @@
   $ ./INTERPRET.exe ../../../../examples/method_access.rb
   200
   $ ./INTERPRET.exe ../../../../examples/lambda.rb
-  [1, 4, 9]
+  [4, 10, 18]
