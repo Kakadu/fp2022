@@ -7,6 +7,14 @@
 (** Alias for built-in OCaml string type. Represents identifiers *)
 type id = string [@@deriving show { with_path = false }]
 
+(** Mapping of declared variables and function
+    into their values *)
+module IdMap = Map.Make (struct
+  type t = id
+
+  let compare = compare
+end)
+
 (** Constants type: values that can't be altered during program execution *)
 type constant =
   | Bool of bool (** true/false *)
@@ -72,3 +80,20 @@ type expr =
   | ADT of id * expr list (** Constuctor of Algebraic Data Types *)
   | Type of id * Typing.t (** Type declaration *)
 [@@deriving show { with_path = false }]
+
+type value =
+  | VUndef
+  | VNil
+  | VUnit
+  | VBool of bool
+  | VInt of int
+  | VString of string
+  | VCons of value * value
+  | VClosure of ((value ref) IdMap.t) * id * expr
+
+type environment = (value ref) IdMap.t
+
+type evaluation_result =
+  { value : value
+  ; env : environment
+  }

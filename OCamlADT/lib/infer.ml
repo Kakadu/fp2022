@@ -105,7 +105,7 @@ module Type = struct
     in
     function
     | TypeVariable id -> id = v
-    | NamedT (_, _) -> failwith "Named is not implemented yet!"
+    | NamedT (_, _) -> false
     | ArrowT (left, right) -> occurs_in v left || occurs_in v right
     | TupleT ts -> Base.List.exists ts ~f:(occurs_in v)
     | ListT t -> occurs_in v t
@@ -137,7 +137,7 @@ module Type = struct
           vs
           ~f:(fun v s -> Base.Set.union s (free_vars_variant empty_set v))
           ~init:acc
-      | NamedT (_, _) -> failwith "Named is not implemented yet!"
+      | NamedT (_, _) -> acc
     in
     helper empty_set
   ;;
@@ -200,7 +200,7 @@ end = struct
       | ListT t -> ListT (helper t)
       | BaseT t -> BaseT t
       | AdtT vs -> AdtT (Base.List.map vs ~f:apply_for_adt_variant)
-      | NamedT (_, _) -> failwith "Named is not implemented yet!"
+      | NamedT (name, t) -> NamedT (name, t)
     in
     helper
   ;;
@@ -355,7 +355,7 @@ let infer =
        | Str _ -> return (Subst.empty, string_t)
        | Bool _ -> return (Subst.empty, bool_t)
        | Unit -> return (Subst.empty, unit_t)
-       | _ -> failwith "Not implemented yet")
+       | Nil -> return (Subst.empty, nil_t))
     | Var name ->
       (match name with
        | "_" ->
@@ -511,7 +511,7 @@ let infer =
       let* subst_expr, t_expr = helper env' in_expr in
       let* final_subst = Subst.compose subst' subst_expr in
       return (final_subst, t_expr)
-    | Type (_, _) -> failwith "Not implemented type inference for Type."
+    | Type (_, _) -> fail `NotImplementedYet
   in
   helper
 ;;

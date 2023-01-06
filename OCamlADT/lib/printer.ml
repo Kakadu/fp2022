@@ -4,9 +4,28 @@
 
 (* Pretty printer module *)
 
-open Values
 open Ast
 open Typing
+
+exception PrinterException of string
+
+let rec type_to_string = function
+  | BaseT b ->
+    (match b with
+     | Int -> "int"
+     | String -> "string"
+     | Bool -> "bool"
+     | _ -> failwith "Not implemented base type_to_string.")
+  | TypeVariable id -> Printf.sprintf "%s%s" "'" (string_of_int id)
+  | NamedT (name, t) ->
+    (match t with
+     | None -> name
+     | Some t -> Printf.sprintf "%s %s" (type_to_string t) name)
+  | AdtT _ -> "ADT"
+  | ArrowT (left, right) -> Printf.sprintf "%s -> %s" (type_to_string left) (type_to_string right)
+  | TupleT ts -> List.fold_left (fun acc x -> Printf.sprintf "%s * %s" acc (type_to_string x)) "" ts
+  | ListT t -> Printf.sprintf "%s %s" (type_to_string t) " list"
+;;
 
 let binop_to_string = function
   | Plus -> "+"
@@ -19,6 +38,7 @@ let binop_to_string = function
 let unop_to_string = function
   | UnaryMinus -> "- "
 ;;
+
 
 let rec expr_to_string = function
   | Constant x -> const_to_string x
@@ -43,20 +63,24 @@ let rec expr_to_string = function
     let sps =
       List.fold_right
         (fun (p, e) a ->
-          Printf.sprintf "%s -> %s" (expr_to_string p) (expr_to_string e) ^ a)
+          Printf.sprintf "%s -> %s%s" (expr_to_string p) (expr_to_string e) a)
         pes
         ""
     in
     Printf.sprintf "match %s with %s" se sps
-  | _ -> failwith "Some unknown expression to print!"
+  | Tuple exprs -> Printf.sprintf "(%s)" (List.fold_left (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr)) "" exprs)
+  | ADT (name, exprs) -> Printf.sprintf "%s (%s)" name (Printf.sprintf "(%s)" (List.fold_left (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr)) "" exprs))
+  | Type (name, t) -> Printf.sprintf "type %s = %s" name (type_to_string t)
+  | List exprs -> Printf.sprintf "([%s]" (List.fold_left (fun acc expr -> Printf.sprintf "%s; %s" acc (expr_to_string expr)) "" exprs)
+  | LetIn (let_expr, in_expr) -> Printf.sprintf "%s in %s" (expr_to_string let_expr) (expr_to_string in_expr)
 
 and string_of_list l =
   let rec string_of_list' = function
     | Cons (h, Constant Nil) -> expr_to_string h
-    | Cons (h, t) -> expr_to_string h ^ "; " ^ string_of_list' t
-    | _ -> failwith "string_of_list should only be used on non-empty lists"
+    | Cons (h, t) -> Printf.sprintf "%s; %s" (expr_to_string h) (string_of_list' t)
+    | _ -> raise (PrinterException "string_of_list should only be used on non-empty lists")
   in
-  "[" ^ string_of_list' l ^ "]"
+  Printf.sprintf "[%s]" (string_of_list' l)
 
 and const_to_string = function
   | Bool b -> string_of_bool b
@@ -81,22 +105,4 @@ and list_to_string v1 = function
   | VCons (v1', v2') ->
     Printf.sprintf "%s; %s" (val_to_string v1) (list_to_string v1' v2')
   | _ -> failwith "list_to_string: Error in typechecker."
-;;
-
-let rec type_to_string = function
-  | BaseT b ->
-    (match b with
-     | Int -> "int"
-     | String -> "string"
-     | Bool -> "bool"
-     | _ -> failwith "Not implemented base type_to_string.")
-  | TypeVariable id -> "'" ^ string_of_int id
-  | NamedT (name, t) ->
-    (match t with
-     | None -> name
-     | Some t -> type_to_string t ^ name)
-  | AdtT _ -> "ADT"
-  | ArrowT (left, right) -> type_to_string left ^ "->" ^ type_to_string right
-  | TupleT ts -> List.fold_left (fun acc x -> acc ^ " * " ^ type_to_string x) "" ts
-  | ListT t -> type_to_string t ^ " list"
 ;;

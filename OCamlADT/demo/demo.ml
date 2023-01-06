@@ -4,6 +4,8 @@
 
 open Ocamladt_lib
 
+exception CommandNotFound
+
 let _ =
   let code = Stdio.In_channel.input_all Caml.stdin in
   try
@@ -12,7 +14,7 @@ let _ =
     let final_string_variants = Str.split semicolons_reg code in
     let final_string =
       match final_string_variants with
-      | [] -> failwith "There must be a substring! Smth went wrong."
+      | [] -> raise CommandNotFound
       | [ x ] -> x
       | h :: _ -> h
     in
@@ -23,24 +25,14 @@ let _ =
       (match type_checking_result with
        | Error error -> Infer.print_type_error error
        | Ok t ->
-         let eval_res = Interpreter.eval result Values.IdMap.empty in
+         let eval_res = Interpreter.eval result Ast.IdMap.empty in
          Format.printf
            "%s : %s\n"
            (Printer.val_to_string eval_res.value)
            (Printer.type_to_string t))
     | Result.Error e ->
       Caml.Format.printf "Error on parsing state: %a\n%!" Parser.pp_error e
-    (* match ast with
-       | Result.Ok result -> (
-           (* let type_checking_result = infer.type_check(result) in *)
-           let type_checking_result = true in
-           match type_checking_result with
-           | false -> print_string "Typecheking failed"
-           | true ->
-               let eval_res = Interpreter.eval result Values.IdMap.empty in
-               print_endline (Printer.val_to_string eval_res.value))
-       | Result.Error e ->
-           Caml.Format.printf "Error on parsing state: %a\n%!" Parser.pp_error e *)
   with
-  | Not_found -> failwith "No string!"
+  | Not_found -> print_endline "No string!"
+  | CommandNotFound -> prerr_endline "Internal error during command substring search!"
 ;;

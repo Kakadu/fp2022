@@ -7,19 +7,14 @@
 open Ast
 open Printer
 open Typing
-open Values
 
 (* Errors [exceptions] that may occur during interpetation *)
-exception CircularDefinition of Typing.t * Typing.t
 exception UnacceptableMatchExpresstion of expr
 exception NotImplementedYet of expr
 exception InexhaustiveMatch of expr
-exception ParseError of string
 exception RuntimeError of string
 exception TypeError of expr * Typing.t
 exception UnboundVariable of string
-exception UndefinedValue of expr
-exception UnificationError of Typing.t * Typing.t
 
 (** Helper function for comparing Values *)
 let rec vcompare v1 v2 =
@@ -47,8 +42,7 @@ let concat (env1 : environment) (env2 : environment) : environment =
   IdMap.fold (fun x v e -> IdMap.add x v e) env1 env2
 ;;
 
-let match_example x =
-  match x with
+let match_example = function
   | h :: _ ->
     (match h with
      | h :: _ -> print_endline h
@@ -135,8 +129,7 @@ let rec eval (e : expr) (env : environment) : evaluation_result =
      | _ -> raise (RuntimeError "Evaluation of function did not give back a VClosure"))
   | Match (expr, patterns) ->
     let expr_value = (eval expr env).value in
-    let rec helper l =
-      match l with
+    let rec helper = function
       | [] -> raise (InexhaustiveMatch expr)
       | (from_expr, to_expr) :: tl ->
         (match pattern_match expr_value from_expr with
@@ -144,7 +137,7 @@ let rec eval (e : expr) (env : environment) : evaluation_result =
            let eval_res =
              if corresponds then eval to_expr (concat match_env env) else helper tl
            in
-           { value = eval_res.value; env = eval_res.env })
+           eval_res)
     in
     helper patterns
   | Tuple _ -> raise (NotImplementedYet e)

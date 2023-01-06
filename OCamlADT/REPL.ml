@@ -4,6 +4,8 @@
 
 open Ocamladt_lib
 
+exception CommandNotFound
+
 let rec read_next_command previous =
   let new_input = read_line () in
   let concatted = previous ^ new_input in
@@ -12,11 +14,12 @@ let rec read_next_command previous =
     let _ = Str.search_forward semicolons_reg concatted 0 in
     let final_string = Str.split semicolons_reg concatted in
     match final_string with
-    | [] -> failwith "There must be a substring! Smth went wrong."
+    | [] -> raise CommandNotFound
     | [ x ] -> x
     | h :: _ -> h
   with
   | Not_found -> read_next_command concatted
+  | CommandNotFound -> read_next_command ""
 ;;
 
 let rec eval_new_repl_command env =
@@ -42,4 +45,4 @@ let rec eval_new_repl_command env =
     eval_new_repl_command env
 ;;
 
-let start_repl = eval_new_repl_command Values.IdMap.empty
+let start_repl = eval_new_repl_command Ast.IdMap.empty

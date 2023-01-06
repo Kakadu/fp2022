@@ -636,8 +636,7 @@ let app_p d =
       ; var_p
       ]
   in
-  let rec parse_exprs exprs =
-    match exprs with
+  let rec parse_exprs = function
     | [] -> Constant (Str "No arguments for App!")
     | [ _ ] -> Constant (Str "Only one argument for App!")
     | [ x; y ] -> App (y, x)
