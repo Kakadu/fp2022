@@ -58,6 +58,12 @@ module OperandsHandler (M : MonadError) : sig
   (* Construct a constant from value *)
   val const_from_val : int -> 'a const
 
+  (* eax register *)
+  val reg_eax : dword reg
+
+  (* Id of eax register *)
+  val reg_eax_id : int
+
   (* Get list of related registers, e.g. for ah we get
      [eax, ax, ah, al] *)
   val reg_get_related_regs : 'a reg -> int list
