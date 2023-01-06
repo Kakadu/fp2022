@@ -21,7 +21,7 @@ Features done (append only):
 Features in progress (and TODOs):
 
 - INPROGRESS: ADT support
-  - Type of List (`list`) is ADT; in AST there mustn't be that List expresstion is separeted from ADT expression
+  - Type of List (`list`) is ADT; in AST there mustn't be that List expresstion is separeted from ADT expression.
 
 
 ##### Замечания по стилю кодирования
