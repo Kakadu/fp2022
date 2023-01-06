@@ -6,47 +6,22 @@ License: LGPL for implementation code + WTFPL for test examles in miniLanguage
 
 Author: Emir Vildanov, emirvildanow@gmail.com
 
-Details:
-- In order to run REPL.ml run `dune exec ./REPL.exe`
-- .t (e.g. `repl.t`) files are tests:
-  - $ = command that user execute
-  - below = output that appliation 
-- dune
-  - name -- name, under which library is exported into source files
-  - public_name -- name, under which library is exported into other executables within dune file
-  - previously was named "jbuilder". In case you see any problems with this name
-
-Requirements:
-- OCaml
-  - Angstrom (Parser generator <opam install angstrom>)
-  - Qcheck (Property-based testing <opam install qcheck>)
-  - PpxExpect [ExpectTest] (Another test framework <opam install ppx_expect>)
-  - PpxDeriving (TypeDriven code generation <opam install ppx_deriving>)
-  - PpxShow (Reimplementation the show plugin from ppx_deriving <opam install ppx_show>)
-    - Questionable (Needed in CSharpOOP)
-- General
-  - Rlwrap (Convinient REPL wrap on terminal <sudo apt-get install rlwrap>)
-
 Features done (append only):
 
-- NOTHINGYET
+- Parser
+- Standard minilang (interpreter + type inference) with:
+  - Base types
+  - Funcs
+  - Lambdas
+  - Recursion
+  - Tuples
+  - Types declaration
+  - Pattern matching
 
 Features in progress (and TODOs):
 
-- INPROGRESS: Parser
-- TODO: Interpreter of non-recursive functions
-- TODO: Interpreter of recursive functions is not yet ready
-- TODO: make pretty-printing less memory consuming
-- TODO: стандартный мини-язык, базовые типы
-- TODO: mini-ML с функциями обычными и анонимными, замыканиями и рекурсией
-- TODO: алгебраические типы как основной способ проектирования типов
-  - в OCaml и Haskell типы int и float -- примитивные (встроенные)
-  - тип списков алгебраический и там, и там; в AST не должно быть, что списки отдельно, а алгебраических значения отдельно
-  - в OCaml тип bool примитивный, а в Haskell -- алгебраический
-- можно поддержать пары, но можно и обойтись алгебраическим типом с одним конструктором
-- разумеется, объявления типов, паттерн-мэтчинг и типизация
-- присваивание не надо
-- исключения не надо
+- INPROGRESS: ADT support
+  - Type of List (`list`) is ADT; in AST there mustn't be that List expresstion is separeted from ADT expression
 
 
 ##### Замечания по стилю кодирования
