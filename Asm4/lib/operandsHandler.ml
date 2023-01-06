@@ -113,6 +113,7 @@ module OperandsHandler (M : MonadError) = struct
 
   let reg_to_id : 'a reg -> int = Fun.id
   let const_val : 'a const -> int = Fun.id
+  let const_from_val : int -> 'a const = Fun.id
 
   let reg_name_to_id reg_name =
     match List.index_of_elem reg_name String.equal all_reg_name_list with
