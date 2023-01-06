@@ -49,6 +49,9 @@ module OperandsHandler (M : MonadError) : sig
   (* Get internal register id by its name *)
   val reg_name_to_id : string -> int t
 
+  (* Get register id *)
+  val reg_to_id : 'a reg -> int
+
   (* Get integer value of a constant *)
   val const_val : 'a const -> int
 
