@@ -2,7 +2,6 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-
 type named_id = int [@@deriving show { with_path = false }]
 type name = string [@@deriving show { with_path = false }]
 type adt_name = string [@@deriving show { with_path = false }]
@@ -27,14 +26,14 @@ type t =
   | ListT of t (** List type: int list *)
 [@@deriving show { with_path = false }]
 
-val number_t: t
-val bool_t: t
-val string_t: t
-val unit_t: t
-val nil_t: t
-val arrow_t: t -> t -> t
-val tuple_t: t list -> t
-val list_t: t -> t
-val adt_t: (adt_name * t option) list -> t
+val number_t : t
+val bool_t : t
+val string_t : t
+val unit_t : t
+val nil_t : t
+val arrow_t : t -> t -> t
+val tuple_t : t list -> t
+val list_t : t -> t
+val adt_t : (adt_name * t option) list -> t
 
 type scheme = (int, Base.Int.comparator_witness) Base.Set.t * t

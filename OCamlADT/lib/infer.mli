@@ -16,5 +16,5 @@ type error =
   | `NotImplementedYet
   ]
 
-val run_inference: expr -> (t, error) result
-val print_type_error: error -> unit
+val run_inference : expr -> (t, error) result
+val print_type_error : error -> unit

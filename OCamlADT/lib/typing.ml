@@ -5,6 +5,7 @@
 type named_id = int [@@deriving show { with_path = false }]
 type name = string [@@deriving show { with_path = false }]
 type adt_name = string [@@deriving show { with_path = false }]
+
 type base_type =
   | Bool
   | Int

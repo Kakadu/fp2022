@@ -89,9 +89,9 @@ type value =
   | VInt of int
   | VString of string
   | VCons of value * value
-  | VClosure of ((value ref) IdMap.t) * id * expr
+  | VClosure of value ref IdMap.t * id * expr
 
-type environment = (value ref) IdMap.t
+type environment = value ref IdMap.t
 
 type evaluation_result =
   { value : value

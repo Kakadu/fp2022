@@ -22,8 +22,10 @@ let rec type_to_string = function
      | None -> name
      | Some t -> Printf.sprintf "%s %s" (type_to_string t) name)
   | AdtT _ -> "ADT"
-  | ArrowT (left, right) -> Printf.sprintf "%s -> %s" (type_to_string left) (type_to_string right)
-  | TupleT ts -> List.fold_left (fun acc x -> Printf.sprintf "%s * %s" acc (type_to_string x)) "" ts
+  | ArrowT (left, right) ->
+    Printf.sprintf "%s -> %s" (type_to_string left) (type_to_string right)
+  | TupleT ts ->
+    List.fold_left (fun acc x -> Printf.sprintf "%s * %s" acc (type_to_string x)) "" ts
   | ListT t -> Printf.sprintf "%s %s" (type_to_string t) " list"
 ;;
 
@@ -38,7 +40,6 @@ let binop_to_string = function
 let unop_to_string = function
   | UnaryMinus -> "- "
 ;;
-
 
 let rec expr_to_string = function
   | Constant x -> const_to_string x
@@ -68,17 +69,40 @@ let rec expr_to_string = function
         ""
     in
     Printf.sprintf "match %s with %s" se sps
-  | Tuple exprs -> Printf.sprintf "(%s)" (List.fold_left (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr)) "" exprs)
-  | ADT (name, exprs) -> Printf.sprintf "%s (%s)" name (Printf.sprintf "(%s)" (List.fold_left (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr)) "" exprs))
+  | Tuple exprs ->
+    Printf.sprintf
+      "(%s)"
+      (List.fold_left
+         (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr))
+         ""
+         exprs)
+  | ADT (name, exprs) ->
+    Printf.sprintf
+      "%s (%s)"
+      name
+      (Printf.sprintf
+         "(%s)"
+         (List.fold_left
+            (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr))
+            ""
+            exprs))
   | Type (name, t) -> Printf.sprintf "type %s = %s" name (type_to_string t)
-  | List exprs -> Printf.sprintf "([%s]" (List.fold_left (fun acc expr -> Printf.sprintf "%s; %s" acc (expr_to_string expr)) "" exprs)
-  | LetIn (let_expr, in_expr) -> Printf.sprintf "%s in %s" (expr_to_string let_expr) (expr_to_string in_expr)
+  | List exprs ->
+    Printf.sprintf
+      "([%s]"
+      (List.fold_left
+         (fun acc expr -> Printf.sprintf "%s; %s" acc (expr_to_string expr))
+         ""
+         exprs)
+  | LetIn (let_expr, in_expr) ->
+    Printf.sprintf "%s in %s" (expr_to_string let_expr) (expr_to_string in_expr)
 
 and string_of_list l =
   let rec string_of_list' = function
     | Cons (h, Constant Nil) -> expr_to_string h
     | Cons (h, t) -> Printf.sprintf "%s; %s" (expr_to_string h) (string_of_list' t)
-    | _ -> raise (PrinterException "string_of_list should only be used on non-empty lists")
+    | _ ->
+      raise (PrinterException "string_of_list should only be used on non-empty lists")
   in
   Printf.sprintf "[%s]" (string_of_list' l)
 
