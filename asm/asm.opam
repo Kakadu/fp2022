@@ -10,7 +10,6 @@ doc: "https://kakadu.github.io/fp2022/docs/asm"
 bug-reports: "https://github.com/tozarin/fp2022/issues"
 depends: [
   "ocaml"
-  "conf-nasm"
   "dune" {>= "3.4"}
   "angstrom"
   "ppx_inline_test" {with-test}

@@ -21,7 +21,6 @@
  (description "Assembler interpret. Support some SIMD operations")
  (depends
   ocaml
-  conf-nasm
   dune
   angstrom
   (ppx_inline_test :with-test)
@@ -32,7 +31,3 @@
   (odoc :with-doc)
   (ocamlformat :build)
   base))
-
-(package
- (name conf-nasm)
- (allow_empty))

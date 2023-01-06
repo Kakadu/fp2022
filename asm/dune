@@ -8,7 +8,6 @@
 
 (executable
  (name REPL)
- (package asm)
  (public_name REPL)
  (modules REPL)
  (libraries asm stdio))
