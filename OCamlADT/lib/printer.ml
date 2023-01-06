@@ -15,7 +15,8 @@ let rec type_to_string = function
      | Int -> "int"
      | String -> "string"
      | Bool -> "bool"
-     | _ -> failwith "Not implemented base type_to_string.")
+     | Nil -> "[]"
+     | Unit -> "()")
   | TypeVariable id -> Printf.sprintf "%s%s" "'" (string_of_int id)
   | NamedT (name, t) ->
     (match t with
@@ -128,5 +129,5 @@ and list_to_string v1 = function
   | VNil -> val_to_string v1
   | VCons (v1', v2') ->
     Printf.sprintf "%s; %s" (val_to_string v1) (list_to_string v1' v2')
-  | _ -> failwith "list_to_string: Error in typechecker."
+  | _ -> raise (PrinterException "list_to_string: Error in typechecker.")
 ;;
