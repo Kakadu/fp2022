@@ -29,7 +29,7 @@ je .fibonachchEnd
 
 
 ; Вывод регистра rax 
-; 0x9DE8D6D -> 
+; 0x9DE8D6D -> 165580141
 section .data
     codes db '0123456789ABCDEF'
 
