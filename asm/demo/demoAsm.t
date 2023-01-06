@@ -101,7 +101,6 @@
       mov     rax, 60  ; exit syscall
       xor     rdi, rdi ; ret code 0
       syscall 
-  $ make
-  nasm -felf64 demo.asm -o demo.o && ld -o demo demo.o && ./demo
+  $ nasm -felf64 demo.asm -o demo.o && ld -o demo demo.o && ./demo
   0000000009DE8D6D
 
