@@ -1,0 +1,7 @@
+(library
+ (name ocamladt_lib)
+ (modules Repl Ast Typing Infer Printer Values Parser Interpreter)
+ (libraries base str angstrom)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show))
+ (inline_tests))

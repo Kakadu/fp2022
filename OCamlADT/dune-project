@@ -1,0 +1,33 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Emir Vildanov")
+
+(maintainers "Emir Vildanov")
+
+(bug_reports "https://github.com/EmirVildanov/OCamlInterpreter/tree/master")
+
+(homepage "https://github.com/EmirVildanov/OCamlInterpreter/tree/master")
+
+(package
+ (name OCamlADT)
+ (synopsis "OCamlADT")
+ (description
+  "OCaml interpreter with support of ADT(AlgebraicDataTypes)")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  ))
