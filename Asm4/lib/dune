@@ -1,7 +1,14 @@
 (library
  (name asm4_lib)
  (public_name Asm4.Lib)
- (modules Ast Parser Interpreter Utils OperandsHandler MonadError Transformations)
+ (modules
+  Ast
+  Parser
+  Interpreter
+  Utils
+  OperandsHandler
+  MonadError
+  Transformations)
  (libraries base angstrom)
  (preprocess
   (pps ppx_expect ppx_deriving.show))
