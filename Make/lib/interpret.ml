@@ -135,21 +135,53 @@ let string_of_recipe context map x =
   process_word ~recipe_context:(Some context) map x |> String.concat " "
 ;;
 
-(* Get all filenames that matches the pattern "pattern_target" (like "/path/to/smth/%.c"),
+(* Get all filenames that matches the pattern "prefix%suffix" (like "/path/to/smth/%.c"),
  where % -- nonzero number on any symbols. Also returns so-called "stem" -- what was actually
  have been substituted in place of % *)
-let get_filenames pattern_target =
-  [ "obj/args_check.o", "args_check"
-  ; "obj/connection.o", "connection"
-  ; "obj/dump_wifi_params.o", "dump_wifi_params"
-  ; "obj/telnet_remote_control.o", "telnet_remote_control"
-  ; "obj/tftp_server.o", "tftp_server"
-  ]
+let get_filenames_with_stem prefix suffix =
+  (* Avaliable since OCaml 4.13.0, but Graphlib requires 4.11.2 *)
+  let starts_with p str =
+    let len = String.length p in
+    if String.length str < len then false else String.sub str 0 len = p
+  in
+  (* Avaliable since OCaml 4.13.0, but Graphlib requires 4.11.2 *)
+  let ends_with e s =
+    let el = String.length e in
+    let sl = String.length s in
+    if sl < el then false else String.sub s (sl - el) el = e
+  in
+  let dir_contents =
+    let rec loop result = function
+      | f :: fs when Sys.is_directory f ->
+        Sys.readdir f
+        |> Array.to_list
+        |> List.map (Filename.concat f)
+        |> List.append fs
+        |> loop result
+      | f :: fs -> loop (f :: result) fs
+      | [] -> result
+    in
+    let files = loop [] [ "." ] in
+    List.map (fun s -> String.sub s 2 (String.length s - 2)) files
+  in
+  let check_file file =
+    if starts_with prefix file && ends_with suffix file
+    then (
+      let stem =
+        String.sub
+          file
+          (String.length prefix)
+          (String.length file - String.length prefix - String.length suffix)
+      in
+      Some (file, stem))
+    else None
+  in
+  List.filter_map check_file dir_contents
 ;;
 
-let process_pattern_rule map pattern_target (prerequisites : word list) recipes =
-  let filenames = get_filenames pattern_target in
-  let filename_to_rule (target, stem) =
+let process_pattern_rule map prefix suffix prerequisites recipes =
+  let filenames_with_stem = get_filenames_with_stem prefix suffix in
+  let filename_with_stem_to_rule (target, stem) =
     let targets = [ target ] in
     let prerequisites =
       List.concat_map (process_word ~prerequisite_context:(Some stem) map) prerequisites
@@ -162,26 +194,29 @@ let process_pattern_rule map pattern_target (prerequisites : word list) recipes 
     in
     { targets; prerequisites; recipes = recipes, context }
   in
-  List.map filename_to_rule filenames
+  List.map filename_with_stem_to_rule filenames_with_stem
 ;;
 
 (* Check whether the first string in targets contain '%'*)
 let check_pattern_presence targets = String.contains (targets |> List.hd) '%'
 
-(** Turns rule into a list of processed rules (this could happen with targets
-    containing pattern).
+(** Turns rule into a list of processed rules (this could happen when target
+    contains pattern).
     Expands variables in targets and prerequisites, leaving recipes intact *)
 let process_rule map ({ targets; prerequisites; recipes } : rule) =
   let targets = [ fst targets ] @ snd targets in
   let targets = expand_words_list map targets in
-  if check_pattern_presence targets
-  then (
-    print_endline
-      "Currently, pattern targets with multiple targets are not supported. The first \
-       target in the rule will be used as a pattern.\n\
-       Other targets in that rule will be dropped.";
-    process_pattern_rule map (List.hd targets) prerequisites recipes)
-  else (
+  match String.split_on_char '%' (List.hd targets) with
+  | prefix :: suffix :: _ ->
+    (match targets with
+     | _ :: _ :: _ ->
+       print_endline
+         "Currently, pattern targets with multiple targets are not supported. The first \
+          target in the rule will be used as a pattern.\n\
+          Other targets in that rule will be dropped."
+     | _ -> ());
+    process_pattern_rule map prefix suffix prerequisites recipes
+  | _ ->
     let prerequisites = expand_words_list map prerequisites in
     let context =
       { current_target = List.hd targets
@@ -189,7 +224,7 @@ let process_rule map ({ targets; prerequisites; recipes } : rule) =
       ; stem = ""
       }
     in
-    [ { targets; prerequisites; recipes = recipes, context } ])
+    [ { targets; prerequisites; recipes = recipes, context } ]
 ;;
 
 let process_var map var =
@@ -615,8 +650,6 @@ let interpret ast targets =
   let rules, varmap = processed_rules_and_vars_of_exprs exprs in
   Format.printf "%a\n%!\n" (Format.pp_print_list pp_processed_rule) rules;
   let graph, vertex_map = graph_of_rules rules in
-  let file = open_out_bin "mygraph.dot" in
-  Dot.output_graph file graph;
   let graph, vertex_map = add_default_goals targets vertex_map rules graph in
   let rec traverse_targets = function
     | [] -> Ok ""
