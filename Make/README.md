@@ -61,4 +61,5 @@ Done:
 
 ## Running tests
 
-go to demos and run `dune exec demoInterpret`
+go to demos and run `dune exec demoInterpret -- <folder_name> [targets]`, where
+`<folder_name>` is one of the folders there
