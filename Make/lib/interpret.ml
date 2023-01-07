@@ -648,7 +648,6 @@ end)
 let interpret ast targets =
   let exprs = ast |> exprs_of_ast in
   let rules, varmap = processed_rules_and_vars_of_exprs exprs in
-  Format.printf "%a\n%!\n" (Format.pp_print_list pp_processed_rule) rules;
   let graph, vertex_map = graph_of_rules rules in
   let graph, vertex_map = add_default_goals targets vertex_map rules graph in
   let rec traverse_targets = function
@@ -659,12 +658,12 @@ let interpret ast targets =
          traverse_targets tl
        with
        | Recipe (target, rc) ->
-         Error (Printf.sprintf "make: *** [Makefile: '%s'] Error %d" target rc)
+         Error (Printf.sprintf "make: *** [Makefile: '%s'] Error %d\n" target rc)
        | NoRule target ->
-         Error (Printf.sprintf "make: *** No rule to make target '%s'. Stop." target)
-       | UpToDate target -> Ok (Printf.sprintf "make: '%s' is up to date." target)
+         Error (Printf.sprintf "make: *** No rule to make target '%s'. Stop.\n" target)
+       | UpToDate target -> Ok (Printf.sprintf "make: '%s' is up to date.\n" target)
        | NothingToBeDone target ->
-         Ok (Printf.sprintf "make: Nothing to be done for '%s'." target))
+         Ok (Printf.sprintf "make: Nothing to be done for '%s'.\n" target))
   in
   match targets with
   (* When no targets are specified, choose first one *)

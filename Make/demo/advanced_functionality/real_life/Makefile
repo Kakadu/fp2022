@@ -19,31 +19,33 @@ $(TARGET): $(OBJECTS)
 	@$(LINKER) $(OBJECTS) $(LFLAGS) -o $@
 	@echo "Linking complete!"
 
+obj/args_check.o : src/args_check.c
+	@echo "Matched "$*
+	@$(CC) $(CFLAGS) -c $< -o $@
+	@echo "Compiled "$<" successfully!"
+obj/connection.o : src/connection.c
+	@echo "Matched "$*
+	@$(CC) $(CFLAGS) -c $< -o $@
+	@echo "Compiled "$<" successfully!"
+obj/dump_wifi_params.o : src/dump_wifi_params.c
+	@echo "Matched "$*
+	@$(CC) $(CFLAGS) -c $< -o $@
+	@echo "Compiled "$<" successfully!"
+obj/telnet_remote_control.o : src/telnet_remote_control.c
+	@echo "Matched "$*
+	@$(CC) $(CFLAGS) -c $< -o $@
+	@echo "Compiled "$<" successfully!"
+obj/tftp_server.o : src/tftp_server.c
+	@echo "Matched "$*
+	@$(CC) $(CFLAGS) -c $< -o $@
+	@echo "Compiled "$<" successfully!"
+
+#We could also do this like so (it will override previous rules)
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@echo "Matched "$*
 	@$(CC) $(CFLAGS) -c $< -o $@
 	@echo "Compiled "$<" successfully!"
 
-# obj/args_check.o : src/args_check.c
-# 	@echo "Matched "$*
-# 	@$(CC) $(CFLAGS) -c $< -o $@
-# 	@echo "Compiled "$<" successfully!"
-# obj/connection.o : src/connection.c
-# 	@echo "Matched "$*
-# 	@$(CC) $(CFLAGS) -c $< -o $@
-# 	@echo "Compiled "$<" successfully!"
-# obj/dump_wifi_params.o : src/dump_wifi_params.c
-# 	@echo "Matched "$*
-# 	@$(CC) $(CFLAGS) -c $< -o $@
-# 	@echo "Compiled "$<" successfully!"
-# obj/telnet_remote_control.o : src/telnet_remote_control.c
-# 	@echo "Matched "$*
-# 	@$(CC) $(CFLAGS) -c $< -o $@
-# 	@echo "Compiled "$<" successfully!"
-# obj/tftp_server.o : src/tftp_server.c
-# 	@echo "Matched "$*
-# 	@$(CC) $(CFLAGS) -c $< -o $@
-# 	@echo "Compiled "$<" successfully!"
 
 clean:
 	@$(rm) $(OBJECTS)

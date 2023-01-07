@@ -3,7 +3,7 @@ go: go.o primes.o
 	gcc -Wall -o go go.o primes.o
 	@echo "Done"
 
-go.o: go.c primes.h go.o
+go.o: go.c primes.h
 	@echo "compiling.."
 	gcc -Wall -c -o go.o go.c
 

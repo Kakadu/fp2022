@@ -11,4 +11,31 @@
  (libraries make_lib stdio core))
 
 (cram
- (deps ./demoParse.exe ./demoInterpret.exe))
+ (deps
+  ./demoParse.exe
+  ./demoInterpret.exe
+  ./basic_functionality/targets_recipes/Makefile
+  ./basic_functionality/targets_dependencies/Makefile
+  ./basic_functionality/empty_symbols/Makefile
+  ./basic_functionality/multiline/Makefile
+  ./basic_functionality/echoing/Makefile
+  ./basic_functionality/dropping/Makefile
+  ./basic_functionality/overriding/Makefile
+  ./basic_functionality/recipe_on_same_line/Makefile
+  ./basic_functionality/timestamps/Makefile
+  ./basic_functionality/timestamps/go.c
+  ./basic_functionality/timestamps/primes.c
+  ./basic_functionality/timestamps/primes.h
+  ./basic_functionality/comments/Makefile
+  ./advanced_functionality/real_life/src/args_check.c
+  ./advanced_functionality/real_life/src/dump_wifi_params.c
+  ./advanced_functionality/real_life/src/tftp_server.c
+  ./advanced_functionality/real_life/src/connection.c
+  ./advanced_functionality/real_life/src/telnet_remote_control.c
+  ./advanced_functionality/real_life/Makefile
+  ./advanced_functionality/real_life/include/telnet_remote_control.h
+  ./advanced_functionality/real_life/include/args_check.h
+  ./advanced_functionality/real_life/include/tftp_server.h
+  ./advanced_functionality/real_life/include/connection.h
+  ./advanced_functionality/variables/Makefile
+  ./advanced_functionality/subsitution_madness/Makefile))
