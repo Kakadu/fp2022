@@ -26,7 +26,7 @@ let repl env = function
         Prettyprint.pp_error Format.err_formatter e;
         VUndef
     in
-    let env = IdMap.add name (ref value) env in
+    let env = IdMap.add name value env in
     (match res_value with
      | Result.Ok v -> Format.printf "val %s : <type_undef> = %a\n" name pp_value v
      | Result.Error _ -> Format.printf "Error: definition evaluation failure \n%!");

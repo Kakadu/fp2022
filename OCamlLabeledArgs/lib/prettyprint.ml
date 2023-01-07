@@ -91,5 +91,5 @@ let pp_error =
 ;;
 
 let pp_env ppf (env : environment) =
-  IdMap.iter (fun name value -> Format.fprintf ppf "%s : %a\n" name pp_value !value) env
+  IdMap.iter (fun name value -> Format.fprintf ppf "%s : %a\n" name pp_value value) env
 ;;

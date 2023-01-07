@@ -15,9 +15,9 @@ type value =
   | VUnit
   | VBool of bool
   | VInt of int
-  | VClosure of value ref IdMap.t * arg_label * expr option * id * expr
+  | VClosure of id option * value IdMap.t * expr
 
-type environment = value ref IdMap.t
+type environment = value IdMap.t
 
 type typ =
   | TBool

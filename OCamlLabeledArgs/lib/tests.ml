@@ -601,10 +601,12 @@ let%test _ =
 ;;
 
 let%test _ =
-  let env = IdMap.add "x" (ref (VInt 8)) IdMap.empty in
+  let env = IdMap.add "x" (VInt 8) IdMap.empty in
   match eval increment env with
-  | Ok (VClosure (env, ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1))))
-    when match compare_values !(IdMap.find "x" env) (VInt 8) with
+  | Ok
+      (VClosure
+        (None, env, Fun (ArgNoLabel, None, "x", Binop (Plus, Var "x", Const (Int 1)))))
+    when match compare_values (IdMap.find "x" env) (VInt 8) with
          | Result.Ok t when t = 0 -> true
          | _ -> false -> true
   | _ -> false

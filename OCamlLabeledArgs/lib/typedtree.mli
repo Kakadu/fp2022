@@ -13,15 +13,15 @@ module IdMap : Map.S with type key = id
 
 (** Possible output values of expressions *)
 type value =
-  | VUndef (** internall value for implementing rec *)
+  | VUndef (** internall undefined value *)
   | VUnit (** internall value for () *)
   | VBool of bool (** represents boolean values *)
   | VInt of int (** represents integer values *)
-  | VClosure of value Stdlib.ref IdMap.t * arg_label * expr option * id * expr
-      (** represents high-order functions in form of (env, "x", e) *)
+  | VClosure of id option * environment * expr
+      (** represents high-order functions in form of (optional name for recursion, env, Fun (...) ) *)
 
 (** Mapping from variable names to types *)
-type environment = value Stdlib.ref IdMap.t
+and environment = value IdMap.t
 
 (** Representation of types *)
 type typ =

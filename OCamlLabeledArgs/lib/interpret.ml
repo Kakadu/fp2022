@@ -18,14 +18,12 @@ module Interpret (M : MONADERROR) = struct
   ;;
 
   let find name (env : environment) =
-    !(match IdMap.find name env with
-      | v -> v
-      | exception Not_found -> ref VUndef)
+    match IdMap.find name env with
+    | v -> v
+    | exception Not_found -> VUndef
   ;;
 
-  let upd_env name value (env : environment) : environment =
-    IdMap.add name (ref value) env
-  ;;
+  let upd_env name value (env : environment) : environment = IdMap.add name value env
 
   let rec eval e (env : environment) =
     match e with
@@ -33,7 +31,7 @@ module Interpret (M : MONADERROR) = struct
     | Var name -> return (find name env)
     | Binop _ -> eval_binop e env
     | Fun (label, default, name, exp) ->
-      return (VClosure (env, label, default, name, exp))
+      return (VClosure (None, env, Fun (label, default, name, exp)))
     | App (fu, label, arg) -> eval_app fu label arg env
     | IfThenElse (cond, tbody, fbody) -> eval_if cond tbody fbody env
     | Let (name, body, exp) -> eval_let name body exp env
@@ -85,40 +83,50 @@ module Interpret (M : MONADERROR) = struct
 
   and eval_app fu label arg env =
     eval fu env
-    >>= function
-    | VClosure (fu_env, ArgNoLabel, None, name, fu_body) ->
-      eval arg env >>= fun arg_val -> eval fu_body (upd_env name arg_val fu_env)
-    | VClosure (fu_env, ArgLabeled l, None, name, fu_body) ->
+    >>= fun closure ->
+    match closure with
+    | VClosure (name, fu_env, fun_exp) ->
       eval arg env
-      >>= fun arg_val -> eval fu_body (upd_env l arg_val (upd_env name arg_val fu_env))
-    | VClosure (fu_env, ArgOptional l, None, name, fu_body) ->
-      eval arg env
-      >>= fun arg_val -> eval fu_body (upd_env l arg_val (upd_env name arg_val fu_env))
-    | VClosure (fu_env, ArgOptional l, Some e, name, fu_body) ->
-      (match label with
-       | ArgLabeled apply_l ->
-         (if compare_string apply_l l = 0 then eval arg env else eval e env)
-         >>= fun arg_val -> eval fu_body (upd_env l arg_val (upd_env name arg_val fu_env))
-       | _ ->
-         eval e env
-         >>= fun arg_val ->
-         eval_app fu_body label arg (upd_env l arg_val (upd_env name arg_val fu_env)))
+      >>= fun arg_val ->
+      let fun_unpack =
+        match fun_exp with
+        | Fun (lab, default, arg_name, fu_body) -> return (lab, default, arg_name, fu_body)
+        | _ -> fail (RuntimeError "Not a function")
+      in
+      fun_unpack
+      >>= fun data ->
+      let lab, default, arg_name, fu_body = data in
+      let default_value =
+        match default with
+        | Some e -> eval e env
+        | None -> return VUndef
+      in
+      default_value
+      >>= fun dv ->
+      let has_unspecified_args, env_updated =
+        match lab with
+        | ArgNoLabel -> false, upd_env arg_name arg_val fu_env
+        | ArgLabeled l -> false, upd_env l arg_val (upd_env arg_name arg_val fu_env)
+        | ArgOptional l ->
+          (match label with
+           | ArgLabeled apply_l when compare_string apply_l l = 0 ->
+             false, upd_env l arg_val (upd_env arg_name arg_val fu_env)
+           | _ -> true, upd_env l dv (upd_env arg_name dv fu_env))
+      in
+      if has_unspecified_args
+      then eval_app fu_body label arg env_updated
+      else (
+        match name with
+        | Some n -> eval fu_body (upd_env n closure env_updated)
+        | None -> eval fu_body env_updated)
     | _ -> fail (RuntimeError "This is not a function. It can not be applied.")
 
   and eval_let name body exp env =
     eval body env >>= fun body_val -> eval exp (upd_env name body_val env)
 
   and eval_letrec name body exp env =
-    let new_env = upd_env name VUndef env in
-    eval body new_env
-    >>= fun body_val ->
-    match IdMap.find name new_env with
-    | exception Not_found -> fail (RuntimeError "Couldn't update environment")
-    | v ->
-      (* Use of assignment:
-         Basically, the whole mutable IdMap thing is for supporting backpatching here *)
-      v := body_val;
-      eval exp new_env
+    let env_updated = upd_env name (VClosure (Some name, env, body)) env in
+    eval exp env_updated
   ;;
 end
 
