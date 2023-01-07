@@ -8,6 +8,16 @@ open Ppx_hash_lib.Std.Hash.Builtin
 open Ppx_compare_lib.Builtin
 open Ppx_sexp_conv_lib.Conv
 
+(** The context needed to properly expand the recipe *)
+type recipe_context =
+  { current_target : string
+  ; first_prerequisite : string
+  ; stem : string
+  }
+[@@deriving compare, sexp, hash, show { with_path = false }]
+
+let default_recipe_context = { current_target = ""; first_prerequisite = ""; stem = "" }
+
 (** Processed rules with substitution performed.
 
     Variables in all parts of a makefile are expanded when read,
@@ -15,7 +25,7 @@ open Ppx_sexp_conv_lib.Conv
 type processed_rule =
   { targets : string list
   ; prerequisites : string list
-  ; recipes : recipe list
+  ; recipes : recipe list * recipe_context
   }
 [@@deriving show { with_path = false }]
 
@@ -50,14 +60,6 @@ let exprs_of_ast ((rule, pos), exprs) =
   insert_at_pos pos rule exprs
 ;;
 
-(** The context needed to properly expand recipe *)
-type recipe_context =
-  { current_target : string
-  ; first_prerequisite : string
-  }
-
-(*TODO: subsitute Pattern and Asterisk. (add parameter None (then $* expands to "") or Some recipe_context, like the result of % expansion)*)
-
 (** Expands variables in a word, turning it into a string list.
 
     Again, is's easier to think of word as a list of strings, separated by
@@ -67,7 +69,12 @@ type recipe_context =
     An example of expanding "a$(a)123$(x)", where "a = x y" and "x = p q":
     a$(a)123$(x) -> a[x; y]123[p; q] -> [ax; y]123[p; q] -> [ax; y123][p; q] -> [ax; y123p; q]
 *)
-let rec process_word ?(recipe_context = Option.None) map word =
+let rec process_word
+  ?(recipe_context = Option.None)
+  ?(prerequisite_context = Option.None)
+  map
+  word
+  =
   (* concat_to_last_element ["a"; "b"] "x" = ["a"; "bx"] *)
   let concat_to_last_element l x =
     let n = List.length l in
@@ -104,7 +111,7 @@ let rec process_word ?(recipe_context = Option.None) map word =
     | Asterisk ->
       (match recipe_context with
        | None -> acc
-       | Some context -> acc (*TODO*))
+       | Some context -> concat_to_last_element acc context.stem)
     | At ->
       (match recipe_context with
        | None -> acc
@@ -114,10 +121,9 @@ let rec process_word ?(recipe_context = Option.None) map word =
        | None -> acc
        | Some context -> concat_to_last_element acc context.first_prerequisite)
     | Pattern ->
-      (match recipe_context with
-       | None -> acc (* TODO *)
-       | Some _ -> concat_to_last_element acc "%")
-    | _ -> acc
+      (match prerequisite_context with
+       | None -> concat_to_last_element acc "%"
+       | Some stem -> concat_to_last_element acc stem)
   in
   List.fold_left expand [ "" ] word
 ;;
@@ -126,17 +132,64 @@ let rec process_word ?(recipe_context = Option.None) map word =
 let expand_words_list map = List.concat_map (process_word map)
 
 let string_of_recipe context map x =
-  process_word ~recipe_context:context map x |> String.concat " "
+  process_word ~recipe_context:(Some context) map x |> String.concat " "
 ;;
 
-(** Turns rule into a processed rule.
+(* Get all filenames that matches the pattern "pattern_target" (like "/path/to/smth/%.c"),
+ where % -- nonzero number on any symbols. Also returns so-called "stem" -- what was actually
+ have been substituted in place of % *)
+let get_filenames pattern_target =
+  [ "obj/args_check.o", "args_check"
+  ; "obj/connection.o", "connection"
+  ; "obj/dump_wifi_params.o", "dump_wifi_params"
+  ; "obj/telnet_remote_control.o", "telnet_remote_control"
+  ; "obj/tftp_server.o", "tftp_server"
+  ]
+;;
+
+let process_pattern_rule map pattern_target (prerequisites : word list) recipes =
+  let filenames = get_filenames pattern_target in
+  let filename_to_rule (target, stem) =
+    let targets = [ target ] in
+    let prerequisites =
+      List.concat_map (process_word ~prerequisite_context:(Some stem) map) prerequisites
+    in
+    let context =
+      { current_target = target
+      ; first_prerequisite = (if prerequisites = [] then "" else List.hd prerequisites)
+      ; stem
+      }
+    in
+    { targets; prerequisites; recipes = recipes, context }
+  in
+  List.map filename_to_rule filenames
+;;
+
+(* Check whether the first string in targets contain '%'*)
+let check_pattern_presence targets = String.contains (targets |> List.hd) '%'
+
+(** Turns rule into a list of processed rules (this could happen with targets
+    containing pattern).
     Expands variables in targets and prerequisites, leaving recipes intact *)
 let process_rule map ({ targets; prerequisites; recipes } : rule) =
   let targets = [ fst targets ] @ snd targets in
-  { targets = expand_words_list map targets
-  ; prerequisites = expand_words_list map prerequisites
-  ; recipes
-  }
+  let targets = expand_words_list map targets in
+  if check_pattern_presence targets
+  then (
+    print_endline
+      "Currently, pattern targets with multiple targets are not supported. The first \
+       target in the rule will be used as a pattern.\n\
+       Other targets in that rule will be dropped.";
+    process_pattern_rule map (List.hd targets) prerequisites recipes)
+  else (
+    let prerequisites = expand_words_list map prerequisites in
+    let context =
+      { current_target = List.hd targets
+      ; first_prerequisite = (if prerequisites = [] then "" else List.hd prerequisites)
+      ; stem = ""
+      }
+    in
+    [ { targets; prerequisites; recipes = recipes, context } ])
 ;;
 
 let process_var map var =
@@ -197,7 +250,7 @@ let processed_rules_and_vars_of_exprs exprs =
   let process_expr (rules, map) = function
     | Rule rule ->
       let result = process_rule map rule in
-      rules @ [ result ], map
+      rules @ result, map
     | Var var -> rules, process_var map var
   in
   List.fold_left process_expr ([], VarMap.empty) exprs
@@ -212,15 +265,16 @@ let rules_has_target target rules =
 ;;
 
 (** Return recipes for specified target among all rules.
-If two or more rules are found with the same target in the target list,
-and with different recipes, the newer one will be used *)
+    If two or more rules are found with the same target in the target list,
+    and with different recipes, the newer one will be used
+ *)
 let recipes_of_target target rules =
   let rules_with_target = List.filter (rule_has_target target) rules in
   let recipes_list = List.map (fun rule -> rule.recipes) rules_with_target in
   let rec traverse_recipes = function
-    | [] -> []
-    | [ x ] -> x
-    | _ :: tl ->
+    | [] -> [], default_recipe_context
+    | [ (x, c) ] -> x, c
+    | (_, _) :: tl ->
       Printf.eprintf
         "Makefile: warning: overriding recipe for target '%s'\n\
         \ Makefile: warning: ignoring old recipe for target '%s'\n"
@@ -257,7 +311,8 @@ let get_unique_filenames rules =
 module Node : sig
   type t =
     { target : string
-    ; recipes : recipe list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
+    ; recipes : recipe list * recipe_context
+         [@compare.ignore] [@hash.ignore] [@sexp.ignore]
     }
   [@@deriving compare, hash, sexp]
 
@@ -267,7 +322,8 @@ end = struct
   module T = struct
     type t =
       { target : string
-      ; recipes : recipe list [@compare.ignore] [@hash.ignore] [@sexp.ignore]
+      ; recipes : recipe list * recipe_context
+           [@compare.ignore] [@hash.ignore] [@sexp.ignore]
       }
     [@@deriving compare, hash, sexp]
   end
@@ -360,35 +416,28 @@ let fold_pred f g n init =
   List.fold_left (fun a x -> if n = x then a else f x a) init preds
 ;;
 
-let recompile (node : G.Node.t) varmap is_default_goal rules =
+let recompile (node : G.Node.t) varmap is_default_goal =
   let recipes = node.node.recipes in
   let target = node.node.target in
-  let context_for_substitution =
-    { current_target = target
-    ; first_prerequisite =
-        (let deps = dependencies_of_target target rules in
-         if deps = [] then "" else List.hd deps)
-    }
-  in
   let execute_recipes =
     let rec traverse_recipes = function
-      | [] -> ()
-      | recipe :: tl ->
+      | [], _ -> ()
+      | recipe :: tl, context ->
         let cmd =
           match recipe with
           | Echo x ->
-            let x = string_of_recipe (Some context_for_substitution) varmap x in
+            let x = string_of_recipe context varmap x in
             print_endline x;
             x
-          | Silent x -> string_of_recipe (Some context_for_substitution) varmap x
+          | Silent x -> string_of_recipe context varmap x
         in
         let rc = Sys.command cmd in
-        if rc <> 0 then raise (Recipe (target, rc)) else traverse_recipes tl
+        if rc <> 0 then raise (Recipe (target, rc)) else traverse_recipes (tl, context)
     in
     traverse_recipes recipes
   in
   match recipes with
-  | [] -> if is_default_goal then raise (NothingToBeDone target)
+  | [], _ -> if is_default_goal then raise (NothingToBeDone target)
   | _ -> execute_recipes
 ;;
 
@@ -473,7 +522,7 @@ let try_execute_recipes
   let target = node.node.target in
   if G.Node.Set.mem nodes_to_recompile node
   then (
-    recompile node varmap is_default_goal rules;
+    recompile node varmap is_default_goal;
     nodes_to_recompile)
   else if Sys.file_exists target
   then
@@ -484,7 +533,7 @@ let try_execute_recipes
     else nodes_to_recompile
   else if rules_has_target target rules
   then (
-    recompile node varmap is_default_goal rules;
+    recompile node varmap is_default_goal;
     nodes_to_recompile)
   else if is_default_goal
   then raise (NothingToBeDone target)
