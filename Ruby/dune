@@ -13,4 +13,16 @@
  (libraries Ruby.Lib stdio))
 
 (cram
- (deps ./INTERPRET.exe %{bin:INTERPRET}))
+ (deps
+  ./INTERPRET.exe
+  %{bin:INTERPRET}
+  examples/arith_op.rb
+  examples/bool_op.rb
+  examples/builtin_methods.rb
+  examples/builtin_types.rb
+  examples/classes.rb
+  examples/combinators.rb
+  examples/conditional.rb
+  examples/functions.rb
+  examples/lambda.rb
+  examples/while_loop.rb))
