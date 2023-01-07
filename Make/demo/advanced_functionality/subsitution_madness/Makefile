@@ -7,6 +7,6 @@ c ?=
 c ?=
 
 all$(targets)$()$($($()))$(c)ff$(WWc)$(c) : $(c)
-	$($($(g$(c$(c$(c)$(c)))))) -o $<.o -Wall $@ && echo $@ $<$<$<
+	echo "$($($(g$(c$(c$(c)$(c)))))) -o $<.o -Wall $@ && echo $@ $<$<$<"
 
 c: ;echo $(c)
