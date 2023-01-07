@@ -1,11 +1,13 @@
 (executable
  (name demoParse)
+ (package asm)
  (modules demoParse)
  (public_name demoParse)
  (libraries asm stdio))
 
 (executable
  (name demoAsm)
+ (package asm)
  (modules demoAsm)
  (public_name demoAsm)
  (libraries asm stdio))
