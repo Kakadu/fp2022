@@ -54,3 +54,10 @@ Fibonacci
   > let rec fib n = match n with 0 -> 1 | 1 -> 1 | x -> (fib (x-2)+fib (x-1)) in fib 4;;
   > EOF
   5 : int
+Fix that behaves confusing
+$ ./demo.exe <<EOF
+> let rec y g = g (fun ignored -> y g) in
+> let fact = y (fun g -> let gres = g () in fun x -> if x=0 then 1 else x*(gres (x-1))) in
+> fact 0;;
+> EOF
+0 : int

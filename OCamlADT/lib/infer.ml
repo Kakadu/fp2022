@@ -344,9 +344,6 @@ let infer =
        | Nil -> return (Subst.empty, nil_t))
     | Var name ->
       (match name with
-       | "_" ->
-         let* fresh_var = fresh_var in
-         return (Subst.empty, fresh_var)
        | _ -> lookup_env name env)
     | UnaryOp (op, expr) ->
       (match op with
@@ -506,11 +503,7 @@ let infer =
 ;;
 
 let run_inference expression = Result.map snd (run (infer TypeEnv.empty expression))
-
-let print_t t =
-  let s = Format.asprintf "%a" pp t in
-  Format.printf "%s\n" s
-;;
+let print_t t = Printf.printf "%s\n" (show t)
 
 let pp_error fmt (err : error) =
   let open Format in
@@ -545,11 +538,6 @@ let%expect_test "Base Int type inference" =
 let%expect_test "Base UnaryOp type inference" =
   get_infered (UnaryOp (UnaryMinus, Constant (Int 1)));
   [%expect {| (BaseT Int) |}]
-;;
-
-let%expect_test "Var type inference" =
-  get_infered (Var "_");
-  [%expect {| (TypeVariable 0) |}]
 ;;
 
 let%expect_test "Fun type inference" =

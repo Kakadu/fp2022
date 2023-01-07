@@ -74,17 +74,23 @@ let rec expr_to_string = function
     Printf.sprintf
       "(%s)"
       (List.fold_left
-         (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr))
+         (fun acc expr ->
+           match acc with
+           | "" -> Printf.sprintf "%s" (expr_to_string expr)
+           | _ -> Printf.sprintf "%s, %s" acc (expr_to_string expr))
          ""
          exprs)
   | ADT (name, exprs) ->
     Printf.sprintf
-      "%s (%s)"
+      "%s %s"
       name
       (Printf.sprintf
          "(%s)"
          (List.fold_left
-            (fun acc expr -> Printf.sprintf "%s, %s" acc (expr_to_string expr))
+            (fun acc expr ->
+              match acc with
+              | "" -> Printf.sprintf "%s" (expr_to_string expr)
+              | _ -> Printf.sprintf "%s, %s" acc (expr_to_string expr))
             ""
             exprs))
   | Type (name, t) -> Printf.sprintf "type %s = %s" name (type_to_string t)
@@ -94,11 +100,12 @@ let rec expr_to_string = function
 and string_of_list l =
   let rec string_of_list' = function
     | Cons (h, Constant Nil) -> expr_to_string h
-    | Cons (h, t) -> Printf.sprintf "%s; %s" (expr_to_string h) (string_of_list' t)
+    | Cons (h, t) -> Printf.sprintf "%s::%s" (expr_to_string h) (string_of_list' t)
+    | Var name -> Printf.sprintf "%s" name
     | _ ->
       raise (PrinterException "string_of_list should only be used on non-empty lists")
   in
-  Printf.sprintf "[%s]" (string_of_list' l)
+  Printf.sprintf "%s" (string_of_list' l)
 
 and const_to_string = function
   | Bool b -> string_of_bool b
@@ -124,4 +131,82 @@ and list_to_string v1 = function
   | VCons (v1', v2') ->
     Printf.sprintf "%s; %s" (val_to_string v1) (list_to_string v1' v2')
   | _ -> raise (PrinterException "list_to_string: Error in typechecker.")
+;;
+
+let%expect_test "Tuple to string" =
+  Printf.printf
+    "%s"
+    (expr_to_string (Tuple [ Constant (Int 1); Constant (Int 2); Constant (Int 3) ]));
+  [%expect {| (1, 2, 3) |}]
+;;
+
+let%expect_test "Match to string" =
+  Printf.printf
+    "%s"
+    (expr_to_string
+       (Match
+          ( Constant (Int 1)
+          , [ Constant (Int 2), Constant (Int 1); Constant (Int 1), Constant (Int 2) ] )));
+  [%expect {| match 1 with | 2 -> 1 | 1 -> 2 |}]
+;;
+
+let%expect_test "LetIn to string" =
+  Printf.printf
+    "%s"
+    (expr_to_string (LetIn (Let (false, "x", None, Constant (Int 69)), Var "x")));
+  [%expect {| let x = 69 in x |}]
+;;
+
+let%expect_test "Another LetIn to string" =
+  Printf.printf
+    "%s"
+    (expr_to_string
+       (LetIn
+          ( Let (false, "x", None, Constant (Bool true))
+          , LetIn
+              ( Let (false, "y", None, Constant (Bool true))
+              , IfThenElse
+                  ( Match (Var "x", [ Constant (Int 1), Constant (Bool true) ])
+                  , Constant (Int 1)
+                  , Constant (Bool false) ) ) )));
+  [%expect
+    {| let x = true in let y = true in if match x with | 1 -> true  then 1 else false |}]
+;;
+
+let%expect_test "Match with different patterns to string" =
+  Printf.printf
+    "%s"
+    (expr_to_string
+       (Match
+          ( Var "l"
+          , [ Constant Nil, Constant (Int 1)
+            ; ADT ("Cons", [ Var "x"; ADT ("Nil", []) ]), Constant (Int 2)
+            ; Cons (Var "h", Var "t"), Constant (Int 3)
+            ] )));
+  [%expect {| match l with | [] -> 1 | Cons (x, Nil ()) -> 2 | h::t -> 3 |}]
+;;
+
+let%expect_test "LetIn sequence with ADT to string" =
+  Printf.printf
+    "%s"
+    (expr_to_string
+       (LetIn
+          ( Let (false, "x", None, ADT ("Some", [ Constant (Int 1) ]))
+          , LetIn
+              ( Let
+                  ( false
+                  , "y"
+                  , None
+                  , ADT
+                      ( "Color"
+                      , [ Constant (Int 2); Constant (Bool true); Constant (Int 69) ] ) )
+              , LetIn
+                  ( Let
+                      ( true
+                      , "f"
+                      , None
+                      , Fun ("x", Fun ("y", App (App (Var "f", Var "x"), Var "y"))) )
+                  , App (App (Var "f", Var "x"), Var "y") ) ) )));
+  [%expect
+    {| let x = Some (1) in let y = Color (2, true, 69) in let rec f = fun x -> fun y -> f (x) (y) in f (x) (y) |}]
 ;;

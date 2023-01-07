@@ -23,7 +23,10 @@ let _ =
     | Result.Ok result ->
       let type_checking_result = Infer.run_inference result in
       (match type_checking_result with
-       | Error error -> Infer.print_type_error error
+       | Error error ->
+         Infer.print_type_error error;
+         let eval_res = Interpreter.eval result Ast.IdMap.empty in
+         Format.printf "%s : fail\n" (Printer.val_to_string eval_res.value)
        | Ok t ->
          let eval_res = Interpreter.eval result Ast.IdMap.empty in
          Format.printf
