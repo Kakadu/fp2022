@@ -11,6 +11,8 @@ type substitute =
   | Pattern (* Pattern substitution, % *)
   | None of string (* No substitution *)
   | Asterisk (* The stem with which an implicit rule matches, $* *)
+  | At (* The file name of the target of the rule, $@ *)
+  | Lesser (* The name of the first prerequisite, $< *)
 [@@deriving show { with_path = false }, variants, sexp, compare]
 
 (* Used for representation of a strings containing substitutions.

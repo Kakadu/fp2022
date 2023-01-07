@@ -17,20 +17,13 @@ License: LGPL for implementation code + WTFPL for test examles in miniLanguage
 Author: Ivan Morozko
 
 TODO:
-- Add variables
-    - Recursively expanded variable (`=`)
-    - Simply expanded variables (`:=`)
-    - Conditional variable assignment (`?=`)
+- Variables
     - Multi-line variables (`define`)
-    - Variables substitution (`$(var)`)
     - `$$`
     - `$(MAKE)` variable
 - Add special variables
     - `.DEFAULT_GOAL`
     - `.PHONY`
-- Add implicit rules
-    - Add pattern rule definition (when the target contains `%`)
-    - Add automatic variable `$*`
 - Add functions
     - `call`
         - Support recursive invocation
@@ -55,6 +48,16 @@ Done:
         - `No rule to make target 'x', needed by 'y'`
         - `Nothing to be done for 'x'`
         - `No rule to make target 'x'`
+- Add variables
+    - Recursively expanded variable (`=`)
+    - Simply expanded variables (`:=`)
+    - Conditional variable assignment (`?=`)
+    - Variables substitution (`$(var)`)
+- Add implicit rules
+    - Add pattern rule definition (when the target contains `%`)
+    - Add automatic variable `$*`
+    - Add automatic variable `$@`
+    - Add automatic variable `$<`
 
 ## Running tests
 

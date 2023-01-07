@@ -16,6 +16,8 @@ let is_backslash = ( = ) '\\'
 let is_regular_substitution_end = ( = ) ')'
 let is_regular_substitution_start = ( = ) "$("
 let is_asterisk_substitution = ( = ) "$*"
+let is_at_substitution = ( = ) "$@"
+let is_lesser_substitution = ( = ) "$<"
 let is_recursive_assigment = ( = ) '='
 let is_simply_assigment = ( = ) ":="
 let is_conditional_assigment = ( = ) "?="
@@ -80,6 +82,8 @@ let word
       @@ some_pred
            [ is_regular_substitution_start
            ; is_asterisk_substitution
+           ; is_at_substitution
+           ; is_lesser_substitution
            ; (if parse_equal_sign
              then f
              else some_pred [ is_simply_assigment; is_conditional_assigment ])
@@ -100,9 +104,11 @@ let word
   let none_p = string_p >>| none in
   let pattern_p = char '%' >>| fun _ -> pattern in
   let asterisk_p = string "$*" >>| fun _ -> asterisk in
+  let at_p = string "$@" >>| fun _ -> at in
+  let lesser_p = string "$<" >>| fun _ -> lesser in
   fix (fun word ->
     let regular_p = string "$(" *> option [ None "" ] word <* char ')' >>| regular in
-    many1 (none_p <|> regular_p <|> pattern_p <|> asterisk_p))
+    many1 (none_p <|> regular_p <|> pattern_p <|> asterisk_p <|> at_p <|> lesser_p))
 ;;
 
 let filename_delim =
@@ -288,22 +294,25 @@ let%test _ = parse_ok "$(a)" [ Regular [ None "a" ] ]
 let%test _ = parse_ok "$()" [ Regular [ None "" ] ]
 let%test _ = parse_ok "%" [ Pattern ]
 let%test _ = parse_ok "$*" [ Asterisk ]
+let%test _ = parse_ok "$@" [ At ]
+let%test _ = parse_ok "$<" [ Lesser ]
 let%test _ = parse_ok "a $(  a)" [ None "a "; Regular [ None "  a" ] ]
 let%test _ = parse_ok "$(%)" [ Regular [ Pattern ] ]
 let%test _ = parse_ok "$($*)" [ Regular [ Asterisk ] ]
+let%test _ = parse_ok "$($<)" [ Regular [ Lesser ] ]
 let%test _ = parse_ok "$($($(x)))" [ Regular [ Regular [ Regular [ None "x" ] ] ] ]
 
 let%test _ =
   parse_ok
-    "a$(A)  $*__+$* $*%"
+    "a$(A)  $*__+$< $@%"
     [ None "a"
     ; Regular [ None "A" ]
     ; None "  "
     ; Asterisk
     ; None "__+"
-    ; Asterisk
+    ; Lesser
     ; None " "
-    ; Asterisk
+    ; At
     ; Pattern
     ]
 ;;

@@ -27,7 +27,7 @@ type processed_rule =
 type var_value =
   | Expanded of string list
   | Raw of word list
-[@@deriving compare]
+[@@deriving compare, show { with_path = false }]
 
 module VarMap = Map.Make (struct
   type t = string [@@deriving compare]
@@ -50,7 +50,14 @@ let exprs_of_ast ((rule, pos), exprs) =
   insert_at_pos pos rule exprs
 ;;
 
+(** The context needed to properly expand recipe *)
+type recipe_context =
+  { current_target : string
+  ; first_prerequisite : string
+  }
+
 (*TODO: subsitute Pattern and Asterisk. (add parameter None (then $* expands to "") or Some recipe_context, like the result of % expansion)*)
+
 (** Expands variables in a word, turning it into a string list.
 
     Again, is's easier to think of word as a list of strings, separated by
@@ -60,7 +67,7 @@ let exprs_of_ast ((rule, pos), exprs) =
     An example of expanding "a$(a)123$(x)", where "a = x y" and "x = p q":
     a$(a)123$(x) -> a[x; y]123[p; q] -> [ax; y]123[p; q] -> [ax; y123][p; q] -> [ax; y123p; q]
 *)
-let rec process_word map word =
+let rec process_word ?(recipe_context = Option.None) map word =
   (* concat_to_last_element ["a"; "b"] "x" = ["a"; "bx"] *)
   let concat_to_last_element l x =
     let n = List.length l in
@@ -94,6 +101,22 @@ let rec process_word map word =
           | Raw data ->
             let data = List.concat_map (process_word map) data in
             merge_by_last_element acc data))
+    | Asterisk ->
+      (match recipe_context with
+       | None -> acc
+       | Some context -> acc (*TODO*))
+    | At ->
+      (match recipe_context with
+       | None -> acc
+       | Some context -> concat_to_last_element acc context.current_target)
+    | Lesser ->
+      (match recipe_context with
+       | None -> acc
+       | Some context -> concat_to_last_element acc context.first_prerequisite)
+    | Pattern ->
+      (match recipe_context with
+       | None -> acc (* TODO *)
+       | Some _ -> concat_to_last_element acc "%")
     | _ -> acc
   in
   List.fold_left expand [ "" ] word
@@ -101,7 +124,10 @@ let rec process_word map word =
 
 (* words list to string list *)
 let expand_words_list map = List.concat_map (process_word map)
-let string_of_recipe map x = process_word map x |> String.concat " "
+
+let string_of_recipe context map x =
+  process_word ~recipe_context:context map x |> String.concat " "
+;;
 
 (** Turns rule into a processed rule.
     Expands variables in targets and prerequisites, leaving recipes intact *)
@@ -145,12 +171,11 @@ let process_var map var =
   | Recursive (name, value) ->
     (match name_as_string name with
      | None -> map
-     | Some name -> VarMap.update name (fun _ -> Some (Raw value)) map)
+     | Some name -> VarMap.add name (Raw value) map)
   | Simply (name, value) ->
     (match name_as_string name with
      | None -> map
-     | Some name ->
-       VarMap.update name (fun _ -> Some (Expanded (expand_words_list map value))) map)
+     | Some name -> VarMap.add name (Expanded (expand_words_list map value)) map)
   | Conditional (name, value) ->
     (match name_as_string name with
      | None -> map
@@ -335,10 +360,16 @@ let fold_pred f g n init =
   List.fold_left (fun a x -> if n = x then a else f x a) init preds
 ;;
 
-let recompile (node : G.Node.t) varmap is_default_goal =
+let recompile (node : G.Node.t) varmap is_default_goal rules =
   let recipes = node.node.recipes in
   let target = node.node.target in
-  (* This is $@ *)
+  let context_for_substitution =
+    { current_target = target
+    ; first_prerequisite =
+        (let deps = dependencies_of_target target rules in
+         if deps = [] then "" else List.hd deps)
+    }
+  in
   let execute_recipes =
     let rec traverse_recipes = function
       | [] -> ()
@@ -346,10 +377,10 @@ let recompile (node : G.Node.t) varmap is_default_goal =
         let cmd =
           match recipe with
           | Echo x ->
-            let x = string_of_recipe varmap x in
+            let x = string_of_recipe (Some context_for_substitution) varmap x in
             print_endline x;
             x
-          | Silent x -> string_of_recipe varmap x
+          | Silent x -> string_of_recipe (Some context_for_substitution) varmap x
         in
         let rc = Sys.command cmd in
         if rc <> 0 then raise (Recipe (target, rc)) else traverse_recipes tl
@@ -442,7 +473,7 @@ let try_execute_recipes
   let target = node.node.target in
   if G.Node.Set.mem nodes_to_recompile node
   then (
-    recompile node varmap is_default_goal;
+    recompile node varmap is_default_goal rules;
     nodes_to_recompile)
   else if Sys.file_exists target
   then
@@ -453,7 +484,7 @@ let try_execute_recipes
     else nodes_to_recompile
   else if rules_has_target target rules
   then (
-    recompile node varmap is_default_goal;
+    recompile node varmap is_default_goal rules;
     nodes_to_recompile)
   else if is_default_goal
   then raise (NothingToBeDone target)

@@ -5,7 +5,7 @@
 open Make_lib
 
 let _ =
-  Stdlib.Sys.chdir "test_project_with_variables";
+  Stdlib.Sys.chdir "real_project";
   let () =
     let input = Core.In_channel.read_all "./Makefile" in
     match Parser.parse input with
