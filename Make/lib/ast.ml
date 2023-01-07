@@ -11,13 +11,13 @@ type substitute =
   | Pattern (* Pattern substitution, % *)
   | None of string (* No substitution *)
   | Asterisk (* The stem with which an implicit rule matches, $* *)
-[@@deriving show { with_path = false }, variants, sexp]
+[@@deriving show { with_path = false }, variants, sexp, compare]
 
 (* Used for representation of a strings containing substitutions.
  For example, string "$(a)_xyz_$(xy)-%" is a substitute list
  [Regular a; None "_xyz_"; Regular xy; None "-"; Pattern]
  *)
-type word = substitute list [@@deriving show { with_path = false }, sexp]
+type word = substitute list [@@deriving show { with_path = false }, sexp, compare]
 
 (* variable name * variable value *)
 type var =
@@ -46,5 +46,10 @@ type expr =
   | Var of var
 [@@deriving show { with_path = false }]
 
-(* Makefile should contain at least one rule *)
-type ast = rule * expr list [@@deriving show { with_path = false }]
+(** Ast for the Make syntax
+
+   Makefile, essentially, is an expr list. However, is should contain at least one rule.
+   We're ensure it by extracting that rule from the list. But we need to remember it's
+   position in the list as this is important when this rule contains a substitute variable.
+ *)
+type ast = (rule * int) * expr list [@@deriving show { with_path = false }]

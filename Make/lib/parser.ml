@@ -224,7 +224,7 @@ let expr =
 let make =
   let custom_many p = sep_and_trim skip_meaningless_characters p in
   lift3
-    (fun lhs rule rhs -> rule, lhs @ rhs)
+    (fun lhs rule rhs -> (rule, List.length lhs), lhs @ rhs)
     (custom_many
     @@ (option Option.None (rule >>= fun x -> return (Some x))
        >>= function
@@ -768,7 +768,7 @@ let parse_fail = test_fail pp_ast parser
 let%test _ =
   parse_ok
     "a:b\na:b\n"
-    ( { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
+    ( ({ targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }, 0)
     , [ Rule
           { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
       ] )
@@ -777,20 +777,23 @@ let%test _ =
 let%test _ =
   parse_ok
     "a:b\n   \n\n   \n  a:b\n"
-    ( { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
+    ( ({ targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }, 0)
     , [ Rule
           { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
       ] )
 ;;
 
 let%test _ =
-  parse_ok "a   \t:" ({ targets = [ None "a" ], []; prerequisites = []; recipes = [] }, [])
+  parse_ok
+    "a   \t:"
+    (({ targets = [ None "a" ], []; prerequisites = []; recipes = [] }, 0), [])
 ;;
 
 let%test _ =
   parse_ok
     "a   \t:\n\tc"
-    ( { targets = [ None "a" ], []; prerequisites = []; recipes = [ Echo [ None "c" ] ] }
+    ( ( { targets = [ None "a" ], []; prerequisites = []; recipes = [ Echo [ None "c" ] ] }
+      , 0 )
     , [] )
 ;;
 
@@ -799,10 +802,11 @@ let%test _ =
     {|a:b
 	
 		a|}
-    ( { targets = [ None "a" ], []
-      ; prerequisites = [ [ None "b" ] ]
-      ; recipes = [ Echo [ None "" ]; Echo [ None "\ta" ] ]
-      }
+    ( ( { targets = [ None "a" ], []
+        ; prerequisites = [ [ None "b" ] ]
+        ; recipes = [ Echo [ None "" ]; Echo [ None "\ta" ] ]
+        }
+      , 0 )
     , [] )
 ;;
 
@@ -812,10 +816,11 @@ let%test _ =
 	
 		a
      	c:d|}
-    ( { targets = [ None "a" ], []
-      ; prerequisites = [ [ None "b" ] ]
-      ; recipes = [ Echo [ None "" ]; Echo [ None "\ta" ] ]
-      }
+    ( ( { targets = [ None "a" ], []
+        ; prerequisites = [ [ None "b" ] ]
+        ; recipes = [ Echo [ None "" ]; Echo [ None "\ta" ] ]
+        }
+      , 0 )
     , [ Rule
           { targets = [ None "c" ], []; prerequisites = [ [ None "d" ] ]; recipes = [] }
       ] )
@@ -836,10 +841,11 @@ let%test _ =
 	echo b
      
 #kek|}
-    ( { targets = [ None "a" ], []
-      ; prerequisites = [ [ None "b" ] ]
-      ; recipes = [ Echo [ None "\t\techo a" ] ]
-      }
+    ( ( { targets = [ None "a" ], []
+        ; prerequisites = [ [ None "b" ] ]
+        ; recipes = [ Echo [ None "\t\techo a" ] ]
+        }
+      , 0 )
     , [ Rule
           { targets = [ None "b" ], []
           ; prerequisites = []
@@ -865,14 +871,15 @@ file2: header
 
 clean:
 	rm -f file1 file2 file3 some_file|}
-    ( { targets = [ None "some_file" ], []
-      ; prerequisites = []
-      ; recipes =
-          [ Echo [ None "echo \"hello\"" ]
-          ; Echo [ None "touch some_file" ]
-          ; Echo [ None "#shell comment" ]
-          ]
-      }
+    ( ( { targets = [ None "some_file" ], []
+        ; prerequisites = []
+        ; recipes =
+            [ Echo [ None "echo \"hello\"" ]
+            ; Echo [ None "touch some_file" ]
+            ; Echo [ None "#shell comment" ]
+            ]
+        }
+      , 0 )
     , [ Rule
           { targets = [ None "file1" ], [ [ None "file3" ] ]
           ; prerequisites = [ [ None "header" ]; [ None "header2" ] ]
@@ -897,13 +904,14 @@ let%test _ =
 	@echo "$(a)+%\
 	ff"
 |}
-    ( { targets = [ Regular [ Pattern ] ], []
-      ; prerequisites = [ [ Asterisk ] ]
-      ; recipes =
-          [ Silent
-              [ None "echo \""; Regular [ None "a" ]; None "+"; Pattern; None "ff\"" ]
-          ]
-      }
+    ( ( { targets = [ Regular [ Pattern ] ], []
+        ; prerequisites = [ [ Asterisk ] ]
+        ; recipes =
+            [ Silent
+                [ None "echo \""; Regular [ None "a" ]; None "+"; Pattern; None "ff\"" ]
+            ]
+        }
+      , 0 )
     , [] )
 ;;
 
@@ -911,7 +919,7 @@ let%test _ =
 let%test _ =
   parse_ok
     "a=b\n  \n\t\t\n   \n a:b #fdsf  \n   x:y   \n   a=b"
-    ( { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
+    ( ({ targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }, 1)
     , [ Var (Recursive ([ None "a" ], [ [ None "b" ] ]))
       ; Rule
           { targets = [ None "x" ], []; prerequisites = [ [ None "y" ] ]; recipes = [] }
@@ -922,7 +930,7 @@ let%test _ =
 let%test _ =
   parse_ok
     "a=b\n  \n\t\t\n   \n a:b #fdsf  \n   x:y   \n   a=b"
-    ( { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
+    ( ({ targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }, 1)
     , [ Var (Recursive ([ None "a" ], [ [ None "b" ] ]))
       ; Rule
           { targets = [ None "x" ], []; prerequisites = [ [ None "y" ] ]; recipes = [] }
@@ -932,8 +940,8 @@ let%test _ =
 
 let%test _ =
   parse_ok
-    "a:=b\na:b \n  $(a):=$(b)c $(x$(y))"
-    ( { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
+    "a:=b\n  $(a):=$(b)c $(x$(y))\n a:b"
+    ( ({ targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }, 2)
     , [ Var (Simply ([ None "a" ], [ [ None "b" ] ]))
       ; Var
           (Simply
@@ -947,7 +955,7 @@ let%test _ =
 let%test _ =
   parse_ok
     "a:b\n $($(x))y ?= $(y)x   \n"
-    ( { targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }
+    ( ({ targets = [ None "a" ], []; prerequisites = [ [ None "b" ] ]; recipes = [] }, 0)
     , [ Var
           (Conditional
              ( [ Regular [ Regular [ None "x" ] ]; None "y" ]
