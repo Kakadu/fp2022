@@ -13,7 +13,6 @@ type ruby_literal =
 
 (** Function scope *)
 type func_scope =
-  | TopLevel (** TopLevelFunction*)
   | Method (** ClassMethod *)
   | Lambda (** Anonymous function *)
 

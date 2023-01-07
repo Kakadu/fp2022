@@ -1,12 +1,12 @@
-def map_indexed_array (arr)
-    x = []
-    i = 0
-    while i < arr.length ()
-        x = x + [yield (i, arr[i])]
-        i = i + 1
+def send_request(url, on_succ, on_fail)
+    if url == "google.com" then
+        on_succ ("123 results")
+    else
+        on_fail ("Unknown resource")
     end
-    x
 end
 
-z = [1, 2, 3]
-map_indexed_array ([4, 5, 6]) {|i, x| x * z[i]}
+on_success = lambda {|msg| "Success! Message: " + msg}
+on_failure = lambda {|msg| "Connection failed.. Message: " + msg }
+
+send_request ("yahoo.com", on_success, on_failure)

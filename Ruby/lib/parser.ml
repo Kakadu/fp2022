@@ -32,7 +32,7 @@ let ruby_string =
   char '"' *> take_while (fun c -> not (Char.equal c '"')) <* char '"' |> as_token
 ;;
 
-let asoc0_t = choice [ string "&&"; string "*"; string "/" ] |> as_token
+let asoc0_t = choice [ string "&&"; string "*"; string "/"; string "%" ] |> as_token
 let asoc1_t = choice [ string "||"; string "+"; string "-" ] |> as_token
 
 let asoc2_t =
@@ -70,6 +70,7 @@ let keywords =
   ; "class"
   ; "yield"
   ; "lambda"
+  ; "nil"
   ]
 ;;
 
@@ -92,6 +93,7 @@ let literal =
     [ (integer_t >>| fun s -> IntegerL, s)
     ; (bool_t >>| fun s -> BoolL, s)
     ; (ruby_string >>| fun s -> StringL, s)
+    ; (token "nil" >>| fun s -> NilL, s)
     ]
   >>| fun (t, s) -> Literal (t, s)
 ;;
@@ -159,7 +161,7 @@ let seq_of_expr =
           <* maybe new_lines
           <* token "end"
           >>| fun f_body ->
-          FuncDeclaration (TopLevel, func_name, params @ [ yield_funcname ], f_body)
+          FuncDeclaration (Method, func_name, params @ [ yield_funcname ], f_body)
         in
         (* --- Method access --- *)
         let method_access =
@@ -257,14 +259,7 @@ let seq_of_expr =
               FuncDeclaration (Method, "initialize", [ yield_funcname ], Seq [])
               :: members
           in
-          ClassDeclaration
-            ( class_name
-            , List.map
-                (function
-                 | FuncDeclaration (_, name, params, body) ->
-                   FuncDeclaration (Method, name, params, body)
-                 | x -> x)
-                members )
+          ClassDeclaration (class_name, members)
         in
         (* --- Expr definition --- *)
         choice

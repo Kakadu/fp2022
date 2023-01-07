@@ -130,6 +130,12 @@ module Eval (M : MONADERROR) = struct
     | _ -> binop_typefail "/" x y
   ;;
 
+  let r_mod x y =
+    match x, y with
+    | Integer x, Integer y -> return (Integer (x mod y))
+    | _ -> binop_typefail "%" x y
+  ;;
+
   let raw_eq x y =
     match x, y with
     | Integer x, Integer y -> return (x = y)
@@ -196,6 +202,7 @@ module Eval (M : MONADERROR) = struct
     | "-" -> return minus
     | "*" -> return multiply
     | "/" -> return divide
+    | "%" -> return r_mod
     | "==" -> return eq
     | "!=" -> return neq
     | "&&" -> return and_op
@@ -288,9 +295,6 @@ module Eval (M : MONADERROR) = struct
       return (v, n_st)
     | FuncDeclaration (level, name, params, body) ->
       (match level with
-       | TopLevel ->
-         let* n_st = set_local_var st name (Function (name, params, body)) in
-         return (Nil, n_st)
        | Method ->
          let* n_st = set_class_var st name (Function (name, params, body)) in
          return (Nil, n_st)
@@ -315,7 +319,7 @@ module Eval (M : MONADERROR) = struct
          return (v, n_st)
        | Lambda (closure, param_names, body) ->
          (* Discard lambda state entirely *)
-         let* v, _ = eval_function "" param_names body closure param_v in
+         let* v, _ = eval_function "Lambda" param_names body closure param_v in
          return (v, n_st)
        | _ -> error "Only functions and lambda can be invoked")
     | ClassDeclaration (name, members) ->
@@ -326,7 +330,16 @@ module Eval (M : MONADERROR) = struct
 
   and eval_function f_name p_names body st p_values =
     if not (List.length p_names = List.length p_values)
-    then error "Wrong number of arguments."
+    then
+      error
+        (String.concat
+           ""
+           [ "Wrong number of arguments in function: "
+           ; f_name
+           ; "("
+           ; String.concat ", " p_names
+           ; ")"
+           ])
     else (
       let state = set_local_var st f_name (Function (f_name, p_names, body)) in
       let params = List.combine p_names p_values in
