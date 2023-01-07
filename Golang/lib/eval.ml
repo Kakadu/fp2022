@@ -18,7 +18,11 @@ type value =
   | VChan of value Channel.t
   | VVoid
 
-and vfunc = ident signature * ident block
+and func_env =
+  | Closure of env
+  | NoClosure
+
+and vfunc = func_env * ident signature * ident block
 
 and env =
   { parent : env option
@@ -54,8 +58,12 @@ let push_fn =
   put { s with env }
 ;;
 
-let enter_func_call =
-  let* cur_env = get_env in
+let enter_func_call closure_env =
+  let* cur_env =
+    match closure_env with
+    | Closure closure_env -> set_env closure_env
+    | NoClosure -> get_env
+  in
   let* _ = push_fn in
   return cur_env
 ;;
@@ -176,7 +184,7 @@ let rec value_to_string = function
   | VArr arr ->
     let els = List.map arr ~f:value_to_string in
     "[" ^ String.concat ~sep:", " els ^ "]"
-  | VFunc (sign, _) ->
+  | VFunc (_, sign, _) ->
     "func" ^ show_typ (FunTyp (ident_sign_to_string_sign sign)) ^ "{ ... }"
   | VVoid -> "void"
   | VChan _ -> "chan"
@@ -197,7 +205,9 @@ let rec eval_expr = function
     let** f = eval_expr f in
     let** args = many_exprs args ~f:eval_expr in
     eval_call f args
-  | FuncLit (sign, b) -> eval_func_lit sign b
+  | FuncLit (sign, b) ->
+    let* env = get_env in
+    eval_func_lit (Closure env) sign b
   | UnOp (op, e) -> eval_unop op e
   | BinOp (l, op, r) -> eval_binop l op r
   | Print args -> eval_print args
@@ -230,8 +240,8 @@ and eval_call f args =
     | List.Or_unequal_lengths.Unequal_lengths -> raise InternalExn
   in
   match f with
-  | VFunc ({ args = fargs; _ }, b) ->
-    let* env = enter_func_call in
+  | VFunc (closure_env, { args = fargs; _ }, b) ->
+    let* env = enter_func_call closure_env in
     let* _ = set_args fargs args in
     let* _ = eval_block b in
     let* _ = exit_func_call env in
@@ -241,7 +251,7 @@ and eval_call f args =
      | None -> return (Ok VVoid))
   | _ -> raise InternalExn
 
-and eval_func_lit sign block = return (Ok (VFunc (sign, block)))
+and eval_func_lit env sign block = return (Ok (VFunc (env, sign, block)))
 
 and eval_unop op e =
   let** e = eval_expr e in
@@ -407,8 +417,7 @@ let eval_file file =
   in
   let eval_func_decl (id, sign, b) =
     let* _ = new_var id VVoid in
-    (* For recursive functions *)
-    let+ v = eval_func_lit sign b in
+    let+ v = eval_func_lit NoClosure sign b in
     set_var id v
   in
   let* _ = fold_state funcs ~f:eval_func_decl in

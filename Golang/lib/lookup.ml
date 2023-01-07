@@ -122,13 +122,7 @@ let set_scope scope : unit t =
   put { state with scope }
 ;;
 
-let enter_fn_scope =
-  let* s = get_scope in
-  let g = Scope.get_global s in
-  let* _ = set_scope g in
-  let* _ = enter_scope in
-  return s
-;;
+let enter_fn_scope = enter_scope
 
 (* Expressions *)
 

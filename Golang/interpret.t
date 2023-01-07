@@ -36,3 +36,8 @@
   0123456789
   $ ./INTERPRET.exe ../../../../examples/goroutines/sum_of_two_ranges.go
   9900
+  $ ./INTERPRET.exe ../../../../examples/func/mutually_recursive.go
+  ........
+  $ ./INTERPRET.exe ../../../../examples/closures/curry.go
+  3 11 
+  20 40
