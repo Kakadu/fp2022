@@ -142,13 +142,13 @@ let get_filenames_with_stem prefix suffix =
   (* Avaliable since OCaml 4.13.0, but Graphlib requires 4.11.2 *)
   let starts_with p str =
     let len = String.length p in
-    if String.length str < len then false else String.sub str 0 len = p
+    String.length str >= len && String.sub str 0 len = p
   in
   (* Avaliable since OCaml 4.13.0, but Graphlib requires 4.11.2 *)
   let ends_with e s =
     let el = String.length e in
     let sl = String.length s in
-    if sl < el then false else String.sub s (sl - el) el = e
+    sl >= el && String.sub s (sl - el) el = e
   in
   let dir_contents =
     let rec loop result = function
