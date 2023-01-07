@@ -41,3 +41,5 @@
   $ ./INTERPRET.exe ../../../../examples/closures/curry.go
   3 11 
   20 40
+  $ ./INTERPRET.exe ../../../../examples/closures/ucombinator.go
+  1 2 120 3628800
