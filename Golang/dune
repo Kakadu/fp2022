@@ -13,4 +13,23 @@
  (libraries threads golang_lib stdio))
 
 (cram
- (deps ./INTERPRET.exe %{bin:INTERPRET}))
+ (deps
+  ./INTERPRET.exe
+  examples/global_var_order.go
+  examples/var_default.go
+  examples/func/id.go
+  examples/func/fact_rec.go
+  examples/func/fibonacci_rec.go
+  examples/func/rec_same_var.go
+  examples/func/hello_world.go
+  examples/func/mutually_recursive.go
+  examples/arrays/arr_assign.go
+  examples/arrays/array_map.go
+  examples/arrays/array_filter.go
+  examples/arrays/arr_assign.go
+  examples/goroutines/single_message.go
+  examples/goroutines/range.go
+  examples/goroutines/sum_of_two_ranges.go
+  examples/for_if/primes_for.go
+  examples/closures/curry.go
+  examples/closures/ucombinator.go))
