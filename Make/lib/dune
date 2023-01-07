@@ -4,5 +4,5 @@
  (modules Ast Parser Interpret)
  (libraries base angstrom unix core ocamlgraph graphlib)
  (preprocess
-  (pps ppx_expect ppx_deriving.show ppx_sexp_conv ppx_hash ppx_compare ppx_variants_conv))
+  (pps ppx_expect ppx_deriving.show ppx_deriving.fold ppx_sexp_conv ppx_hash ppx_compare ppx_variants_conv))
  (inline_tests))
