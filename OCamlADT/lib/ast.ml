@@ -40,7 +40,6 @@ type unary_op = UnaryMinus (** - *) [@@deriving show { with_path = false }]
 type expr =
   | Constant of constant (** Wrapper for constants *)
   | Tuple of expr list (** Tuple like (a, b, d) *)
-  | List of expr list (** List like [a; b; d] *)
   | BinaryOp of binary_op * expr * expr
       (** Binary operator like [left_expr] [op] [right_expr] *)
   | UnaryOp of unary_op * expr (** Unary operator like -3 *)
@@ -81,6 +80,10 @@ type expr =
   | Type of id * Typing.t (** Type declaration *)
 [@@deriving show { with_path = false }]
 
+let nil_adt_name = "Nil"
+let cons_adt_name = "Cons"
+
+(** Intermediate result of interpreter evaluation process *)
 type value =
   | VUndef
   | VNil
@@ -89,9 +92,15 @@ type value =
   | VInt of int
   | VString of string
   | VCons of value * value
-  | VClosure of value ref IdMap.t * id * expr
+  | VClosure of
+      value IdMap.t
+      * id
+      * expr (* Result of Fun evaluation, where id is a Fun paramenter *)
+  | VRecClosure of id * value IdMap.t * id * expr
+(* Result of RecFun evaluation, where first 
+     id is a Fun name and second id is a Fun parameter *)
 
-type environment = value ref IdMap.t
+type environment = value IdMap.t
 
 type evaluation_result =
   { value : value

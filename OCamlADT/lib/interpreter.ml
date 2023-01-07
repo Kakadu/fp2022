@@ -42,14 +42,6 @@ let concat (env1 : environment) (env2 : environment) : environment =
   IdMap.fold (fun x v e -> IdMap.add x v e) env1 env2
 ;;
 
-let match_example = function
-  | h :: _ ->
-    (match h with
-     | h :: _ -> print_endline h
-     | _ -> print_endline "Inner other")
-  | _ -> print_endline "Outer other"
-;;
-
 (** Helper function evaluation Match epxression.
     
     let match_example x = match x with
@@ -68,7 +60,7 @@ let rec pattern_match (v : value) (pattern : expr) : bool * environment =
      | Nil, VNil -> true, emptyMap
      | Unit, VUnit -> true, emptyMap
      | _ -> false, emptyMap)
-  | Var name -> true, IdMap.add name (ref v) emptyMap
+  | Var name -> true, IdMap.add name v emptyMap
   | Cons (p1, p2) ->
     (match v with
      | VCons (v1, v2) ->
@@ -81,12 +73,14 @@ let rec pattern_match (v : value) (pattern : expr) : bool * environment =
 
 (** Hepler function for updating value in environment *)
 let update (x : id) (v : value) (env : environment) : environment =
-  try
+  IdMap.mapi (fun key value -> if key = x then v else value) env
+;;
+
+(* try
     IdMap.find x env := v;
     env
   with
-  | Not_found -> env
-;;
+  | Not_found -> env *)
 
 (** Main evaluation function *)
 let rec eval (e : expr) (env : environment) : evaluation_result =
@@ -99,7 +93,7 @@ let rec eval (e : expr) (env : environment) : evaluation_result =
      | Nil -> { value = VNil; env }
      | Unit -> { value = VUnit; env })
   | Var name ->
-    (try { value = !(IdMap.find name env); env } with
+    (try { value = IdMap.find name env; env } with
      | Not_found -> raise (UnboundVariable name))
   | Fun (id, expr) -> { value = VClosure (env, id, expr); env }
   | BinaryOp (_, _, _) -> { value = eval_operator env e; env }
@@ -112,20 +106,26 @@ let rec eval (e : expr) (env : environment) : evaluation_result =
      | VBool false -> { value = (eval else_expr env).value; env }
      | _ -> raise (TypeError (if_expr, BaseT Typing.Bool)))
   | Let (flag, id, _, expr) ->
-    (*update id (eval e1 env) env;*)
     (match flag with
      | true ->
-       { value = VUnit
-       ; env =
-           (let tmp_env = IdMap.add id (ref VUndef) env in
-            update id (eval expr tmp_env).value tmp_env)
-       }
-     | false -> { value = VUnit; env = IdMap.add id (ref (eval expr env).value) env })
+       (match expr with
+        | Fun (fun_id, expr) ->
+          { value = VUnit; env = IdMap.add id (VRecClosure (id, env, fun_id, expr)) env }
+        | _ -> { value = VUnit; env = IdMap.add id (eval expr env).value env })
+     | false -> { value = VUnit; env = IdMap.add id (eval expr env).value env })
   | LetIn (let_expr, in_expr) -> eval in_expr (eval let_expr env).env
   | App (expr1, expr2) ->
-    (match (eval expr1 env).value with
+    let expr1_eval_value = (eval expr1 env).value in
+    (match expr1_eval_value with
      | VClosure (envi, id, expr) ->
-       { value = (eval expr (IdMap.add id (ref (eval expr2 env).value) envi)).value; env }
+       { value = (eval expr (IdMap.add id (eval expr2 env).value envi)).value; env }
+     | VRecClosure (name, envi, id, expr) ->
+       let expr2_eval_value = (eval expr2 env).value in
+       let extended_with_expr2_env = IdMap.add id expr2_eval_value envi in
+       let extended_with_func_name_env =
+         IdMap.add name expr1_eval_value extended_with_expr2_env
+       in
+       { value = (eval expr extended_with_func_name_env).value; env }
      | _ -> raise (RuntimeError "Evaluation of function did not give back a VClosure"))
   | Match (expr, patterns) ->
     let expr_value = (eval expr env).value in
@@ -141,7 +141,11 @@ let rec eval (e : expr) (env : environment) : evaluation_result =
     in
     helper patterns
   | Tuple _ -> raise (NotImplementedYet e)
-  | List _ -> raise (NotImplementedYet e)
+  | ADT (name, _) when name = nil_adt_name -> { value = VNil; env }
+  | ADT (name, exprs) when name = cons_adt_name ->
+    (match exprs with
+     | [ x; y ] -> { value = VCons ((eval x env).value, (eval y env).value); env }
+     | _ -> raise (RuntimeError "Unacceptable List ADT instance!"))
   | ADT (_, _) -> raise (NotImplementedYet e)
   | Type (_, _) -> raise (NotImplementedYet e)
 

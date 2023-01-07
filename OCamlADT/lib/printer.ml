@@ -58,14 +58,14 @@ let rec expr_to_string = function
     Printf.sprintf "(%s %s %s)" sl sop sr
   | UnaryOp (op, e) -> Printf.sprintf "%s%s" (unop_to_string op) (expr_to_string e)
   | Fun (x, e) -> Printf.sprintf "fun %s -> %s" x (expr_to_string e)
-  | App (e, e') -> Printf.sprintf "(%s) (%s)" (expr_to_string e) (expr_to_string e')
+  | App (e, e') -> Printf.sprintf "%s (%s)" (expr_to_string e) (expr_to_string e')
   | Var x -> x
   | Match (e, pes) ->
     let se = expr_to_string e in
     let sps =
       List.fold_right
         (fun (p, e) a ->
-          Printf.sprintf "%s -> %s%s" (expr_to_string p) (expr_to_string e) a)
+          Printf.sprintf "| %s -> %s %s" (expr_to_string p) (expr_to_string e) a)
         pes
         ""
     in
@@ -88,13 +88,6 @@ let rec expr_to_string = function
             ""
             exprs))
   | Type (name, t) -> Printf.sprintf "type %s = %s" name (type_to_string t)
-  | List exprs ->
-    Printf.sprintf
-      "([%s]"
-      (List.fold_left
-         (fun acc expr -> Printf.sprintf "%s; %s" acc (expr_to_string expr))
-         ""
-         exprs)
   | LetIn (let_expr, in_expr) ->
     Printf.sprintf "%s in %s" (expr_to_string let_expr) (expr_to_string in_expr)
 
@@ -124,6 +117,7 @@ let rec val_to_string = function
   | VUnit -> "()"
   | VCons (v1, v2) -> Printf.sprintf "[%s]" (list_to_string v1 v2)
   | VClosure (_, _, _) -> "<fun>"
+  | VRecClosure (_, _, _, _) -> "<rec fun>"
 
 and list_to_string v1 = function
   | VNil -> val_to_string v1

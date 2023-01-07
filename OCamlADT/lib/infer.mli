@@ -10,8 +10,7 @@ type identifier = string
 type error =
   [ `Occurs_check
   | `NoVariable of identifier
-  | `NoConstructor of identifier
-  | `UnificationFailed of t * t
+  | `UnificationFailed of Typing.t * Typing.t
   | `NotReachable
   | `NotImplementedYet
   ]

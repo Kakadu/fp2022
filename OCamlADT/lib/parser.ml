@@ -302,7 +302,12 @@ let list_p d =
   in
   fix (fun p ->
     let ps = choice_p p in
-    (fun exprs -> Ast.List exprs) <$> brackets (sep_by1 (char ';') ps))
+    let rec unfold_expr_list = function
+      | [] -> ADT (nil_adt_name, [])
+      | [ x ] -> ADT (cons_adt_name, [ x; unfold_expr_list [] ])
+      | h :: t -> ADT (cons_adt_name, [ h; unfold_expr_list t ])
+    in
+    (fun exprs -> unfold_expr_list exprs) <$> brackets (sep_by1 (char ';') ps))
 ;;
 
 (* Parser of UnaryOp expression *)
@@ -788,7 +793,14 @@ let%expect_test "Custom variant with several arguments" =
     {|
       (ADT ("Smth",
          [(Constant (Int 1));
-           (List [(Constant (Int 1)); (Constant (Int 2)); (Constant (Int 3))]);
+           (ADT ("Cons",
+              [(Constant (Int 1));
+                (ADT ("Cons",
+                   [(Constant (Int 2));
+                     (ADT ("Cons", [(Constant (Int 3)); (ADT ("Nil", []))]))]
+                   ))
+                ]
+              ));
            (Constant (Str "aba"))]
          )) |}]
 ;;
@@ -823,36 +835,65 @@ let%expect_test "Simple tuple" =
 let%expect_test "Tuple with nested lis" =
   Format.printf "%a" pp (parse_optimistically "(1,[1;2])");
   [%expect
-    {| (Tuple [(Constant (Int 1)); (List [(Constant (Int 1)); (Constant (Int 2))])]) |}]
+    {|
+        (Tuple
+           [(Constant (Int 1));
+             (ADT ("Cons",
+                [(Constant (Int 1));
+                  (ADT ("Cons", [(Constant (Int 2)); (ADT ("Nil", []))]))]
+                ))
+             ]) |}]
 ;;
 
 (* List *)
 let%expect_test "Simple list" =
   Format.printf "%a" pp (parse_optimistically "[1;2]");
-  [%expect {| (List [(Constant (Int 1)); (Constant (Int 2))]) |}]
+  [%expect
+    {|
+    (ADT ("Cons",
+       [(Constant (Int 1));
+         (ADT ("Cons", [(Constant (Int 2)); (ADT ("Nil", []))]))]
+       )) |}]
 ;;
 
 let%expect_test "List of if_then" =
   Format.printf "%a" pp (parse_optimistically "[if 1 then 1;if 2 then 2]");
   [%expect
     {|
-    (List
-       [(IfThenElse ((Constant (Int 1)), (Constant (Int 1)), (Constant Unit)));
-         (IfThenElse ((Constant (Int 2)), (Constant (Int 2)), (Constant Unit)))]) |}]
+      (ADT ("Cons",
+         [(IfThenElse ((Constant (Int 1)), (Constant (Int 1)), (Constant Unit)));
+           (ADT ("Cons",
+              [(IfThenElse ((Constant (Int 2)), (Constant (Int 2)), (Constant Unit)
+                  ));
+                (ADT ("Nil", []))]
+              ))
+           ]
+         )) |}]
 ;;
 
 (* Cons *)
 let%expect_test "Simple cons" =
   Format.printf "%a" pp (parse_optimistically "1::[1]");
-  [%expect {| (Cons ((Constant (Int 1)), (List [(Constant (Int 1))]))) |}]
+  [%expect
+    {|
+  (Cons ((Constant (Int 1)),
+     (ADT ("Cons", [(Constant (Int 1)); (ADT ("Nil", []))])))) |}]
 ;;
 
 let%expect_test "Cons of two lists" =
   Format.printf "%a" pp (parse_optimistically "[2;3]::[1;4]");
   [%expect
     {|
-      (Cons ((List [(Constant (Int 2)); (Constant (Int 3))]),
-         (List [(Constant (Int 1)); (Constant (Int 4))]))) |}]
+          (Cons (
+             (ADT ("Cons",
+                [(Constant (Int 2));
+                  (ADT ("Cons", [(Constant (Int 3)); (ADT ("Nil", []))]))]
+                )),
+             (ADT ("Cons",
+                [(Constant (Int 1));
+                  (ADT ("Cons", [(Constant (Int 4)); (ADT ("Nil", []))]))]
+                ))
+             )) |}]
 ;;
 
 (* IfThenElse *)

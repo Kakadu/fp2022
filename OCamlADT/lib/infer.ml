@@ -17,7 +17,6 @@ type identifier = string
 type error =
   [ `Occurs_check
   | `NoVariable of identifier
-  | `NoConstructor of identifier
   | `UnificationFailed of Typing.t * Typing.t
   | `NotReachable
   | `NotImplementedYet
@@ -330,19 +329,6 @@ let rec find_identifiers = function
   | App (expr1, expr2) -> find_identifiers expr1 @ find_identifiers expr2
   | Var id -> [ id ]
   | Fun _ -> []
-  (* | List exprs | Tuple exprs ->
-       List.fold_right
-         ~f:(fun expr acc -> find_identifiers expr @ acc)
-         ~init:[]
-         exprs
-     | Cons (h, t) -> find_identifiers h @ find_identifiers t
-     | ADT (_, vs) ->
-       List.fold_right
-         ~f:(fun vr acc -> match vr with
-               | None -> acc
-               | Some v -> find_identifiers v @ acc)
-         ~init:[]
-         vs *)
   | _ -> []
 ;;
 
@@ -413,23 +399,26 @@ let infer =
           [ subst_condition; subst_true_branch; subst_false_branch; subst'; subst'' ]
       in
       return (final_subst, Subst.apply final_subst typ_true_branch)
-    | List list ->
-      (match list with
-       | [] ->
-         let* fresh_var = fresh_var in
-         return (Subst.empty, ListT fresh_var)
-       | head :: tail ->
-         let* head_subst, head_typ = helper env head in
+    | ADT (name, _) when name = nil_adt_name -> return (Subst.empty, nil_t)
+    | ADT (name, exprs) when name = cons_adt_name ->
+      (match exprs with
+       | [ x; y ] ->
+         let* head_subst, head_typ = helper env x in
          let rec substlist subst = function
-           | [] -> return subst
-           | elem :: tail ->
-             let* elem_subst, elem_typ = helper env elem in
-             let* subst' = unify elem_typ head_typ in
-             let* subst'' = Subst.compose_all [ subst; elem_subst; subst' ] in
-             substlist subst'' tail
+           | ADT (name, _) when name = nil_adt_name -> return subst
+           | ADT (name, inner_exprs) when name = cons_adt_name ->
+             (match inner_exprs with
+              | [ x; y ] ->
+                let* elem_subst, elem_typ = helper env x in
+                let* subst' = unify elem_typ head_typ in
+                let* subst'' = Subst.compose_all [ subst; elem_subst; subst' ] in
+                substlist subst'' y
+              | _ -> fail `NotReachable)
+           | _ -> fail `NotReachable
          in
-         let* final_subst = substlist head_subst tail in
-         return (final_subst, list_t @@ Subst.apply final_subst head_typ))
+         let* final_subst = substlist head_subst y in
+         return (final_subst, list_t @@ Subst.apply final_subst head_typ)
+       | _ -> fail `NotReachable)
     | Tuple list ->
       let rec subst_tuple subst = function
         | [] -> return (subst, [])
@@ -528,7 +517,6 @@ let pp_error fmt (err : error) =
   match err with
   | `Occurs_check -> fprintf fmt "Occurs check failed.\n"
   | `NoVariable identifier -> fprintf fmt "No such variable: %s" identifier
-  | `NoConstructor identifier -> fprintf fmt "No such constructor: %s" identifier
   | `UnificationFailed (t1, t2) ->
     fprintf fmt "Unification failed: type of the expression is ";
     pp fmt t1;
@@ -593,18 +581,29 @@ let%expect_test "Failed IfThenElse type inference" =
 ;;
 
 let%expect_test "List type inference" =
-  get_infered (List [ Constant (Int 1); Constant (Int 1) ]);
+  get_infered
+    (ADT
+       ( cons_adt_name
+       , [ Constant (Int 1)
+         ; ADT (cons_adt_name, [ Constant (Int 1); ADT (nil_adt_name, []) ])
+         ] ));
   [%expect {| (ListT (BaseT Int)) |}]
 ;;
 
 let%expect_test "Failed List type inference" =
-  get_infered (List [ Constant (Int 1); Constant (Bool false) ]);
+  get_infered
+    (ADT
+       ( cons_adt_name
+       , [ Constant (Int 1)
+         ; ADT (cons_adt_name, [ Constant (Bool true); ADT (nil_adt_name, []) ])
+         ] ));
   [%expect
     {|
     Unification failed: type of the expression is (BaseT Bool) but expected type was (
     BaseT Int) |}]
 ;;
 
-(* let%expect_test "Let type inference" =
-   get_infered (Let(false, "x", None, Constant (Int 1)));
-   [%expect {| int |}] *)
+let%expect_test "Let type inference" =
+  get_infered (Let (false, "x", None, Constant (Int 1)));
+  [%expect {| (BaseT Int) |}]
+;;
