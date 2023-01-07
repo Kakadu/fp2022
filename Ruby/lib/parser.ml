@@ -58,7 +58,19 @@ let field_name =
 ;;
 
 let keywords =
-  [ "if"; "then"; "else"; "end"; "true"; "false"; "while"; "do"; "def"; "class"; "yield" ]
+  [ "if"
+  ; "then"
+  ; "else"
+  ; "end"
+  ; "true"
+  ; "false"
+  ; "while"
+  ; "do"
+  ; "def"
+  ; "class"
+  ; "yield"
+  ; "lambda"
+  ]
 ;;
 
 let identifier_t =
@@ -129,13 +141,15 @@ let seq_of_expr =
           >>= fun params ->
           maybe new_lines *> seq_of_expr
           <* maybe new_lines
-          >>| fun body -> FuncDeclaration (Lambda, yield_funcname, params, body)
+          >>| fun body ->
+          FuncDeclaration (Lambda, yield_funcname, params @ [ yield_funcname ], body)
         in
         let lambda_declaration =
           token "{" *> lambda_inner
           <* token "}"
           <|> (token "do" *> lambda_inner <* token "end")
         in
+        let standalone_lambda = token "lambda" *> lambda_declaration in
         let function_declaration =
           token "def" *> identifier_t
           >>= fun func_name ->
@@ -169,7 +183,9 @@ let seq_of_expr =
         (* --- Yield keyword --- *)
         let yield =
           token "yield" *> option [] args
-          >>| fun args -> Invocation (Var yield_funcname, args)
+          >>= fun args ->
+          option empty_lambda lambda_declaration
+          >>| fun lambda -> Invocation (Var yield_funcname, args @ [ lambda ])
         in
         (* --- Var assn --- *)
         let assn =
@@ -215,6 +231,7 @@ let seq_of_expr =
             ; var_cal
             ; conditional
             ; array_v
+            ; standalone_lambda
             ]
         in
         let asoc0_p = chainl1 factor asoc0 in
