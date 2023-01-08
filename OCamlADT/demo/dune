@@ -1,0 +1,8 @@
+(executable
+ (name demo)
+ (public_name demo)
+ (modules Demo)
+ (libraries ocamladt_lib stdio))
+
+(cram
+ (deps ./demo.exe))
