@@ -1,0 +1,8 @@
+(executable
+ (name demoSingle)
+ (modules demoSingle)
+ (public_name demoSingle)
+ (libraries OCamlLabeledArgs_lib))
+
+(cram
+ (deps ./demoSingle.exe))

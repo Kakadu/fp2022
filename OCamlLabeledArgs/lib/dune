@@ -1,0 +1,8 @@
+(library
+ (name OCamlLabeledArgs_lib)
+ (public_name OCamlLabeledArgs.Lib)
+ (modules Errors Interpret Parser Parsetree Prettyprint Repl Tests Typedtree)
+ (libraries base angstrom stdio)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show))
+ (inline_tests))
