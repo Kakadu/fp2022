@@ -15,9 +15,9 @@
 (homepage "not specified")
 
 (package
- (name SQL) ; FIXME and regenerate .opam file using 'dune build @install'
- (synopsis "SQL")
- (description "SQL language")
+ (name SQLyd) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "SQLyd")
+ (description "SQLyd language")
  (version 0.1)
  (depends
   dune

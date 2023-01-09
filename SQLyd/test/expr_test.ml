@@ -3,8 +3,8 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open OUnit2
-open SQL_lib.Parser
-open SQL_lib.Type
+open SQLyd_lib.Parser
+open SQLyd_lib.Type
 
 (* (A = 1) or (D = 4) *)
 let (tokens1 : expr_type list) =

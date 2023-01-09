@@ -2,7 +2,7 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open SQL_lib
+open SQLyd_lib
 
 let main () =
   let _ =

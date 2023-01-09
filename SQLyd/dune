@@ -6,9 +6,17 @@
 
 (executable
  (name REPL)
- (public_name SQL.Repl)
+ (public_name SQLyd.Repl)
  (modules REPL)
- (libraries SQL.Lib str csv ANSITerminal stdio opal ppx_show.runtime ounit2)
+ (libraries
+  SQLyd.Lib
+  str
+  csv
+  ANSITerminal
+  stdio
+  opal
+  ppx_show.runtime
+  ounit2)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))
 

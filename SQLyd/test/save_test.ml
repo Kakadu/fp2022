@@ -2,9 +2,9 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-open SQL_lib.Type
-open SQL_lib.Tree
-open SQL_lib.Save
+open SQLyd_lib.Type
+open SQLyd_lib.Tree
+open SQLyd_lib.Save
 
 let class_number_tree =
   let insert_1 = insert (0, "1110") empty in

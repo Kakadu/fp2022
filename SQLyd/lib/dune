@@ -5,8 +5,8 @@
    (-short-paths))))
 
 (library
- (name SQL_lib)
- (public_name SQL.Lib)
+ (name SQLyd_lib)
+ (public_name SQLyd.Lib)
  (modules Type Controller Helper Parser Rep Save Tokenizer Tree)
  (libraries str csv ANSITerminal stdio opal ppx_show.runtime)
  (inline_tests)

@@ -8,7 +8,7 @@ open Type
 
 exception Type of string
 
-let path_to_csv_dir = Filename.current_dir_name (* "/Users/akabynda/fp2022/SQL" *)
+let path_to_csv_dir = Filename.current_dir_name (* "/Users/akabynda/fp2022/SQLyd" *)
 let conc_comma = String.concat ","
 let conc_line = String.concat "\n"
 

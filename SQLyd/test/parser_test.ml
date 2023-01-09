@@ -3,10 +3,10 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
 open OUnit2
-open SQL_lib.Tokenizer
-open SQL_lib.Parser
-open SQL_lib.Type
-open SQL_lib.Helper
+open SQLyd_lib.Tokenizer
+open SQLyd_lib.Parser
+open SQLyd_lib.Type
+open SQLyd_lib.Helper
 
 (* (Country = Mexico) or (LandSize >= 1000 and Population >= 1000) *)
 let condition1 =
