@@ -1,0 +1,10 @@
+bcpandas
+mysql-connector
+numpy
+pandas
+pyodbc
+python-dateutil
+pytz
+six
+SQLAlchemy
+utils

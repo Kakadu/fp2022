@@ -1,0 +1,35 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Danil Yevdokimov")
+
+(maintainers "st076209@student.spbu.ru")
+
+(bug_reports "not specified")
+
+(homepage "not specified")
+
+(package
+ (name SQLyd) ; FIXME and regenerate .opam file using 'dune build @install'
+ (synopsis "SQLyd")
+ (description "SQLyd language")
+ (version 0.1)
+ (depends
+  dune
+  opal
+  (ppx_inline_test :with-test)
+  ppx_expect
+  ppx_deriving
+  ppx_show
+  (ocamlformat :build)
+  csv
+  stdio
+  ANSITerminal
+  ounit2
+  ; After adding dependencies to 'dune' files and the same dependecies here too
+  ))

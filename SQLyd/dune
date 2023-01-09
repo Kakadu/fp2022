@@ -1,0 +1,28 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
+(executable
+ (name REPL)
+ (public_name SQLyd.Repl)
+ (modules REPL)
+ (libraries
+  SQLyd.Lib
+  str
+  csv
+  ANSITerminal
+  stdio
+  opal
+  ppx_show.runtime
+  ounit2)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
+
+(cram
+ (deps
+  test/expr_test.exe
+  test/parser_test.exe
+  test/save_test.exe
+  test/tree_test.exe))

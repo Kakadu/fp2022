@@ -1,0 +1,11 @@
+CREATE Persons PersonID INTEGER, LastName VARCHAR, FirstName VARCHAR, Address VARCHAR, City VARCHAR ;
+INSERT INTO Persons PersonID, LastName, FirstName, Address, City VALUES  9, "Big", "Flopa", "Jojo", "Moon" ;
+INSERT INTO Persons PersonID, LastName, FirstName VALUES  20, "Nono", "Ilya"  ;
+INSERT INTO Persons PersonID, LastName, FirstName VALUES  30, "Hoho",  "Jaba" ;
+INSERT INTO Persons PersonID, LastName, FirstName VALUES  90,  "Dota", "dva" ;
+SELECT PersonID, FirstName, LastName FROM Persons ;
+DELETE FROM Persons WHERE PersonID = 30 ;
+SELECT PersonID, FirstName, LastName FROM Persons ;
+UPDATE Persons SET PersonID = 99, LastName = Unknown WHERE PersonID = 30 AND LastName = "Hoho" ;
+SAVE Persons ;
+QUIT ;

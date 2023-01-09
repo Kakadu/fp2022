@@ -1,0 +1,14 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
+(library
+ (name SQLyd_lib)
+ (public_name SQLyd.Lib)
+ (modules Type Controller Helper Parser Rep Save Tokenizer Tree)
+ (libraries str csv ANSITerminal stdio opal ppx_show.runtime)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect ppx_show ppx_deriving.eq)))

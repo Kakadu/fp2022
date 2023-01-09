@@ -1,0 +1,65 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26)
+   (-short-paths))))
+
+(executable
+ (name expr_test)
+ (modules expr_test)
+ (libraries
+  SQLyd.Lib
+  str
+  csv
+  ANSITerminal
+  stdio
+  opal
+  ppx_show.runtime
+  ounit2)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name parser_test)
+ (modules parser_test)
+ (libraries
+  SQLyd.Lib
+  str
+  csv
+  ANSITerminal
+  stdio
+  opal
+  ppx_show.runtime
+  ounit2)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name save_test)
+ (modules save_test)
+ (libraries
+  SQLyd.Lib
+  str
+  csv
+  ANSITerminal
+  stdio
+  opal
+  ppx_show.runtime
+  ounit2)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
+
+(executable
+ (name tree_test)
+ (modules tree_test)
+ (libraries
+  SQLyd.Lib
+  str
+  csv
+  ANSITerminal
+  stdio
+  opal
+  ppx_show.runtime
+  ounit2)
+ (preprocess
+  (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
